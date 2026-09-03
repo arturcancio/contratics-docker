@@ -5,6 +5,8 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE SCHEMA IF NOT EXISTS _realtime;
+GRANT USAGE, CREATE ON SCHEMA _realtime TO postgres;
 
 -- Ensure postgres, anon, authenticated, service_role roles exist
 DO $$
@@ -763,5 +765,31 @@ SELECT
   data->>'updatedAt' AS "updatedAt",
   updated_at
 FROM public."planejamentos";
+
+-- ==============================================================================
+-- Universal RLS Policies and Permissions on All 22 Collections
+-- ==============================================================================
+DO $$
+DECLARE
+  tbl TEXT;
+  tbls TEXT[] := ARRAY[
+    'users', 'fornecedores', 'dfds', 'planejamentos', 'contratos',
+    'itensSOF', 'itensPlanejamentoSOF', 'tarefas', 'historicoPlanejamentos',
+    'historicosContratuais', 'aditivos', 'apostilamentos', 'pagamentos',
+    'baseConhecimento', 'faqs', 'presencialDays', 'templates',
+    'siopData', 'siopHistory', 'loginLogs', 'system', 'projectionSpreadsheets'
+  ];
+BEGIN
+  FOREACH tbl IN ARRAY tbls LOOP
+    BEGIN
+      EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', tbl);
+      EXECUTE format('DROP POLICY IF EXISTS "Allow all" ON public.%I', tbl);
+      EXECUTE format('CREATE POLICY "Allow all" ON public.%I FOR ALL TO anon, authenticated, service_role, postgres USING (true) WITH CHECK (true)', tbl);
+      EXECUTE format('GRANT ALL ON TABLE public.%I TO anon, authenticated, service_role, postgres, authenticator', tbl);
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END LOOP;
+END $$;
+
 
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;

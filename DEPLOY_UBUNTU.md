@@ -1,48 +1,82 @@
-# Guia Completo de Instalação e Implantação do Contratics em Ubuntu Server Zerado
+# Guia Definitivo de Implantação do Contratics em Ubuntu Server Zerado
 
-Este guia fornece instruções detalhadas, passo a passo, para instalar e executar a stack completa do **Contratics** (aplicação web + Supabase Self-Hosted com PostgreSQL, Realtime WebSockets, PostgREST, GoTrue Auth, Kong Gateway e Supabase Studio) em uma máquina virtual ou servidor físico **Ubuntu Server (22.04 LTS ou 24.04 LTS)** recém-instalado.
-
----
-
-## 1. Requisitos Mínimos Recomendados
-
-- **Sistema Operacional**: Ubuntu Server 22.04 LTS ou 24.04 LTS (64 bits)
-- **CPU**: 2 núcleos (vCPU)
-- **Memória RAM**: 4 GB (mínimo recomendado para rodar PostgreSQL, Realtime e Studio confortavelmente)
-- **Armazenamento**: 25 GB SSD livres
-- **Portas de Rede**:
-  - `22/tcp`: Acesso SSH
-  - `80/tcp`: Acesso HTTP (Contratics ou Nginx reverso)
-  - `443/tcp`: Acesso HTTPS (SSL Certbot)
-  - `3000/tcp`: Aplicação Web Contratics
-  - `8000/tcp`: Supabase API Gateway (PostgREST + Realtime WebSockets)
-  - `8001/tcp`: Supabase Studio (Painel de Gestão Visual do Banco)
+Este manual fornece o roteiro completo, testado e validado, para implantar o **Contratics** com sua stack completa (Aplicação Web React + Supabase Self-Hosted com PostgreSQL, Realtime WebSockets, PostgREST API, GoTrue Auth, Kong Gateway e Supabase Studio) em uma máquina virtual (VirtualBox, VMware, Proxmox, Hyper-V) ou servidor em nuvem/físico rodando **Ubuntu Server (22.04 LTS ou 24.04 LTS)**.
 
 ---
 
-## 2. Preparação do Servidor Ubuntu
+## Sumário
+1. [Requisitos de Hardware e Portas de Rede](#1-requisitos-de-hardware-e-portas-de-rede)
+2. [Preparação do Sistema Operacional](#2-preparação-do-sistema-operacional)
+3. [Instalação Oficial do Docker Engine e Compose](#3-instalação-oficial-do-docker-engine-e-compose)
+4. [Configuração de Repositório Privado (GitHub / GitLab Corporativo)](#4-configuração-de-repositório-privado-github--gitlab-corporativo)
+5. [Configuração das Variáveis de Ambiente (.env)](#5-configuração-das-variáveis-de-ambiente-env)
+6. [Carga Inicial Automática dos Dados Reais](#6-carga-inicial-automática-dos-dados-reais)
+7. [Inicialização dos Containers e Validação](#7-inicialização-dos-containers-e-validação)
+8. [Fluxo de Desenvolvimento Contínuo (Deploy sem Derrubar o Banco)](#8-fluxo-de-desenvolvimento-contínuo-deploy-sem-derrubar-o-banco)
+9. [Como Migrar o Repositório para o Git da Empresa / Órgão](#9-como-migrar-o-repositório-para-o-git-da-empresa--órgão)
+10. [Configuração de Produção: Domínio Institucional e SSL/HTTPS](#10-configuração-de-produção-domínio-institucional-e-sslhttps)
+11. [Rotina de Backup e Restauração do Banco de Dados](#11-rotina-de-backup-e-restauração-do-banco-de-dados)
 
-Conecte-se via SSH ao servidor como usuário `root` ou com privilégios `sudo`:
+---
 
+## 1. Requisitos de Hardware e Portas de Rede
+
+### Hardware Recomendado:
+- **CPU**: 2 vCPUs ou mais.
+- **Memória RAM**: 4 GB (mínimo recomendado para acomodar PostgreSQL, Realtime Elixir e Node/Nginx com folga).
+- **Disco**: 25 GB de espaço livre em SSD.
+
+### Portas Utilizadas:
+| Porta | Protocolo | Serviço | Descrição |
+| :--- | :--- | :--- | :--- |
+| **22** | TCP | SSH | Acesso remoto ao servidor |
+| **3000** | TCP | Web Frontend | Interface do usuário do Contratics (Nginx) |
+| **8000** | TCP | Kong Gateway | API PostgREST REST + WebSockets Realtime |
+| **8001** | TCP | Supabase Studio | Painel visual administrativo do banco de dados |
+| **5432** | TCP | PostgreSQL | Conexão direta ao banco (opcional/administração) |
+| **80 / 443** | TCP | HTTP / HTTPS | Acesso web via Proxy Reverso Nginx com SSL |
+
+---
+
+## 2. Preparação do Sistema Operacional
+
+Conecte-se à VM Ubuntu via terminal SSH:
 ```bash
-ssh usuario@seu_servidor_ip
+ssh usuario@ip_da_sua_vm
 ```
 
-### Atualize os pacotes do sistema:
+### Atualize o sistema:
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-### Instale pacotes auxiliares essenciais:
+### Instale ferramentas essenciais:
 ```bash
-sudo apt install -y ca-certificates curl gnupg lsb-release git ufw htop
+sudo apt install -y ca-certificates curl gnupg lsb-release git ufw htop nano
+```
+
+### Configure o Firewall do Ubuntu (UFW):
+```bash
+# Permite SSH prioritariamente (evita perda de acesso)
+sudo ufw allow 22/tcp
+
+# Libera as portas da aplicação
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 3000/tcp
+sudo ufw allow 8000/tcp
+sudo ufw allow 8001/tcp
+
+# Ativa o firewall
+sudo ufw --force enable
+sudo ufw status verbose
 ```
 
 ---
 
-## 3. Instalação Oficial do Docker e Docker Compose
+## 3. Instalação Oficial do Docker Engine e Compose
 
-Recomenda-se utilizar o repositório oficial da Docker para garantir as versões mais estáveis e recentes do Docker Engine e do plugin Compose.
+> ⚠️ **Importante**: Utilize o repositório oficial da Docker (e não os pacotes `docker.io` do Ubuntu) para garantir a versão moderna do `docker compose` sem erros de compatibilidade.
 
 ### Passo 3.1: Adicionar a chave GPG oficial do Docker:
 ```bash
@@ -51,28 +85,28 @@ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o 
 sudo chmod a+r /etc/apt/keyrings/docker.gpg
 ```
 
-### Passo 3.2: Configurar o repositório estável do Docker:
+### Passo 3.2: Configurar o repositório estável:
 ```bash
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
   $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 ```
 
-### Passo 3.3: Instalar Docker Engine, CLI, Containerd e Docker Compose:
+### Passo 3.3: Instalar o Docker Engine e o Plugin Compose:
 ```bash
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-### Passo 3.4: Habilitar o Docker para iniciar no boot e adicionar seu usuário ao grupo docker:
+### Passo 3.4: Habilitar o serviço e dar permissão ao seu usuário:
 ```bash
 sudo systemctl enable docker
 sudo systemctl start docker
 sudo usermod -aG docker $USER
 ```
-*(Se necessário, faça logout e login novamente para aplicar a permissão de grupo).*
+*(Faça logout digitando `exit` e entre novamente via SSH para que o grupo `docker` tenha efeito sem precisar de `sudo`).*
 
-### Verifique a instalação:
+Confirme a instalação:
 ```bash
 docker --version
 docker compose version
@@ -80,164 +114,217 @@ docker compose version
 
 ---
 
-## 4. Configuração do Firewall (UFW)
+## 4. Configuração de Repositório Privado (GitHub / GitLab Corporativo)
 
-Proteja seu servidor liberando apenas as portas necessárias:
+Para proteger o código e dados do projeto, o repositório deve ser mantido como **Privado**.
 
-```bash
-# Permitir SSH (evite perder o acesso remoto!)
-sudo ufw allow 22/tcp
+### Opção A: Usando Personal Access Token (PAT) - Método Mais Rápido
+1. No seu GitHub, clique na sua foto de perfil > **Settings** > **Developer Settings** > **Personal access tokens** > **Tokens (classic)**.
+2. Clique em **Generate new token (classic)**, dê um nome (ex: `vm-contratics`) e marque a caixa de seleção **`repo`**.
+3. Copie o token gerado (ex: `ghp_xxxxxxxxxxxxxxxxxxxx`).
+4. Na VM Ubuntu, clone o projeto utilizando o token na URL:
+   ```bash
+   cd /opt
+   sudo git clone https://ghp_SEU_TOKEN_AQUI@github.com/arturcancio/contratics-docker.git contratics
+   sudo chown -R $USER:$USER /opt/contratics
+   cd /opt/contratics
+   ```
+   *Dessa forma, todos os comandos futuros (`git pull`) funcionarão automaticamente sem pedir usuário ou senha.*
 
-# Permitir portas do Contratics
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow 3000/tcp
-sudo ufw allow 8000/tcp
-sudo ufw allow 8001/tcp
-
-# Ativar firewall
-sudo ufw enable
-sudo ufw status verbose
-```
+### Opção B: Usando Chave SSH (Deploy Key) - Método Ideal para Servidores Corporativos
+1. Na VM Ubuntu, gere um par de chaves SSH:
+   ```bash
+   ssh-keygen -t ed25519 -C "servidor-contratics" -f ~/.ssh/id_contratics -N ""
+   ```
+2. Veja a chave pública gerada:
+   ```bash
+   cat ~/.ssh/id_contratics.pub
+   ```
+3. No GitHub/GitLab, abra o repositório > **Settings** > **Deploy Keys** > **Add deploy key**:
+   - Cole o conteúdo da chave pública.
+   - Deixe o acesso somente-leitura (read-only).
+4. Na VM, configure o SSH para usar essa chave:
+   ```bash
+   nano ~/.ssh/config
+   ```
+   Adicione:
+   ```text
+   Host github.com
+       IdentityFile ~/.ssh/id_contratics
+   ```
+5. Clone via SSH:
+   ```bash
+   cd /opt
+   sudo git clone git@github.com:arturcancio/contratics-docker.git contratics
+   sudo chown -R $USER:$USER /opt/contratics
+   cd /opt/contratics
+   ```
 
 ---
 
-## 5. Clonagem e Configuração do Projeto Contratics
+## 5. Configuração das Variáveis de Ambiente (.env)
 
-### Passo 5.1: Clonar o repositório no diretório de sua preferência:
-```bash
-cd /opt
-sudo git clone <URL_DO_SEU_REPOSITORIO_GIT> contratics
-cd /opt/contratics
-```
-*(Ou envie os arquivos via `scp` ou `rsync`).*
-
-### Passo 5.2: Configurar as Variáveis de Ambiente (`.env`):
-Copie o modelo de ambiente:
+Dentro da pasta `/opt/contratics`:
 ```bash
 cp .env.example .env
-```
-
-Abra o arquivo `.env` para edição:
-```bash
 nano .env
 ```
 
-Se você estiver acessando o servidor por IP (rede local, VirtualBox ou IP público), ajuste `VITE_SUPABASE_URL`:
+### Identificando o IP correto da sua máquina:
+Execute no terminal:
+```bash
+hostname -I
+```
+> O comando mostrará os IPs da máquina (ex: `172.27.1.106 172.17.0.1`).
+> - **Use o primeiro IP (`172.27.1.106`)**: É o IP da máquina na rede local ou corporativa.
+> - **Nunca use `172.17.0.1`**: Esse é o IP interno da ponte virtual do Docker (`docker0`), inacessível fora da VM.
+
+### Ajustando o `.env`:
 ```env
-# Exemplo com IP da máquina / VirtualBox (veja com 'hostname -I'):
+# ==============================================================================
+# CONFIGURAÇÕES DO CONTRATICS
+# ==============================================================================
+POSTGRES_DB=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=contratics_pg_secret_2026
+JWT_SECRET=super-secret-jwt-token-with-at-least-32-characters-long
+
+API_PORT=8000
+STUDIO_PORT=8001
+WEB_PORT=3000
+
+# Coloque aqui o IP da sua VM ou o domínio que será acessado pelo navegador:
 VITE_SUPABASE_URL=http://172.27.1.106:8000
 
-# Se for domínio corporativo com SSL:
-# VITE_SUPABASE_URL=https://api.contratics.planejamento.gov.br
+# Chave anônima padrão (gerada com o JWT_SECRET padrão acima):
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNjcwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.UTHCBq0o_4VwW1RzPp0OOg8njzim5F3KAi7HCD-4bVc
 ```
 
-> **Atenção ao IP no VirtualBox / Ubuntu**:
-> Ao rodar `hostname -I`, o sistema costuma exibir dois IPs (ex: `172.27.1.106 172.17.0.1`).
-> - **`172.27.1.106`**: É o IP real da VM na sua rede (o que deve ser colocado no `.env` e acessado pelo navegador).
-> - **`172.17.0.1`**: É a interface virtual interna do Docker (`docker0`), que **não** é acessível pela sua máquina host Windows. Nunca utilize o IP `172.17.0.1` no navegador.
-
-Salve o arquivo com `Ctrl + O` e saia com `Ctrl + X`.
+Pressione `Ctrl + O` e `Enter` para salvar, e `Ctrl + X` para sair.
 
 ---
 
-## 6. Como os Dados Reais são Inicializados
+## 6. Carga Inicial Automática dos Dados Reais
 
-A pasta `docker/volumes/db/init/` já contém dois scripts SQL gerados:
-1. `01_schema.sql`: Cria todas as 22 tabelas relacionais em PostgreSQL, habilita `REPLICA IDENTITY FULL`, adiciona todas as tabelas à publicação `supabase_realtime`, cria índices GIN e a função `merge_document`.
-2. `02_real_data.sql`: Contém **todos os 475 registros reais** exportados do Firestore (usuários institucionais, fornecedores, contratos, DFDs, históricos, SIOP, etc.).
+Você **não** precisa rodar nenhum script manual no banco de dados!
 
-Quando o PostgreSQL inicia pela primeira vez, o Docker executa esses scripts automaticamente, deixando o banco pronto com todos os dados reais.
+O diretório `docker/volumes/db/init/` já contém os scripts pré-configurados que o container do PostgreSQL executa automaticamente na primeira inicialização:
+1. `01_schema.sql`: 
+   - Cria as roles de segurança (`postgres`, `anon`, `authenticated`, `service_role`).
+   - Cria o schema `_realtime` para suporte a WebSockets.
+   - Cria todas as **22 tabelas** relacionais em PostgreSQL com suporte a JSONB, índices GIN de alta performance e réplica em tempo real.
+   - Aplica as políticas RLS (`Row Level Security`) e permissões de acesso para todos os perfis.
+2. `02_real_data.sql`:
+   - Insere todos os **475 registros reais** (15 contratos, 57 itens de SOF, 25 DFDs, 13 planejamentos, 77 tarefas, fornecedores e histórico).
 
 ---
 
-## 7. Inicialização da Stack Contratics
+## 7. Inicialização dos Containers e Validação
 
-Com o Docker Compose, basta um único comando para construir a imagem web e subir todos os 7 serviços em background:
-
+Suba todos os 7 containers com um único comando:
 ```bash
-cd /opt/contratics
 docker compose up -d --build
 ```
 
-### Acompanhando a subida dos containers:
+### Verifique o status dos serviços:
 ```bash
 docker compose ps
 ```
 
-Você verá a seguinte saída:
-- `contratics-db` (PostgreSQL 15) - Status: `Up (healthy)`
-- `contratics-rest` (PostgREST) - Status: `Up`
-- `contratics-realtime` (WebSockets) - Status: `Up`
-- `contratics-auth` (GoTrue) - Status: `Up`
-- `contratics-kong` (API Gateway) - Status: `Up`
-- `contratics-studio` (Dashboard) - Status: `Up`
-- `contratics-web` (Aplicação React Nginx) - Status: `Up`
+Todos os 7 containers devem estar com status `Up`:
+- `contratics-db` (PostgreSQL 15 - healthy)
+- `contratics-rest` (PostgREST)
+- `contratics-realtime` (WebSockets)
+- `contratics-auth` (GoTrue)
+- `contratics-kong` (API Gateway)
+- `contratics-studio` (Painel Visual do Banco)
+- `contratics-web` (Frontend Contratics)
 
-### Verificando logs dos serviços:
-```bash
-# Ver todos os logs em tempo real
-docker compose logs -f
+### Acesso no Navegador:
+Abra em seu computador:
+- **Aplicação Contratics**: `http://<IP_DA_VM>:3000`
+- **Supabase Studio (Administração Visual)**: `http://<IP_DA_VM>:8001`
 
-# Ver logs apenas da aplicação web
-docker compose logs -f contratics-web
+Entre na aplicação com qualquer um dos e-mails institucionais já cadastrados:
+- **E-mail**: `arturcancio@gmail.com` ou `artur.cancio@planejamento.gov.br`
+- **Senha Inicial**: `sof123`
 
-# Ver logs do banco de dados
-docker compose logs -f contratics-db
+---
+
+## 8. Fluxo de Desenvolvimento Contínuo (Deploy sem Derrubar o Banco)
+
+**"Dá para continuar editando o projeto pelo meu computador quando ele estiver em produção?"**
+**SIM!** Esse é o fluxo profissional padrão de trabalho:
+
+```mermaid
+graph LR
+    Dev[Seu PC Windows / Antigravity] -->|git push| Git[(GitHub / GitLab)]
+    Git -->|git pull| VM[VM Ubuntu / Produção]
+    VM -->|docker compose up -d --build contratics-web| Web[Aplicação Atualizada]
 ```
 
----
-
-## 8. Acesso ao Sistema
-
-Abra seu navegador:
-- **Aplicação Contratics**: `http://<SEU_IP_OU_DOMINIO>:3000`
-- **Painel Supabase Studio**: `http://<SEU_IP_OU_DOMINIO>:8001`
-- **API Gateway Supabase**: `http://<SEU_IP_OU_DOMINIO>:8000`
-
-### Como Entrar no Sistema:
-Utilize os e-mails institucionais já cadastrados (por exemplo, `artur.cancio@planejamento.gov.br` ou `arturcancio@gmail.com`) com a senha padrão inicial `sof123`.
-
----
-
-## 9. Validação da Reatividade em Tempo Real
-
-O Contratics possui funcionalidades com resposta visual imediata que foram 100% mantidas e otimizadas com o Supabase:
-
-1. **Ativação / Desativação de DFDs**:
-   - Acesse o menu **Orçamento Atual** ou **DFDs**.
-   - Alterne o interruptor de contabilização de um DFD em um ano específico.
-   - **Resultado**: O cálculo total e o gráfico são recalculados no mesmo instante (0 ms de latência percebida graças ao cache otimista), e a alteração é persistida no PostgreSQL via `merge_document` e transmitida para qualquer outro usuário conectado via WebSocket.
-2. **Perspectiva de Renovação de Contratos**:
-   - Na lista de contratos ou no simulador plurianual, ative ou desative a perspectiva de renovação.
-   - **Resultado**: O cálculo do saldo contratual e vigências é atualizado em tempo real.
-3. **Quadro Kanban de Processos**:
-   - Arraste um card de tarefa entre as colunas (ex: de *Em Elaboração* para *Aguardando Assinatura*).
-   - **Resultado**: A posição atualiza instantaneamente e é sincronizada no Supabase.
+### Como funciona no dia a dia:
+1. Você faz alterações de código, telas ou melhorias no seu ambiente local (Windows com Antigravity).
+2. Envia para o repositório Git:
+   ```bash
+   git add .
+   git commit -m "Nova funcionalidade adicionada"
+   git push origin main
+   ```
+3. No servidor Ubuntu (onde o Contratics está rodando), basta executar:
+   ```bash
+   cd /opt/contratics
+   git pull
+   docker compose up -d --build contratics-web
+   ```
+4. **O banco de dados não para e nenhum dado é perdido!** O Docker recompila apenas o container do frontend (`contratics-web`) em cerca de 15 segundos e substitui a aplicação no ar de forma suave. O volume de dados do PostgreSQL permanece 100% intacto e online.
 
 ---
 
-## 10. Configuração de Domínio e SSL Gratuito (Opcional - Recomendado para Produção)
+## 9. Como Migrar o Repositório para o Git da Empresa / Órgão
 
-Para rodar em domínio institucional com certificado HTTPS (ex: `https://contratics.empresa.gov.br`):
+**"Consigo transferir o repositório privado para o Git da minha empresa sem problemas?"**
+**SIM!** Como o Git é descentralizado, o código e todo o histórico de commits podem ser enviados para qualquer outro servidor Git (GitLab corporativo, GitHub Enterprise, Azure DevOps, Bitbucket ou Gitea interno) com apenas dois comandos.
 
-### Passo 10.1: Instalar Nginx no host Ubuntu e Certbot:
+### Passo a passo no seu computador (Windows):
+1. Crie um projeto vazio no Git corporativo da sua empresa (ex: `https://gitlab.planejamento.gov.br/seu-usuario/contratics.git`).
+2. No terminal do seu projeto, altere o endereço de envio remoto:
+   ```bash
+   git remote set-url origin https://gitlab.planejamento.gov.br/seu-usuario/contratics.git
+   ```
+3. Envie todos os arquivos e branches:
+   ```bash
+   git push -u origin --all
+   git push -u origin --tags
+   ```
+4. Na máquina virtual do trabalho, basta clonar a partir do novo endereço corporativo:
+   ```bash
+   git clone https://gitlab.planejamento.gov.br/seu-usuario/contratics.git /opt/contratics
+   ```
+
+---
+
+## 10. Configuração de Produção: Domínio Institucional e SSL/HTTPS
+
+Em ambiente de produção no órgão, configure um proxy reverso Nginx no host com certificado digital para acesso seguro via HTTPS (porta 443):
+
+### Instale o Nginx e Certbot no Ubuntu:
 ```bash
 sudo apt install -y nginx certbot python3-certbot-nginx
 ```
 
-### Passo 10.2: Criar arquivo de configuração do proxy reverso:
+### Crie o arquivo de configuração do site:
 ```bash
 sudo nano /etc/nginx/sites-available/contratics.conf
 ```
 
-Adicione o conteúdo:
+Conteúdo recomendado:
 ```nginx
 server {
     listen 80;
-    server_name contratics.seu-dominio.gov.br;
+    server_name contratics.planejamento.gov.br;
 
-    # Aplicação Web
+    # Frontend Contratics
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
@@ -246,28 +333,36 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Supabase API e WebSockets
-    location /supabase/ {
-        rewrite ^/supabase/(.*) /$1 break;
+    # API Supabase e WebSockets
+    location /api/ {
+        rewrite ^/api/(.*) /$1 break;
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-### Passo 10.3: Ativar o site e emitir certificado SSL:
+### Ative e gere o certificado SSL:
 ```bash
 sudo ln -s /etc/nginx/sites-available/contratics.conf /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 
-# Emitir certificado SSL Let's Encrypt
-sudo certbot --nginx -d contratics.seu-dominio.gov.br
+# Emitir certificado SSL automático
+sudo certbot --nginx -d contratics.planejamento.gov.br
 ```
+
+> **Nota**: Ao usar domínio HTTPS, altere no `.env` da VM:
+> ```env
+> VITE_SUPABASE_URL=https://contratics.planejamento.gov.br/api
+> ```
+> E reconstrua a web: `docker compose up -d --build contratics-web`.
 
 ---
 
@@ -283,31 +378,33 @@ docker exec -t contratics-db pg_dump -U postgres -d postgres > backup_contratics
 cat backup_contratics_YYYYMMDD_HHMMSS.sql | docker exec -i contratics-db psql -U postgres -d postgres
 ```
 
-### Agendar Backup Diário Automático via Cron:
+### Configurar Backup Automático Diário (Cron):
+Crie a pasta de backups:
+```bash
+sudo mkdir -p /var/backups/contratics
+sudo chown $USER:$USER /var/backups/contratics
+```
+
 Abra o crontab:
 ```bash
 crontab -e
 ```
-Adicione a linha para rodar todos os dias às 03:00 da manhã:
+
+Adicione a linha para executar todos os dias às 03:00 da madrugada, mantendo backups compactados:
 ```bash
-0 3 * * * docker exec -t contratics-db pg_dump -U postgres -d postgres > /opt/backups/contratics_$(date +\%Y\%m\%d).sql 2>&1
+0 3 * * * docker exec -t contratics-db pg_dump -U postgres -d postgres | gzip > /var/backups/contratics/contratics_$(date +\%Y\%m\%d).sql.gz 2>&1
 ```
 
 ---
 
-## 12. Comandos Úteis de Manutenção
+## 12. Comandos de Manutenção Rápida
 
-```bash
-# Reiniciar todos os serviços
-docker compose restart
-
-# Parar todos os serviços
-docker compose down
-
-# Subir novamente
-docker compose up -d
-
-# Atualizar código após alterações no Git
-git pull
-docker compose up -d --build contratics-web
-```
+| Ação | Comando |
+| :--- | :--- |
+| **Verificar status de todos os serviços** | `docker compose ps` |
+| **Ver logs da aplicação web** | `docker compose logs -f contratics-web` |
+| **Ver logs do banco de dados** | `docker compose logs -f contratics-db` |
+| **Reiniciar todos os serviços** | `docker compose restart` |
+| **Parar a stack mantendo os dados** | `docker compose down` |
+| **Subir novamente** | `docker compose up -d` |
+| **Atualizar código da web após git pull** | `docker compose up -d --build contratics-web` |
