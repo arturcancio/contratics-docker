@@ -11,16 +11,28 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 // Environment variables or smart self-hosted fallbacks
 const getSupabaseUrl = (): string => {
   const env = (import.meta as any).env;
-  if (env && env.VITE_SUPABASE_URL) {
-    return env.VITE_SUPABASE_URL;
-  }
+  const envUrl = env?.VITE_SUPABASE_URL;
+
   if (typeof window !== 'undefined' && window.location) {
-    // If port 3000, fallback to port 8000 on same hostname for Kong Gateway
     const host = window.location.hostname;
     const protocol = window.location.protocol;
+
+    if (envUrl) {
+      try {
+        const parsed = new URL(envUrl);
+        // If configured as localhost, 127.0.0.1, 0.0.0.0 or docker0 bridge 172.17.0.1, but browser is accessing via a real IP/domain:
+        const isLocalOrBridge = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '172.17.0.1' || parsed.hostname === '0.0.0.0';
+        const isBrowserRemote = host !== 'localhost' && host !== '127.0.0.1';
+        if (isLocalOrBridge && isBrowserRemote) {
+          return `${protocol}//${host}:${parsed.port || '8000'}`;
+        }
+        return envUrl;
+      } catch (e) {}
+    }
+    // Dynamic fallback to port 8000 on same hostname for Kong Gateway
     return `${protocol}//${host}:8000`;
   }
-  return 'http://localhost:8000';
+  return envUrl || 'http://localhost:8000';
 };
 
 const getSupabaseAnonKey = (): string => {

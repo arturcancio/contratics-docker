@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ============================================================================
   # 1. Contratics Web Application (Production Nginx serving built SPA)
@@ -9,6 +7,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-}
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-3000}:80"
@@ -120,7 +121,7 @@ services:
   # ============================================================================
   contratics-studio:
     container_name: contratics-studio
-    image: supabase/studio:20240729-ef413b3
+    image: supabase/studio:latest
     restart: unless-stopped
     ports:
       - "${STUDIO_PORT:-8001}:3000"

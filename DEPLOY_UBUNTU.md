@@ -123,17 +123,20 @@ Abra o arquivo `.env` para edição:
 nano .env
 ```
 
-Se você estiver acessando o servidor por um IP público (exemplo: `203.0.113.10`) ou domínio, ajuste `VITE_SUPABASE_URL`:
+Se você estiver acessando o servidor por IP (rede local, VirtualBox ou IP público), ajuste `VITE_SUPABASE_URL`:
 ```env
-# Se for IP público:
-VITE_SUPABASE_URL=http://203.0.113.10:8000
+# Exemplo com IP da máquina / VirtualBox (veja com 'hostname -I'):
+VITE_SUPABASE_URL=http://172.27.1.106:8000
 
 # Se for domínio corporativo com SSL:
 # VITE_SUPABASE_URL=https://api.contratics.planejamento.gov.br
-
-# Se for ambiente local:
-# VITE_SUPABASE_URL=http://localhost:8000
 ```
+
+> **Atenção ao IP no VirtualBox / Ubuntu**:
+> Ao rodar `hostname -I`, o sistema costuma exibir dois IPs (ex: `172.27.1.106 172.17.0.1`).
+> - **`172.27.1.106`**: É o IP real da VM na sua rede (o que deve ser colocado no `.env` e acessado pelo navegador).
+> - **`172.17.0.1`**: É a interface virtual interna do Docker (`docker0`), que **não** é acessível pela sua máquina host Windows. Nunca utilize o IP `172.17.0.1` no navegador.
+
 Salve o arquivo com `Ctrl + O` e saia com `Ctrl + X`.
 
 ---
