@@ -23,11 +23,17 @@ services:
   # Supabase Realtime WebSockets
   - name: realtime-v1
     url: http://contratics-realtime:4000/socket
+    protocol: ws
     routes:
       - name: realtime-v1-routes
         strip_path: true
         paths:
           - /realtime/v1/
+        protocols:
+          - http
+          - https
+          - ws
+          - wss
 
 plugins:
   - name: cors
@@ -49,6 +55,13 @@ plugins:
         - x-client-info
         - prefer
         - range
+        - accept-profile
+        - content-profile
+        - x-upsert
+        - sec-websocket-protocol
+        - sec-websocket-version
+        - sec-websocket-key
+        - sec-websocket-extensions
       exposed_headers:
         - content-range
         - x-total-count
