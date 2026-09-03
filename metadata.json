@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Contratics",
+  "description": "Sistema de Gestão de Contratos e Planejamento de TIC para a Secretaria de Orçamento Federal (SOF).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,171 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. Contratics Web Application (Production Nginx serving built SPA)
+  # ============================================================================
+  contratics-web:
+    container_name: contratics-web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      contratics-kong:
+        condition: service_started
+    networks:
+      - contratics-net
+
+  # ============================================================================
+  # 2. Supabase API Gateway (Kong)
+  # ============================================================================
+  contratics-kong:
+    container_name: contratics-kong
+    image: kong:2.8.1
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_HTTP_CLIENT_BODY_BUFFER_SIZE: 50M
+      KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 100M
+    volumes:
+      - ./docker/volumes/api/kong.yml:/var/lib/kong/kong.yml:ro
+    depends_on:
+      contratics-rest:
+        condition: service_started
+      contratics-auth:
+        condition: service_started
+      contratics-realtime:
+        condition: service_started
+    networks:
+      - contratics-net
+
+  # ============================================================================
+  # 3. PostgREST (Auto-generated REST API from PostgreSQL)
+  # ============================================================================
+  contratics-rest:
+    container_name: contratics-rest
+    image: postgrest/postgrest:v12.0.2
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD:-contratics_pg_secret_2026}@contratics-db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    depends_on:
+      contratics-db:
+        condition: service_healthy
+    networks:
+      - contratics-net
+
+  # ============================================================================
+  # 4. Supabase Realtime (WebSockets synchronization for instant UI reactions)
+  # ============================================================================
+  contratics-realtime:
+    container_name: contratics-realtime
+    image: supabase/realtime:v2.30.23
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DB_HOST: contratics-db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_USER: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
+      DB_AFTER_CONNECT_QUERY: 'SET search_path = _realtime'
+      DB_ENC_KEY: supabaserealtimeenckey12345678
+      API_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      SECRET_KEY_BASE: UpOHxtnl32yB5QWFQxzkNuBc9NUjarA6wvUps0WmQpzoOXoNuBc9NUjarA6wvUps
+      ERL_AFLAGS: -proto_dist inet_tcp
+      ENABLE_TAILSCALE: "false"
+      DNS_NODES: "''"
+    depends_on:
+      contratics-db:
+        condition: service_healthy
+    networks:
+      - contratics-net
+
+  # ============================================================================
+  # 5. Supabase Auth (GoTrue)
+  # ============================================================================
+  contratics-auth:
+    container_name: contratics-auth
+    image: supabase/gotrue:v2.158.1
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: http://localhost:${API_PORT:-8000}/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-contratics_pg_secret_2026}@contratics-db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      GOTRUE_SITE_URL: http://localhost:${WEB_PORT:-3000}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_DISABLE_SIGNUP: "false"
+    depends_on:
+      contratics-db:
+        condition: service_healthy
+    networks:
+      - contratics-net
+
+  # ============================================================================
+  # 6. Supabase Studio (Database & SQL Dashboard on port 8001)
+  # ============================================================================
+  contratics-studio:
+    container_name: contratics-studio
+    image: supabase/studio:20240729-ef413b3
+    restart: unless-stopped
+    ports:
+      - "${STUDIO_PORT:-8001}:3000"
+    environment:
+      STUDIO_PG_META_URL: http://contratics-kong:8000/pg
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
+      SUPABASE_URL: http://contratics-kong:8000
+      SUPABASE_REST_URL: http://contratics-kong:8000/rest/v1/
+      SUPABASE_ANON_KEY: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNjcwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.UTHCBq0o_4VwW1RzPp0OOg8njzim5F3KAi7HCD-4bVc}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE2NzAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.iqGJWfsZCgqGFsAKakdKT8KoXbC6AnoUF8OXDx5a_3o}
+    depends_on:
+      contratics-kong:
+        condition: service_started
+    networks:
+      - contratics-net
+
+  # ============================================================================
+  # 7. PostgreSQL Database (Supabase Image with Extensions, RLS & Realtime)
+  # ============================================================================
+  contratics-db:
+    container_name: contratics-db
+    image: supabase/postgres:15.6.1.143
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_HOST: /var/run/postgresql
+    volumes:
+      - contratics-db-data:/var/lib/postgresql/data
+      - ./docker/volumes/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - contratics-net
+
+volumes:
+  contratics-db-data:
+    name: contratics_db_data
+
+networks:
+  contratics-net:
+    name: contratics_network
+    driver: bridge

@@ -1,0 +1,120 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if the user is authenticated (signed in via Firebase Auth / Anonymously)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User accounts and profiles
+    match /users/{userId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // System configurations (used during seeding check)
+    match /system/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Fornecedores
+    match /fornecedores/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // DFDs
+    match /dfds/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Planejamentos
+    match /planejamentos/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Historicos de Planejamento
+    match /historicoPlanejamentos/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Tarefas Kanban
+    match /tarefas/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Contratos centralizados
+    match /contratos/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Itens de Contrato SOF
+    match /itensSOF/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Itens de Planejamento SOF
+    match /itensPlanejamentoSOF/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Termos Aditivos
+    match /aditivos/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Termos Apostilamentos
+    match /apostilamentos/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Historicos Contratuais
+    match /historicosContratuais/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Pagamentos
+    match /pagamentos/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Base de Conhecimento
+    match /baseConhecimento/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // FAQs
+    match /faqs/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // PresencialDays GECTI
+    match /presencialDays/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Templates de Processo
+    match /templates/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // SIOP Data
+    match /siopData/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // SIOP History
+    match /siopHistory/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Login Audit Logs
+    match /loginLogs/{docId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

@@ -1,0 +1,400 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Dados do usuário cadastrado na plataforma",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["GECTI", "Fiscal", "Auditor", "Visualizador"] },
+        "passwordSimulated": { "type": "string" },
+        "needsPasswordReset": { "type": "boolean" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Fornecedor": {
+      "title": "Fornecedor",
+      "description": "Empresas fornecedoras e prestadoras de serviços",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Nome_Fornecedor": { "type": "string" },
+        "CNPJ": { "type": "string" },
+        "EmailContato": { "type": "string" },
+        "TelefoneContato": { "type": "string" },
+        "Situacao": { "type": "string", "enum": ["Ativo", "Inativo"] }
+      },
+      "required": ["id", "Nome_Fornecedor", "CNPJ", "Situacao"]
+    },
+    "DFD": {
+      "title": "DFD",
+      "description": "Documentos de Formalização da Demanda do PCA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Num_DFD": { "type": "string" },
+        "Ano_PCA": { "type": "string" },
+        "Descricao_Objeto": { "type": "string" },
+        "Valor_Estimado": { "type": "number" },
+        "Status_DFD": { "type": "string", "enum": ["Concluído", "Iniciado", "Não iniciado"] },
+        "UASG": { "type": "string" },
+        "Planejamento_Vinculado": { "type": "string" },
+        "Data_conclusao_estimada": { "type": "string" },
+        "Periodicidade_Pagamento": { "type": "string", "enum": ["Mensal", "Anual", "Total"] },
+        "Valor_Anual_Proporcional": { "type": "number" },
+        "Anexo_PDF": { "type": "string" },
+        "Contabilizar_Orcamento": { "type": "boolean" },
+        "updatedAt": { "type": "string" },
+        "Valor_Custeio": { "type": "number" },
+        "Valor_Investimento": { "type": "number" }
+      },
+      "required": ["id", "Num_DFD", "Ano_PCA", "Descricao_Objeto", "Valor_Estimado", "Status_DFD", "UASG", "Contabilizar_Orcamento"]
+    },
+    "Planejamento": {
+      "title": "Planejamento",
+      "description": "Processos de planejamento de aquisição TIC (Processo SEI)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "DFD_PNCP": { "type": "string" },
+        "Data_Inicio_Processo_SEI": { "type": "string" },
+        "Objeto": { "type": "string" },
+        "SEI_Processo": { "type": "string" },
+        "Portaria_Equipe_PC_Numero": { "type": "string" },
+        "Portaria_Equipe_PC_SEI": { "type": "string" },
+        "Int_Requisitante": { "type": "string" },
+        "Int_Requisitante_Subst": { "type": "string" },
+        "Int_Tecnico": { "type": "string" },
+        "Int_Tecnico_Subst": { "type": "string" },
+        "Int_Administrativo": { "type": "string" },
+        "Int_Administrativo_Subst": { "type": "string" },
+        "Estimativa_Custo": { "type": "number" },
+        "Status_Planejamento": { "type": "string", "enum": ["Em Elaboração", "Seleção Fornecedor", "Gerou Contrato", "Arquivado"] },
+        "Contrato_Originado": { "type": "string" },
+        "Data_Sessao_Publica": { "type": "string" },
+        "Link_Sessao": { "type": "string" },
+        "PCA": { "type": "string", "enum": ["MPO", "MGI"] },
+        "Ano_PCA_Vinculado": { "type": "string" },
+        "Tipo_Processo": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "Objeto", "SEI_Processo", "Status_Planejamento", "PCA", "Ano_PCA_Vinculado"]
+    },
+    "HistoricoPlanejamento": {
+      "title": "HistoricoPlanejamento",
+      "description": "Históricos processuais de cada Planejamento",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Processo_SEI": { "type": "string" },
+        "Data": { "type": "string" },
+        "Descricao": { "type": "string" },
+        "Num_SEI": { "type": "string" },
+        "Coordenacao": { "type": "string" }
+      },
+      "required": ["id", "Processo_SEI", "Data", "Descricao"]
+    },
+    "TarefaPlanejamento": {
+      "title": "TarefaPlanejamento",
+      "description": "Tarefas associadas para o acompanhamento Kanban do Planejamento",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ProcessoPlanejamento": { "type": "string" },
+        "Tarefa": { "type": "string" },
+        "Inicio": { "type": "string" },
+        "Prazo_Dias": { "type": "number" },
+        "Status_Tarefa": { "type": "string", "enum": ["Pendente", "Em Elaboração", "Aguardando Assinatura", "Concluído"] },
+        "MovidoPor": { "type": "string" },
+        "MovidoEm": { "type": "string" }
+      },
+      "required": ["id", "ProcessoPlanejamento", "Tarefa", "Status_Tarefa"]
+    },
+    "Contrato": {
+      "title": "Contrato",
+      "description": "Atas ou contratos gerados e ativos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Num_Contrato": { "type": "string" },
+        "Objeto": { "type": "string" },
+        "SEI_Processo": { "type": "string" },
+        "Vigencia_Inicio": { "type": "string" },
+        "Vigencia_Inicial_Meses": { "type": "number" },
+        "Tempo_Possivel_Prorrogacao_Meses": { "type": "number" },
+        "Numero_Renovacoes": { "type": "number" },
+        "Valor_Contrato": { "type": "number" },
+        "Valor_Atualizado": { "type": "number" },
+        "Gestor_Contrato": { "type": "string" },
+        "Gestor_Substituto": { "type": "string" },
+        "Fiscal_Administrativo": { "type": "string" },
+        "Fiscal_Administrativo_Substituto": { "type": "string" },
+        "Fiscal_Tecnico": { "type": "string" },
+        "Fiscal_Tecnico_Substituto": { "type": "string" },
+        "Fiscal_Requisitante": { "type": "string" },
+        "Fiscal_Requisitante_Substituto": { "type": "string" },
+        "Preposto": { "type": "string" },
+        "EmailPreposto": { "type": "string" },
+        "Portaria_Fiscalizacao_Numero": { "type": "string" },
+        "Portaria_Fiscalizacao_SEI": { "type": "string" },
+        "LinkContrato": { "type": "string" },
+        "Status_Contrato": { "type": "string", "enum": ["Vigente", "A Vencer", "Encerrado"] },
+        "Data_Orcamento_Estimado": { "type": "string" },
+        "Fornecedor": { "type": "string" },
+        "Periodicidade_Pagamento": { "type": "string", "enum": ["Mensal", "Anual", "Total"] },
+        "Data_Ultima_Atualizacao": { "type": "string" },
+        "DFD_Vinculado": { "type": "string" },
+        "Valor_Anual_SOF": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "Num_Contrato", "Objeto", "SEI_Processo", "Vigencia_Inicio", "Valor_Contrato", "Fornecedor"]
+    },
+    "ItemContratoSOF": {
+      "title": "ItemContratoSOF",
+      "description": "Itens do cronograma físico-financeiro do contrato no SOF",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Num_Contrato": { "type": "string" },
+        "Numero_Item": { "type": "string" },
+        "Grupo_Lote": { "type": "string" },
+        "Descricao_Item": { "type": "string" },
+        "Unidade_Medida": { "type": "string" },
+        "Quantidade": { "type": "number" },
+        "Valor_Unitario": { "type": "number" },
+        "Status_Item": { "type": "string", "enum": ["Ativo", "Cancelado", "Totalmente Entregue"] },
+        "Natureza_Despesa": { "type": "string", "enum": ["Custeio", "Investimento"] }
+      },
+      "required": ["id", "Num_Contrato", "Numero_Item", "Descricao_Item"]
+    },
+    "ItemPlanejamentoSOF": {
+      "title": "ItemPlanejamentoSOF",
+      "description": "Itens orçados de um processo de planejamento SEI no SOF",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Processo_SEI": { "type": "string" },
+        "Numero_Item": { "type": "string" },
+        "Grupo_Lote": { "type": "string" },
+        "Descricao_Item": { "type": "string" },
+        "Unidade_Medida": { "type": "string" },
+        "Quantidade": { "type": "number" },
+        "Valor_Unitario": { "type": "number" },
+        "Status_Item": { "type": "string", "enum": ["Ativo", "Cancelado"] },
+        "Natureza_Despesa": { "type": "string", "enum": ["Custeio", "Investimento"] }
+      },
+      "required": ["id", "Processo_SEI", "Numero_Item", "Descricao_Item"]
+    },
+    "TermoAditivo": {
+      "title": "TermoAditivo",
+      "description": "Histórico de Termos Aditivos de cada contrato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Data_Aditivo": { "type": "string" },
+        "Tipo_Aditivo": { "type": "string" },
+        "Porcentagem_Aditivo": { "type": "number" },
+        "Valor_Aditivado": { "type": "number" },
+        "Meses_Renovacoes": { "type": "number" },
+        "Documento_SEI": { "type": "string" },
+        "Observacoes": { "type": "string" },
+        "Num_Contrato": { "type": "string" },
+        "Processo_SEI": { "type": "string" },
+        "Tipo_Operacao": { "type": "string" },
+        "Valor_Final_Apos_Ajuste": { "type": "number" }
+      },
+      "required": ["id", "Num_Contrato", "Tipo_Aditivo", "Valor_Aditivado"]
+    },
+    "TermoApostilamento": {
+      "title": "TermoApostilamento",
+      "description": "Histórico de Termos de Apostilamento de cada contrato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Data_Apostilamento": { "type": "string" },
+        "Tipo_Apostilamento": { "type": "string" },
+        "Porcentagem_Reajuste": { "type": "number" },
+        "Valor_do_Ajuste": { "type": "number" },
+        "Observacoes": { "type": "string" },
+        "Documento_SEI": { "type": "string" },
+        "Num_Contrato": { "type": "string" },
+        "Processo_SEI": { "type": "string" },
+        "Tipo_Operacao": { "type": "string" },
+        "Valor_Final_Apos_Ajuste": { "type": "number" }
+      },
+      "required": ["id", "Num_Contrato", "Tipo_Apostilamento", "Valor_do_Ajuste"]
+    },
+    "HistoricoContratual": {
+      "title": "HistoricoContratual",
+      "description": "Históricos de ocorrências do contrato",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Data": { "type": "string" },
+        "ContratoRelacionado": { "type": "string" },
+        "Descricao": { "type": "string" },
+        "Numero_SEI": { "type": "string" },
+        "Coordenacao": { "type": "string" }
+      },
+      "required": ["id", "ContratoRelacionado", "Data", "Descricao"]
+    },
+    "Pagamento": {
+      "title": "Pagamento",
+      "description": "Lançamentos de pagamentos efetuados",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Num_Contrato": { "type": "string" },
+        "Descricao": { "type": "string" },
+        "Data": { "type": "string" },
+        "Valor": { "type": "number" },
+        "Status": { "type": "string", "enum": ["Empenhado", "Liquidado", "Pago"] },
+        "Documento_SEI": { "type": "string" },
+        "Observacoes": { "type": "string" }
+      },
+      "required": ["id", "Num_Contrato", "Valor", "Status"]
+    },
+    "BaseDeConhecimento": {
+      "title": "BaseDeConhecimento",
+      "description": "Documentos legais e links de normativos técnicos de governança",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Dispositivo_Legal": { "type": "string" },
+        "Descricao": { "type": "string" },
+        "Acesso": { "type": "string" },
+        "Categoria": { "type": "string", "enum": ["Interno", "Geral"] }
+      },
+      "required": ["id", "Dispositivo_Legal", "Descricao", "Acesso", "Categoria"]
+    },
+    "FAQItem": {
+      "title": "FAQItem",
+      "description": "Perguntas frequentes e respostas do sistema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "Pergunta": { "type": "string" },
+        "Resposta": { "type": "string" }
+      },
+      "required": ["id", "Pergunta", "Resposta"]
+    },
+    "PresencialGECTI": {
+      "title": "PresencialGECTI",
+      "description": "Escalas de trabalho presencial consecutivas dos membros da GECTI",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "dataInicio": { "type": "string" },
+        "dataFim": { "type": "string" },
+        "diasUteisSeguidos": { "type": "number" }
+      },
+      "required": ["id", "userId", "dataInicio", "dataFim"]
+    },
+    "ProcessTemplate": {
+      "title": "ProcessTemplate",
+      "description": "Modelos de tarefas para tipos de processos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tipo": { "type": "string" },
+        "tasks": { "type": "array" }
+      },
+      "required": ["id", "tipo", "tasks"]
+    },
+    "SIOPData8861": {
+      "title": "SIOPData8861",
+      "description": "Dados informativos da ação orçamentária 8861 inseridos manualmente",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dotacaoInicial": { "type": "number" },
+        "dotacaoAtual": { "type": "number" },
+        "empenhado": { "type": "number" },
+        "liquidado": { "type": "number" },
+        "pago": { "type": "number" },
+        "dotacaoInicialCusteio": { "type": "number" },
+        "dotacaoAtualCusteio": { "type": "number" },
+        "empenhadoCusteio": { "type": "number" },
+        "liquidadoCusteio": { "type": "number" },
+        "pagoCusteio": { "type": "number" },
+        "dotacaoInicialInvestimento": { "type": "number" },
+        "dotacaoAtualInvestimento": { "type": "number" },
+        "empenhadoInvestimento": { "type": "number" },
+        "liquidadoInvestimento": { "type": "number" },
+        "pagoInvestimento": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "dotacaoInicial", "dotacaoAtual", "empenhado", "liquidado", "pago", "updatedAt"]
+    },
+    "SIOPHistory8861": {
+      "title": "SIOPHistory8861",
+      "description": "Histórico de alterações nos dados orçamentários oficiais da ação 8861",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "dotacaoInicial": { "type": "number" },
+        "dotacaoAtual": { "type": "number" },
+        "empenhado": { "type": "number" },
+        "liquidado": { "type": "number" },
+        "pago": { "type": "number" },
+        "dotacaoInicialCusteio": { "type": "number" },
+        "dotacaoAtualCusteio": { "type": "number" },
+        "empenhadoCusteio": { "type": "number" },
+        "liquidadoCusteio": { "type": "number" },
+        "pagoCusteio": { "type": "number" },
+        "dotacaoInicialInvestimento": { "type": "number" },
+        "dotacaoAtualInvestimento": { "type": "number" },
+        "empenhadoInvestimento": { "type": "number" },
+        "liquidadoInvestimento": { "type": "number" },
+        "pagoInvestimento": { "type": "number" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" },
+        "updatedByName": { "type": "string" }
+      },
+      "required": ["id", "dotacaoInicial", "dotacaoAtual", "empenhado", "liquidado", "pago", "updatedAt"]
+    },
+    "LoginLog": {
+      "title": "LoginLog",
+      "description": "Registros de auditoria de logins e acessos efetuados no sistema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userRole": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "status": { "type": "string" },
+        "ipSimulated": { "type": "string" },
+        "userAgent": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "userEmail", "userRole", "timestamp", "status"]
+    }
+  },
+  "firestore": {
+    "users": { "schema": "User", "description": "Contas e perfis de usuário do sistema" },
+    "fornecedores": { "schema": "Fornecedor", "description": "Contatos e situações cadastrais dos fornecedores" },
+    "dfds": { "schema": "DFD", "description": "Lançamentos de Documentos de Formalização da Demanda (DFDs)" },
+    "planejamentos": { "schema": "Planejamento", "description": "Processos de planejamento de TIC em andamento" },
+    "historicoPlanejamentos": { "schema": "HistoricoPlanejamento", "description": "Fatos e numerações SEI de cada planejamento" },
+    "tarefas": { "schema": "TarefaPlanejamento", "description": "Atividades e ordens do quadro kanban de processos" },
+    "contratos": { "schema": "Contrato", "description": "Contratos centralizados da coordenação" },
+    "itensSOF": { "schema": "ItemContratoSOF", "description": "Desdobramento físico-financeiro de itens de contrato" },
+    "itensPlanejamentoSOF": { "schema": "ItemPlanejamentoSOF", "description": "Itens orçados do processo de planejamento SEI" },
+    "aditivos": { "schema": "TermoAditivo", "description": "Aditamentos, acréscimos e supressões de valor ou vigência" },
+    "apostilamentos": { "schema": "TermoApostilamento", "description": "Ajustes de reajuste de preço e índices oficiais" },
+    "historicosContratuais": { "schema": "HistoricoContratual", "description": "Ocorrências na fiscalização contratual" },
+    "pagamentos": { "schema": "Pagamento", "description": "Valores faturados, validados e recolhidos" },
+    "baseConhecimento": { "schema": "BaseDeConhecimento", "description": "Manual de governança e normativos da SOF" },
+    "faqs": { "schema": "FAQItem", "description": "Apoio ao usuário e respostas consolidadas" },
+    "presencialDays": { "schema": "PresencialGECTI", "description": "Escala de trabalho semanal em repartição pública" },
+    "templates": { "schema": "ProcessTemplate", "description": "Moldes e rotinas de fluxos de trabalho" },
+    "siopData": { "schema": "SIOPData8861", "description": "Valores orçamentários oficiais da ação 8861 inseridos manualmente" },
+    "siopHistory": { "schema": "SIOPHistory8861", "description": "Históricos das atualizações da ação orçamentária 8861" },
+    "loginLogs": { "schema": "LoginLog", "description": "Registros de auditoria de logins e acessos efetuados" }
+  }
+}

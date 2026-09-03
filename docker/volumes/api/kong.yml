@@ -1,0 +1,56 @@
+_format_version: "2.1"
+_transform: true
+
+services:
+  # PostgREST REST API
+  - name: rest-v1
+    url: http://contratics-rest:3000
+    routes:
+      - name: rest-v1-routes
+        strip_path: true
+        paths:
+          - /rest/v1/
+
+  # GoTrue Auth API
+  - name: auth-v1
+    url: http://contratics-auth:9999
+    routes:
+      - name: auth-v1-routes
+        strip_path: true
+        paths:
+          - /auth/v1/
+
+  # Supabase Realtime WebSockets
+  - name: realtime-v1
+    url: http://contratics-realtime:4000/socket
+    routes:
+      - name: realtime-v1-routes
+        strip_path: true
+        paths:
+          - /realtime/v1/
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+        - HEAD
+      headers:
+        - authorization
+        - apikey
+        - content-type
+        - x-client-info
+        - prefer
+        - range
+      exposed_headers:
+        - content-range
+        - x-total-count
+      credentials: true
+      max_age: 3600

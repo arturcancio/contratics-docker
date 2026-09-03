@@ -1,0 +1,16 @@
+DIFERENÇA DE LOGO DO PDF (SOF)
+=====================================
+
+Para atualizar o logotipo oficial que aparece nos arquivos PDFs exportados, por favor siga os seguintes passos:
+
+1. Coloque a imagem do logo oficial no formato PNG ou JPG com o nome de arquivo exatamente igual a:
+   sof-logo.png
+
+2. Coloque esse arquivo dentro desta pasta (/public).
+
+3. O sistema já está configurado para:
+   - Identificar automaticamente se o arquivo /sof-logo.png existe.
+   - Usar esse novo logotipo oficial nos PDFs exportados (com proporção ajustada de altura de 54px e largura automática).
+   - Se por qualquer motivo o arquivo não estiver presente ou for apagado, o sistema aplica graciosamente o logotipo SVG desenhado em vetor como fallback de segurança para não quebrar a diagramação do documento.
+
+Qualquer dúvida ou alteração que julgue necessária, estamos à disposição!
