@@ -20,6 +20,7 @@ interface KanbanBoardProps {
   templates: ProcessTemplate[];
   onUpdateTemplates: (updatedTemplates: ProcessTemplate[]) => void;
   onSelectPlanejamento?: (id: string) => void;
+  hideGlobalPhaseSelector?: boolean;
 }
 
 export default function KanbanBoard({
@@ -34,6 +35,7 @@ export default function KanbanBoard({
   templates,
   onUpdateTemplates,
   onSelectPlanejamento,
+  hideGlobalPhaseSelector = false,
 }: KanbanBoardProps) {
   const [draggedOverCol, setDraggedOverCol] = useState<StatusTarefa | null>(null);
   const [kanbanSearch, setKanbanSearch] = useState('');
@@ -335,8 +337,9 @@ export default function KanbanBoard({
 
   return (
     <div className="space-y-6" id="kanban-component" data-tour="kanban-header">
-      {/* Fluxo BPM de Contratações de TIC */}
-      <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 md:p-6 shadow-sm space-y-5" data-tour="kanban-pipeline">
+      {/* Fluxo BPM de Contratações de TIC (visível apenas na visão global de fases) */}
+      {!hideGlobalPhaseSelector && (
+        <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 md:p-6 shadow-sm space-y-5" data-tour="kanban-pipeline">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-outline-variant/40">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary shrink-0">
@@ -538,6 +541,7 @@ export default function KanbanBoard({
           </div>
         </div>
       </div>
+    )}
 
       {/* Kanban header bar */}
       <div className="bg-surface-container border border-outline-variant rounded-xl p-4 shadow-sm flex flex-col gap-3.5" data-tour="kanban-actions">

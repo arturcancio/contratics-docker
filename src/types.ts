@@ -87,6 +87,14 @@ export interface Planejamento {
   Contabilizar_Orcamento_Anual?: { [year: string]: boolean };
   Valor_Customizado_Anual?: { [year: string]: number | null };
   isBudgetOnlyItem?: boolean;
+  bpmnLanes?: BpmnLane[];
+}
+
+export interface BpmnLane {
+  id: string;
+  nome: string;
+  cor?: string;
+  ordem?: number;
 }
 
 export interface HistoricoPlanejamento {
@@ -117,6 +125,11 @@ export interface TarefaPlanejamento {
   MovidoEm?: string; // timestamp of movement
   DuracaoColunas?: Record<string, number>; // records in seconds in each column
   subTarefas?: SubTarefa[];
+  areaResponsavel?: string; // Raia / Swimlane responsável no BPMN
+  ordemFluxo?: number;
+  bpmnType?: 'task' | 'gateway' | 'start' | 'end';
+  descricao?: string;
+  dataConclusao?: string;
 }
 
 export type StatusContrato = 'Vigente' | 'A Vencer' | 'Encerrado';

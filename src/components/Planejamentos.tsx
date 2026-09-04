@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { formatCurrency, formatDate, formatDateTime, isModifiedRecently, parseMonetaryValue } from '../utils';
 import KanbanBoard from './KanbanBoard';
+import BpmnFlowBoard from './BpmnFlowBoard';
 import ItensPlanejamentoSOFPanel from './ItensPlanejamentoSOFPanel';
 import { CurrencyInput } from './CurrencyInput';
 import { ReUIBadge, ReUIStepper } from './ReUI';
@@ -1968,20 +1969,32 @@ export default function Planejamentos({
               </div>
             </div>
           ) : activeSubTab === 'tarefas' ? (
-            /* Kanban Board Component integrated */
-            <KanbanBoard
-              planejamento={selectedPlan!}
-              allPlanejamentos={planejamentos}
-              itensPlanejamentoSOF={itensPlanejamentoSOF}
-              tarefas={tarefas}
-              currentUser={currentUser}
-              onAddTarefa={onAddTarefa}
-              onUpdateTarefa={onUpdateTarefa}
-              onDeleteTarefa={onDeleteTarefa}
-              templates={templates}
-              onUpdateTemplates={onUpdateTemplates}
-              onSelectPlanejamento={(id) => setSelectedPlanId(id)}
-            />
+            /* Fluxo BPMN Interativo do Processo + Quadro Kanban */
+            <div className="space-y-6">
+              <BpmnFlowBoard
+                planejamento={selectedPlan!}
+                tarefas={tarefas}
+                currentUser={currentUser}
+                onAddTarefa={onAddTarefa}
+                onUpdateTarefa={onUpdateTarefa}
+                onDeleteTarefa={onDeleteTarefa}
+                onUpdatePlanejamento={onEditPlanejamento}
+              />
+              <KanbanBoard
+                planejamento={selectedPlan!}
+                allPlanejamentos={planejamentos}
+                itensPlanejamentoSOF={itensPlanejamentoSOF}
+                tarefas={tarefas}
+                currentUser={currentUser}
+                onAddTarefa={onAddTarefa}
+                onUpdateTarefa={onUpdateTarefa}
+                onDeleteTarefa={onDeleteTarefa}
+                templates={templates}
+                onUpdateTemplates={onUpdateTemplates}
+                onSelectPlanejamento={(id) => setSelectedPlanId(id)}
+                hideGlobalPhaseSelector={true}
+              />
+            </div>
           ) : (
             <ItensPlanejamentoSOFPanel
               planejamento={selectedPlan!}
