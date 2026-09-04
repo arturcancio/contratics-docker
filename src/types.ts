@@ -88,6 +88,8 @@ export interface Planejamento {
   Valor_Customizado_Anual?: { [year: string]: number | null };
   isBudgetOnlyItem?: boolean;
   bpmnLanes?: BpmnLane[];
+  bpmnNodes?: BpmnNode[];
+  bpmnConnections?: BpmnConnection[];
 }
 
 export interface BpmnLane {
@@ -95,6 +97,44 @@ export interface BpmnLane {
   nome: string;
   cor?: string;
   ordem?: number;
+}
+
+export type BpmnNodeType = 
+  | 'start' 
+  | 'start_message'
+  | 'start_timer'
+  | 'task_user' 
+  | 'task_service' 
+  | 'task_send'
+  | 'task_subprocess'
+  | 'gateway_exclusive' 
+  | 'gateway_parallel' 
+  | 'gateway_inclusive'
+  | 'gateway_event'
+  | 'timer' 
+  | 'intermediate_message'
+  | 'end' 
+  | 'end_terminate'
+  | 'data_object'
+  | 'annotation';
+
+export interface BpmnNode {
+  id: string;
+  type: BpmnNodeType;
+  label: string;
+  laneId: string;
+  prazoDias?: number;
+  descricao?: string;
+  tarefaId?: string;
+}
+
+export interface BpmnConnection {
+  id: string;
+  fromId: string;
+  toId: string;
+  label?: string;
+  tipo?: 'sequence' | 'conditional' | 'default' | 'association';
+  cor?: string;
 }
 
 export interface HistoricoPlanejamento {
