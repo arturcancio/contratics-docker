@@ -385,50 +385,138 @@ export default function BpmnFlowBoard({
     return PALETTE_ITEMS.filter(i => i.category === paletteTab);
   }, [paletteTab]);
 
-  // --- ROTEAMENTO ORTOGONAL (MANHATTAN) DE SETAS EM ÂNGULO RETO ---
+  // --- ROTEAMENTO ORTOGONAL (MANHATTAN) DE SETAS EM ÂNGULO RETO COM DESVIO DE OBSTÁCULOS ---
   const getOrthogonalPath = (
     p1: { x: number; y: number; w: number; h: number },
     p2: { x: number; y: number; w: number; h: number },
-    conn: BpmnConnection
+    conn: BpmnConnection,
+    allPos: Record<string, { x: number; y: number; w: number; h: number }>
   ) => {
-    // Verificar se o nó destino está à esquerda do nó de origem (Retorno / Loop para trás)
+    // Helper para verificar se um segmento de linha cruza qualquer outro nó
+    const intersectsOtherNode = (x1: number, y1: number, x2: number, y2: number) => {
+      for (const [id, node] of Object.entries(allPos)) {
+        if (id === conn.fromId || id === conn.toId) continue;
+        const margin = 6;
+        const left = node.x - node.w / 2 - margin;
+        const right = node.x + node.w / 2 + margin;
+        const top = node.y - node.h / 2 - margin;
+        const bottom = node.y + node.h / 2 + margin;
+
+        // Segmento vertical
+        if (Math.abs(x1 - x2) < 2) {
+          const segX = x1;
+          const minY = Math.min(y1, y2);
+          const maxY = Math.max(y1, y2);
+          if (segX >= left && segX <= right && maxY > top && minY < bottom) {
+            return true;
+          }
+        }
+        // Segmento horizontal
+        if (Math.abs(y1 - y2) < 2) {
+          const segY = y1;
+          const minX = Math.min(x1, x2);
+          const maxX = Math.max(x1, x2);
+          if (segY >= top && segY <= bottom && maxX > left && minX < right) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    const isCrossLane = Math.abs(p1.y - p2.y) > 80;
+
+    if (isCrossLane) {
+      // --- CONEXÃO ENTRE RAIAS DIFERENTES ---
+      const isGoingDown = p2.y > p1.y;
+
+      if (isGoingDown) {
+        // De cima para baixo (ex: Raia 1 -> Raia 2)
+        // Corredor livre entre as duas fileiras de nós (faixa de transição entre raias)
+        const p1Bottom = p1.y + p1.h / 2;
+        const p2Top = p2.y - p2.h / 2;
+        const corridorY = (p1Bottom + p2Top) / 2;
+
+        const startX = p1.x;
+        const startY = p1Bottom;
+        const endX = p2.x;
+        const endY = p2Top;
+
+        // Se o destino está alinhado na mesma coluna X, desce em linha reta
+        if (Math.abs(startX - endX) <= 6 && !intersectsOtherNode(startX, startY, endX, endY)) {
+          const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
+          const labelPos = { x: startX + 12, y: corridorY };
+          return { pathData, labelPos, isBackward: false };
+        }
+
+        // Sai da base de A, desce até o corredor entre raias,
+        // corre na horizontal pelo corredor livre (por fora de qualquer atividade)
+        // e desce verticalmente no topo de B
+        const pathData = `M ${startX} ${startY} L ${startX} ${corridorY} L ${endX} ${corridorY} L ${endX} ${endY}`;
+        const labelPos = { x: (startX + endX) / 2, y: corridorY - 10 };
+        return { pathData, labelPos, isBackward: false };
+      } else {
+        // De baixo para cima (ex: Raia 2 -> Raia 1)
+        const p1Top = p1.y - p1.h / 2;
+        const p2Bottom = p2.y + p2.h / 2;
+        const corridorY = (p1Top + p2Bottom) / 2;
+
+        const startX = p1.x;
+        const startY = p1Top;
+        const endX = p2.x;
+        const endY = p2Bottom;
+
+        if (Math.abs(startX - endX) <= 6 && !intersectsOtherNode(startX, startY, endX, endY)) {
+          const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
+          const labelPos = { x: startX + 12, y: corridorY };
+          return { pathData, labelPos, isBackward: false };
+        }
+
+        const pathData = `M ${startX} ${startY} L ${startX} ${corridorY} L ${endX} ${corridorY} L ${endX} ${endY}`;
+        const labelPos = { x: (startX + endX) / 2, y: corridorY - 10 };
+        return { pathData, labelPos, isBackward: false };
+      }
+    }
+
+    // --- CONEXÃO NA MESMA RAIA (MESMA ALTURA) ---
     const isBackward = p2.x < p1.x + p1.w / 2 + 15;
 
     if (isBackward) {
-      // Loop de retorno (como o caminho "Yes" na imagem de referência)
-      // Sai da borda inferior de A
+      // Retorno / Loop para trás (como na imagem de referência)
+      // Sai da base de A, passa pelo canal inferior da raia e sobe na base de B
       const startX = p1.x;
       const startY = p1.y + p1.h / 2;
-
-      // Entra na borda inferior de B
       const endX = p2.x;
       const endY = p2.y + p2.h / 2;
 
-      // Canal horizontal inferior passando abaixo de ambos os nós
-      const loopY = Math.max(startY, endY) + 48;
-
-      // Traçado ortogonal estrito com dobras de 90 graus
+      const loopY = Math.max(startY, endY) + 40;
       const pathData = `M ${startX} ${startY} L ${startX} ${loopY} L ${endX} ${loopY} L ${endX} ${endY}`;
-      const labelPos = { x: startX + 8, y: startY + 20 };
+      const labelPos = { x: startX + 8, y: startY + 18 };
 
       return { pathData, labelPos, isBackward: true };
     } else {
-      // Fluxo em frente (para a direita)
+      // Fluxo em frente para a direita
       const startX = p1.x + p1.w / 2;
       const startY = p1.y;
       const endX = p2.x - p2.w / 2;
       const endY = p2.y;
 
-      if (Math.abs(startY - endY) <= 5) {
-        // Linha reta horizontal direta (exatamente como na imagem)
+      if (!intersectsOtherNode(startX, startY, endX, endY) && Math.abs(startY - endY) <= 5) {
+        // Linha reta horizontal direta (sem obstáculos)
         const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
         const labelPos = { x: (startX + endX) / 2, y: startY - 12 };
         return { pathData, labelPos, isBackward: false };
-      } else {
-        // Degrau ortogonal com duas curvas em 90 graus
+      } else if (!intersectsOtherNode(startX, startY, endX, endY)) {
+        // Degrau ortogonal normal
         const midX = (startX + endX) / 2;
         const pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
         const labelPos = { x: midX + 8, y: (startY + endY) / 2 };
+        return { pathData, labelPos, isBackward: false };
+      } else {
+        // Há um nó intermediário no caminho horizontal! Desvia "por fora" pelo canal superior
+        const bypassY = Math.min(p1.y - p1.h / 2, p2.y - p2.h / 2) - 36;
+        const pathData = `M ${p1.x} ${p1.y - p1.h / 2} L ${p1.x} ${bypassY} L ${p2.x} ${bypassY} L ${p2.x} ${p2.y - p2.h / 2}`;
+        const labelPos = { x: (p1.x + p2.x) / 2, y: bypassY - 8 };
         return { pathData, labelPos, isBackward: false };
       }
     }
@@ -1169,7 +1257,7 @@ export default function BpmnFlowBoard({
             const p2 = nodePositions[conn.toId];
             if (!p1 || !p2) return null;
 
-            const { pathData, labelPos, isBackward } = getOrthogonalPath(p1, p2, conn);
+            const { pathData, labelPos, isBackward } = getOrthogonalPath(p1, p2, conn, nodePositions);
             const isAssociation = conn.tipo === 'association';
 
             return (
