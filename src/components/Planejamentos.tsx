@@ -180,7 +180,7 @@ export default function Planejamentos({
     }
     return { custeio: val, investimento: 0 };
   };
-  const [activeSubTab, setActiveSubTab] = useState<'historico' | 'tarefas' | 'itens-sof'>('historico');
+  const [activeSubTab, setActiveSubTab] = useState<'tarefas' | 'itens-sof' | 'historico'>('tarefas');
 
   // Form Modals
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
@@ -1870,20 +1870,8 @@ export default function Planejamentos({
             );
           })()}
 
-          {/* Sub-navigation Tabs: History vs Kanban */}
+          {/* Sub-navigation Tabs: 1ª Fluxo e Kanban, 2ª Itens SOF Orçados, 3ª Histórico Processual */}
           <div className="flex border-b border-outline-variant gap-1 overflow-x-auto" data-tour="plan-detail-tabs">
-            <button
-              onClick={() => setActiveSubTab('historico')}
-              data-tour="plan-tab-historico"
-              className={`px-6 py-3 cursor-pointer text-xs font-bold transition-all relative ${
-                activeSubTab === 'historico'
-                  ? 'text-primary bg-primary/5'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              Aba Histórico Processual
-              {activeSubTab === 'historico' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded" />}
-            </button>
             <button
               onClick={() => setActiveSubTab('tarefas')}
               data-tour="plan-tab-tarefas"
@@ -1894,7 +1882,7 @@ export default function Planejamentos({
               }`}
             >
               <ListTodo className="w-4 h-4 shrink-0" />
-              Aba de Tarefas (Quadro Kanban)
+              Fluxo e Kanban
               {activeSubTab === 'tarefas' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded" />}
             </button>
             <button
@@ -1906,13 +1894,61 @@ export default function Planejamentos({
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
-              Itens da SOF Orçados
+              Itens SOF Orçados
               {activeSubTab === 'itens-sof' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded" />}
+            </button>
+            <button
+              onClick={() => setActiveSubTab('historico')}
+              data-tour="plan-tab-historico"
+              className={`px-6 py-3 cursor-pointer text-xs font-bold transition-all relative ${
+                activeSubTab === 'historico'
+                  ? 'text-primary bg-primary/5'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              Histórico Processual
+              {activeSubTab === 'historico' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded" />}
             </button>
           </div>
 
           {/* Tab body contents */}
-          {activeSubTab === 'historico' ? (
+          {activeSubTab === 'tarefas' ? (
+            /* Fluxo BPMN Interativo do Processo + Quadro Kanban */
+            <div className="space-y-6">
+              <BpmnFlowBoard
+                planejamento={selectedPlan!}
+                tarefas={tarefas}
+                currentUser={currentUser}
+                onAddTarefa={onAddTarefa}
+                onUpdateTarefa={onUpdateTarefa}
+                onDeleteTarefa={onDeleteTarefa}
+                onUpdatePlanejamento={onEditPlanejamento}
+              />
+              <KanbanBoard
+                planejamento={selectedPlan!}
+                allPlanejamentos={planejamentos}
+                itensPlanejamentoSOF={itensPlanejamentoSOF}
+                tarefas={tarefas}
+                currentUser={currentUser}
+                onAddTarefa={onAddTarefa}
+                onUpdateTarefa={onUpdateTarefa}
+                onDeleteTarefa={onDeleteTarefa}
+                templates={templates}
+                onUpdateTemplates={onUpdateTemplates}
+                onSelectPlanejamento={(id) => setSelectedPlanId(id)}
+                hideGlobalPhaseSelector={true}
+              />
+            </div>
+          ) : activeSubTab === 'itens-sof' ? (
+            <ItensPlanejamentoSOFPanel
+              planejamento={selectedPlan!}
+              itensPlanejamentoSOF={itensPlanejamentoSOF}
+              currentUser={currentUser}
+              onAddItem={onAddItemPlanejamentoSOF}
+              onEditItem={onEditItemPlanejamentoSOF}
+              onDeleteItem={onDeleteItemPlanejamentoSOF}
+            />
+          ) : (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <div>
@@ -1968,42 +2004,6 @@ export default function Planejamentos({
                 )}
               </div>
             </div>
-          ) : activeSubTab === 'tarefas' ? (
-            /* Fluxo BPMN Interativo do Processo + Quadro Kanban */
-            <div className="space-y-6">
-              <BpmnFlowBoard
-                planejamento={selectedPlan!}
-                tarefas={tarefas}
-                currentUser={currentUser}
-                onAddTarefa={onAddTarefa}
-                onUpdateTarefa={onUpdateTarefa}
-                onDeleteTarefa={onDeleteTarefa}
-                onUpdatePlanejamento={onEditPlanejamento}
-              />
-              <KanbanBoard
-                planejamento={selectedPlan!}
-                allPlanejamentos={planejamentos}
-                itensPlanejamentoSOF={itensPlanejamentoSOF}
-                tarefas={tarefas}
-                currentUser={currentUser}
-                onAddTarefa={onAddTarefa}
-                onUpdateTarefa={onUpdateTarefa}
-                onDeleteTarefa={onDeleteTarefa}
-                templates={templates}
-                onUpdateTemplates={onUpdateTemplates}
-                onSelectPlanejamento={(id) => setSelectedPlanId(id)}
-                hideGlobalPhaseSelector={true}
-              />
-            </div>
-          ) : (
-            <ItensPlanejamentoSOFPanel
-              planejamento={selectedPlan!}
-              itensPlanejamentoSOF={itensPlanejamentoSOF}
-              currentUser={currentUser}
-              onAddItem={onAddItemPlanejamentoSOF}
-              onEditItem={onEditItemPlanejamentoSOF}
-              onDeleteItem={onDeleteItemPlanejamentoSOF}
-            />
           )}
         </div>
       )}

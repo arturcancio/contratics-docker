@@ -217,8 +217,10 @@ export default function App() {
     const root = document.documentElement;
     if (theme === 'light') {
       root.classList.add('light');
+      root.classList.remove('dark');
     } else {
       root.classList.remove('light');
+      root.classList.add('dark');
     }
     localStorage.setItem('contratics_theme', theme);
   }, [theme]);

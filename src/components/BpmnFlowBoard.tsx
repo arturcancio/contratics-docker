@@ -1001,7 +1001,7 @@ export default function BpmnFlowBoard({
               <h3 className="text-base font-bold text-on-surface tracking-tight">
                 Fluxo BPMN 2.0 Oficial
               </h3>
-              <span className="text-[9.5px] font-mono font-bold bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 px-2 py-0.5 rounded">
+              <span className="text-[9.5px] font-mono font-bold bg-surface-container-high text-on-surface border border-outline-variant px-2 py-0.5 rounded">
                 Setas Retas 90° + Formatação Canônica
               </span>
               {connectSourceId && (
@@ -1087,7 +1087,7 @@ export default function BpmnFlowBoard({
             onClick={() => { setActiveTool('connect_sequence'); setConnectSourceId(null); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
               activeTool === 'connect_sequence'
-                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 font-bold border-slate-700 shadow-xs'
+                ? 'bg-primary text-on-primary font-bold border-primary shadow-xs'
                 : 'bg-surface-container-low text-on-surface border-outline-variant hover:bg-surface-container-high'
             }`}
             title="Traçar Seta de Fluxo: clique na origem e no destino para criar linha reta em 90 graus"
@@ -1219,7 +1219,7 @@ export default function BpmnFlowBoard({
       {/* BPMN Interactive Pool Canvas (Estrutura da Imagem de Referência) */}
       <div 
         ref={canvasRef}
-        className="bg-white dark:bg-slate-950 border-2 border-slate-800 dark:border-slate-200 rounded-xl overflow-x-auto custom-scrollbar shadow-md relative"
+        className="bg-surface-container-lowest border-2 border-outline-variant rounded-xl overflow-x-auto custom-scrollbar shadow-md relative"
       >
         {/* Camada SVG de Conectores (Setas Retas em 90 Graus) */}
         <svg 
@@ -1261,7 +1261,7 @@ export default function BpmnFlowBoard({
             const isAssociation = conn.tipo === 'association';
 
             return (
-              <g key={conn.id} className="pointer-events-auto group text-slate-900 dark:text-slate-100">
+              <g key={conn.id} className="pointer-events-auto group text-on-surface">
                 {/* Linha invisível larga para clique facilitado */}
                 <path
                   d={pathData}
@@ -1299,7 +1299,7 @@ export default function BpmnFlowBoard({
                       <button
                         type="button"
                         onClick={() => handleOpenConnectionModal(conn)}
-                        className="bg-white/95 dark:bg-slate-900/95 border border-slate-300 dark:border-slate-700 text-[10.5px] font-semibold text-slate-900 dark:text-slate-100 px-1.5 py-0.5 rounded shadow-2xs hover:scale-105 transition-all cursor-pointer whitespace-nowrap"
+                        className="bg-surface-container-low/95 border border-outline-variant text-[10.5px] font-semibold text-on-surface px-1.5 py-0.5 rounded shadow-2xs hover:scale-105 transition-all cursor-pointer whitespace-nowrap"
                         title="Clique para editar rótulo da seta"
                       >
                         {conn.label}
@@ -1318,7 +1318,7 @@ export default function BpmnFlowBoard({
                     <button
                       type="button"
                       onClick={() => handleOpenConnectionModal(conn)}
-                      className="bg-white dark:bg-slate-900 border border-slate-400 text-[8px] font-mono px-1 py-0.5 rounded shadow-xs cursor-pointer text-slate-700 dark:text-slate-200 hover:bg-primary hover:text-white"
+                      className="bg-surface-container-low border border-outline-variant text-[8px] font-mono px-1 py-0.5 rounded shadow-xs cursor-pointer text-on-surface-variant hover:bg-primary hover:text-on-primary"
                       title="Clique para nomear esta seta (ex: Sim/Não)"
                     >
                       +
@@ -1330,7 +1330,7 @@ export default function BpmnFlowBoard({
           })}
         </svg>
 
-        <div className="min-w-[1100px] divide-y-2 divide-slate-800 dark:divide-slate-200 relative z-10">
+        <div className="min-w-[1100px] divide-y-2 divide-outline-variant relative z-10">
           {/* Swimlanes Render */}
           {lanes.map((lane, laneIdx) => {
             const laneTasks = filteredTarefas.filter(t => {
@@ -1352,12 +1352,12 @@ export default function BpmnFlowBoard({
                 className={`flex flex-row min-h-[290px] transition-all group ${
                   isDropTarget 
                     ? 'bg-primary/5 ring-2 ring-inset ring-primary/40' 
-                    : 'bg-white dark:bg-slate-950'
+                    : 'bg-surface-container-lowest'
                 }`}
               >
                 {/* Cabeçalho Vertical da Raia (Estilo "Customer" da Imagem de Referência) */}
                 <div 
-                  className="w-12 sm:w-14 border-r-2 border-slate-800 dark:border-slate-200 bg-slate-50 dark:bg-slate-900/80 flex flex-col justify-between items-center py-4 select-none relative shrink-0"
+                  className="w-12 sm:w-14 border-r-2 border-outline-variant bg-surface-container-low flex flex-col justify-between items-center py-4 select-none relative shrink-0"
                   style={{ borderLeft: `5px solid ${lane.cor || '#0ea5e9'}` }}
                 >
                   {/* Botões rápidos discretos no topo da faixa vertical */}
@@ -1366,7 +1366,7 @@ export default function BpmnFlowBoard({
                       <button
                         type="button"
                         onClick={() => handleMoveLane(laneIdx, 'up')}
-                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded cursor-pointer"
+                        className="p-1 hover:bg-surface-container-high text-on-surface-variant rounded cursor-pointer"
                         title="Mover raia para cima"
                       >
                         <MoveVertical className="w-3 h-3" />
@@ -1375,7 +1375,7 @@ export default function BpmnFlowBoard({
                     <button
                       type="button"
                       onClick={() => handleOpenLaneModal(lane)}
-                      className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 rounded cursor-pointer"
+                      className="p-1 hover:bg-surface-container-high text-on-surface-variant rounded cursor-pointer"
                       title="Editar nome da raia"
                     >
                       <Edit3 className="w-3 h-3" />
@@ -1385,7 +1385,7 @@ export default function BpmnFlowBoard({
                   {/* Nome da Área formatado verticalmente seguindo a linha (como "Customer") */}
                   <div className="flex-1 flex items-center justify-center my-2">
                     <span 
-                      className="text-xs sm:text-sm font-bold tracking-widest text-slate-900 dark:text-slate-100 uppercase whitespace-nowrap cursor-pointer hover:text-primary transition-colors"
+                      className="text-xs sm:text-sm font-bold tracking-widest text-on-surface uppercase whitespace-nowrap cursor-pointer hover:text-primary transition-colors"
                       style={{
                         writingMode: 'vertical-rl',
                         transform: 'rotate(180deg)',
@@ -1403,7 +1403,7 @@ export default function BpmnFlowBoard({
                       <button
                         type="button"
                         onClick={() => handleDeleteLane(lane.id, lane.nome)}
-                        className="p-1 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-500 rounded cursor-pointer"
+                        className="p-1 hover:bg-rose-500/15 text-rose-500 rounded cursor-pointer"
                         title="Remover raia"
                       >
                         <Trash2 className="w-3 h-3" />
@@ -1415,8 +1415,8 @@ export default function BpmnFlowBoard({
                 {/* Conteúdo da Raia / Elementos Alinhados Harmoniosamente */}
                 <div className="flex-1 px-8 py-6 flex items-center gap-14 sm:gap-18 overflow-x-auto custom-scrollbar relative">
                   {laneTasks.length === 0 && laneAdditionalNodes.length === 0 ? (
-                    <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-800 rounded-xl p-6 text-center">
-                      <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                    <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-outline-variant rounded-xl p-6 text-center">
+                      <span className="text-xs text-on-surface-variant font-medium">
                         {isDropTarget 
                           ? 'Solte o elemento BPMN aqui...' 
                           : 'Arraste componentes da paleta para esta raia ou clique em "+ Nova Tarefa"'}
@@ -1442,7 +1442,7 @@ export default function BpmnFlowBoard({
                           >
                             {/* Rótulo ACIMA no caso de Gateways (como "Scan successful?" na imagem) */}
                             {isGateway && (
-                              <span className="absolute -top-3 text-[11px] font-bold text-slate-900 dark:text-slate-100 text-center leading-tight whitespace-nowrap bg-white/90 dark:bg-slate-950/90 px-1.5 py-0.5 rounded shadow-2xs z-10">
+                              <span className="absolute -top-3 text-[11px] font-bold text-on-surface text-center leading-tight whitespace-nowrap bg-surface-container-low/95 border border-outline-variant px-1.5 py-0.5 rounded shadow-2xs z-10">
                                 {node.label}
                               </span>
                             )}
@@ -1463,35 +1463,35 @@ export default function BpmnFlowBoard({
                                 isConnectingSource ? 'ring-4 ring-amber-400 shadow-lg' : ''
                               } ${
                                 isGateway
-                                  ? 'w-13 h-13 rotate-45 border-2 border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-900 flex items-center justify-center shadow-xs'
+                                  ? 'w-13 h-13 rotate-45 border-2 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
                                   : isStart
-                                    ? 'w-11 h-11 rounded-full border-2 border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-900 flex items-center justify-center shadow-xs'
+                                    ? 'w-11 h-11 rounded-full border-2 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
                                     : isEnd
-                                      ? 'w-11 h-11 rounded-full border-4 border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-900 flex items-center justify-center shadow-xs'
+                                      ? 'w-11 h-11 rounded-full border-4 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
                                       : node.type === 'timer'
-                                        ? 'w-11 h-11 rounded-full border-2 border-double border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-900 flex items-center justify-center shadow-xs'
+                                        ? 'w-11 h-11 rounded-full border-2 border-double border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
                                         : isDataObject
-                                          ? 'w-24 h-28 border-2 border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-900 rounded-sm flex flex-col justify-center items-center shadow-xs p-2'
-                                          : 'w-32 border-l-4 border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-900 p-2 text-xs italic shadow-xs'
+                                          ? 'w-24 h-28 border-2 border-outline-variant bg-surface-container-low text-on-surface rounded-sm flex flex-col justify-center items-center shadow-xs p-2'
+                                          : 'w-32 border-l-4 border-outline-variant bg-surface-container-low text-on-surface p-2 text-xs italic shadow-xs'
                               }`}
                             >
                               {/* Símbolo Interno do Nó */}
                               {isGateway && (
-                                <span className="-rotate-45 text-xl font-black font-mono text-slate-900 dark:text-slate-100 select-none">
+                                <span className="-rotate-45 text-xl font-black font-mono text-on-surface select-none">
                                   {node.type === 'gateway_exclusive' ? '✕' : node.type === 'gateway_parallel' ? '➕' : '◯'}
                                 </span>
                               )}
                               {isStart && node.type === 'start_message' && (
-                                <Mail className="w-4 h-4 text-slate-800 dark:text-slate-200" />
+                                <Mail className="w-4 h-4 text-on-surface" />
                               )}
                               {node.type === 'timer' && (
-                                <Clock className="w-4 h-4 text-slate-800 dark:text-slate-200" />
+                                <Clock className="w-4 h-4 text-on-surface" />
                               )}
                               {node.type === 'end_terminate' && (
-                                <span className="w-4 h-4 rounded-full bg-slate-900 dark:bg-slate-100 inline-block" />
+                                <span className="w-4 h-4 rounded-full bg-on-surface inline-block" />
                               )}
                               {isDataObject && (
-                                <FileText className="w-6 h-6 text-slate-800 dark:text-slate-200 mb-1" />
+                                <FileText className="w-6 h-6 text-on-surface mb-1" />
                               )}
 
                               {/* Puxador rápido de Seta na borda direita */}
@@ -1503,7 +1503,7 @@ export default function BpmnFlowBoard({
                                 } ${
                                   isConnectingSource 
                                     ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-amber-300 animate-pulse'
-                                    : 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 border-slate-700 opacity-0 group-hover/node:opacity-100 hover:scale-115'
+                                    : 'bg-surface-container-high text-on-surface border border-outline-variant opacity-0 group-hover/node:opacity-100 hover:scale-115 hover:bg-primary hover:text-on-primary'
                                 }`}
                                 title="Traçar Seta a partir deste nó"
                               >
@@ -1513,17 +1513,17 @@ export default function BpmnFlowBoard({
 
                             {/* Rótulo ABAIXO no caso de Start, End e Artefatos (como "Notices QR code" e "Is informed") */}
                             {!isGateway && (
-                              <span className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 text-center mt-2.5 leading-snug max-w-[110px] break-words">
+                              <span className="text-[11px] font-semibold text-on-surface text-center mt-2.5 leading-snug max-w-[110px] break-words">
                                 {node.label}
                               </span>
                             )}
 
                             {/* Ações de Edição e Exclusão no hover */}
-                            <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity bg-white/95 dark:bg-slate-900/95 border border-slate-300 dark:border-slate-700 rounded-md p-0.5 shadow-xs z-30">
+                            <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity bg-surface-container-low/95 border border-outline-variant rounded-md p-0.5 shadow-xs z-30">
                               <button
                                 type="button"
                                 onClick={() => handleOpenNodeModal(node)}
-                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded"
+                                className="p-1 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface rounded"
                                 title="Editar elemento"
                               >
                                 <Edit3 className="w-3 h-3" />
@@ -1531,7 +1531,7 @@ export default function BpmnFlowBoard({
                               <button
                                 type="button"
                                 onClick={() => handleDeleteNode(node.id)}
-                                className="p-1 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-500 rounded"
+                                className="p-1 hover:bg-rose-500/15 text-rose-500 rounded"
                                 title="Excluir elemento"
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -1560,7 +1560,7 @@ export default function BpmnFlowBoard({
                                   handleConnectElement(task.id);
                                 }
                               }}
-                              className={`w-44 h-24 rounded-2xl border-2 border-slate-900 dark:border-slate-100 bg-white dark:bg-slate-900 flex flex-col justify-between p-2.5 shadow-xs relative transition-all select-none ${
+                              className={`w-44 h-24 rounded-2xl border-2 border-outline-variant bg-surface-container-low flex flex-col justify-between p-2.5 shadow-xs relative transition-all select-none hover:border-primary ${
                                 activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
                               } ${
                                 isConnectingSource
@@ -1572,7 +1572,7 @@ export default function BpmnFlowBoard({
                             >
                               {/* Top Header da Tarefa: mini ícone de tipo BPMN + alerta SLA */}
                               <div className="flex items-center justify-between">
-                                <span className="text-slate-600 dark:text-slate-400" title="BPMN Activity">
+                                <span className="text-on-surface-variant" title="BPMN Activity">
                                   <User className="w-3.5 h-3.5" />
                                 </span>
 
@@ -1585,13 +1585,13 @@ export default function BpmnFlowBoard({
 
                               {/* Texto Principal Centralizado (como "Scan QR code" e "Open product information") */}
                               <div className="flex-1 flex items-center justify-center text-center px-1">
-                                <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-snug line-clamp-3">
+                                <p className="text-xs font-semibold text-on-surface leading-snug line-clamp-3">
                                   {task.Tarefa}
                                 </p>
                               </div>
 
                               {/* Rodapé discreto com Prazo e Status */}
-                              <div className="flex items-center justify-between text-[9.5px] text-slate-500 dark:text-slate-400 font-mono pt-1 border-t border-slate-200 dark:border-slate-800">
+                              <div className="flex items-center justify-between text-[9.5px] text-on-surface-variant font-mono pt-1 border-t border-outline-variant/60">
                                 <span className="flex items-center gap-0.5">
                                   <Clock className="w-2.5 h-2.5" />
                                   <strong>{sla.prazo}d</strong>
@@ -1608,7 +1608,7 @@ export default function BpmnFlowBoard({
                                 className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-30 cursor-pointer shadow-md ${
                                   isConnectingSource 
                                     ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-amber-300 animate-pulse'
-                                    : 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950 border-slate-700 opacity-0 group-hover/card:opacity-100 hover:scale-115'
+                                    : 'bg-surface-container-high text-on-surface border border-outline-variant opacity-0 group-hover/card:opacity-100 hover:scale-115 hover:bg-primary hover:text-on-primary'
                                 }`}
                                 title="Traçar Seta a partir desta Tarefa"
                               >
@@ -1617,11 +1617,11 @@ export default function BpmnFlowBoard({
                             </div>
 
                             {/* Ações de Edição e Exclusão no hover */}
-                            <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-white/95 dark:bg-slate-900/95 border border-slate-300 dark:border-slate-700 rounded-md p-0.5 shadow-xs z-30">
+                            <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-surface-container-low/95 border border-outline-variant rounded-md p-0.5 shadow-xs z-30">
                               <button
                                 type="button"
                                 onClick={() => handleOpenTaskModal(task, lane.nome)}
-                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded"
+                                className="p-1 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface rounded"
                                 title="Editar tarefa"
                               >
                                 <Edit3 className="w-3 h-3" />
@@ -1629,7 +1629,7 @@ export default function BpmnFlowBoard({
                               <button
                                 type="button"
                                 onClick={() => onDeleteTarefa(task.id)}
-                                className="p-1 hover:bg-rose-100 dark:hover:bg-rose-950 text-rose-500 rounded"
+                                className="p-1 hover:bg-rose-500/15 text-rose-500 rounded"
                                 title="Excluir tarefa"
                               >
                                 <Trash2 className="w-3 h-3" />
