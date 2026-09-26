@@ -130,7 +130,8 @@ import {
   ArrowUpRight,
   FileCheck2,
   ListTodo,
-  Scale
+  Scale,
+  RefreshCw
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, FunnelChart, Funnel, LabelList, Legend } from 'recharts';
 
@@ -186,30 +187,39 @@ export default function App() {
   // ICTI OData API states from Ipeadata for Dashboard
   const [ictiLoading, setIctiLoading] = useState(false);
   const [ictiData, setIctiData] = useState<{ date: string; value: number }[]>([]);
+  const [ictiIndexData, setIctiIndexData] = useState<{ date: string; value: number }[]>([]);
+  const [ictiMensalData, setIctiMensalData] = useState<{ date: string; value: number }[]>([]);
   const [ictiLatest, setIctiLatest] = useState<{ date: string; value: number } | null>(null);
+  const [ictiLatestIndex, setIctiLatestIndex] = useState<{ date: string; value: number } | null>(null);
+  const [ictiLatestMensal, setIctiLatestMensal] = useState<{ date: string; value: number } | null>(null);
+  const [ictiSource, setIctiSource] = useState<'api' | 'cache' | 'consolidated'>('consolidated');
+  const [ictiLastUpdated, setIctiLastUpdated] = useState<string>('');
 
   // ICTI Calculator Modal state
   const [isIctiCalculatorOpen, setIsIctiCalculatorOpen] = useState(false);
   const [ictiCalculatorContractId, setIctiCalculatorContractId] = useState<string>('');
 
+  const fetchICTI = async (forceRefresh: boolean = false) => {
+    setIctiLoading(true);
+    try {
+      const bundle = await getIctiSeriesBundle(forceRefresh);
+      setIctiData(bundle.series12m);
+      setIctiIndexData(bundle.seriesIndex);
+      setIctiMensalData(bundle.seriesMensal);
+      setIctiLatest(bundle.latest12m);
+      setIctiLatestIndex(bundle.latestIndex);
+      setIctiLatestMensal(bundle.latestMensal);
+      setIctiSource(bundle.source);
+      setIctiLastUpdated(bundle.updatedAt);
+    } catch (err) {
+      console.warn("Aviso ao carregar ICTI:", err);
+    } finally {
+      setIctiLoading(false);
+    }
+  };
+
   React.useEffect(() => {
-    let active = true;
-    const fetchICTI = async () => {
-      setIctiLoading(true);
-      try {
-        const bundle = await getIctiSeriesBundle();
-        if (active) {
-          setIctiData(bundle.series12m);
-          setIctiLatest(bundle.latest12m);
-        }
-      } catch (err) {
-        console.warn("Aviso ao carregar ICTI:", err);
-      } finally {
-        if (active) setIctiLoading(false);
-      }
-    };
-    fetchICTI();
-    return () => { active = false; };
+    fetchICTI(false);
   }, []);
 
   // Apply theme class to the document level
@@ -3704,11 +3714,36 @@ export default function App() {
                       <TrendingUp className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-on-surface font-display">Acompanhamento do Índice de Custos de TI (ICTI)</h4>
-                      <p className="text-[11px] text-on-surface-variant">Série histórica oficial consolidada e auditada pelo Ipea/Ipeadata para contratos de tecnologia.</p>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-on-surface font-display">Acompanhamento do Índice de Custos de TI (ICTI)</h4>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                          ictiSource === 'api' 
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                            : ictiSource === 'cache'
+                            ? 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+                            : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${
+                            ictiSource === 'api' ? 'bg-emerald-400 animate-pulse' : ictiSource === 'cache' ? 'bg-sky-400' : 'bg-amber-400'
+                          }`}></span>
+                          {ictiSource === 'api' ? 'API ao vivo (Ipeadata)' : ictiSource === 'cache' ? 'Cache Local Sincronizado' : 'Base Auditada Oficial'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant">Série histórica oficial consolidada e auditada pelo Ipea/Ipeadata (séries DIMAC12) para reajuste de contratos de tecnologia.</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fetchICTI(true)}
+                      disabled={ictiLoading}
+                      className="px-3 py-1.5 bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant hover:border-amber-400/50 text-on-surface rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                      title="Sincronizar com os servidores do Ipeadata agora"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${ictiLoading ? 'animate-spin' : ''}`} />
+                      <span>{ictiLoading ? 'Sincronizando...' : 'Atualizar com Ipea'}</span>
+                    </button>
+
                     <button
                       onClick={() => {
                         setIctiCalculatorContractId('');
@@ -3725,12 +3760,17 @@ export default function App() {
                       <div className="flex items-center gap-2 text-right">
                         <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 text-[10px] font-bold px-2.5 py-1 rounded-md flex items-center gap-1.5">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          Última divulgação oficial: <strong className="font-mono text-[11px]">{ictiLatest.value.toFixed(2)}%</strong> (Ref: {(() => {
+                          Última divulgação oficial: <strong className="font-mono text-[11px]">{ictiLatest.value.toFixed(2)}%</strong> ({(() => {
                             try {
                               const d = new Date(ictiLatest.date);
                               return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
                             } catch { return '—'; }
                           })()})
+                          {ictiLatestIndex && (
+                            <span className="text-on-surface-variant font-normal ml-1">
+                              | Índice: <strong className="font-mono text-on-surface">{ictiLatestIndex.value.toFixed(4)}</strong>
+                            </span>
+                          )}
                         </span>
                       </div>
                     )}
@@ -3741,12 +3781,20 @@ export default function App() {
                   {/* Left Column: Recharts Area Chart */}
                   <div className="lg:col-span-7 bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 flex flex-col justify-between">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider block mb-3">
-                        Curva de Variação Acumulada nos Últimos 12 Meses
-                      </span>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider block">
+                          Curva de Variação Acumulada nos Últimos 12 Meses (DIMAC12_ICTI1)
+                        </span>
+                        {ictiLastUpdated && (
+                          <span className="text-[9px] text-on-surface-variant/70 font-mono">
+                            Sincronizado: {new Date(ictiLastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
                       {ictiLoading ? (
-                        <div className="h-56 flex items-center justify-center text-xs text-on-surface-variant italic">
-                          Carregando gráfico do Ipeadata...
+                        <div className="h-56 flex flex-col items-center justify-center text-xs text-on-surface-variant italic gap-2">
+                          <RefreshCw className="w-5 h-5 text-amber-400 animate-spin" />
+                          <span>Consultando dados no Ipeadata...</span>
                         </div>
                       ) : (
                         <div className="h-56 w-full">
@@ -3762,7 +3810,7 @@ export default function App() {
                               <XAxis 
                                 dataKey="date" 
                                 stroke="#94a3b8" 
-                                fontSize={9}
+                                fontSize={9} 
                                 tickLine={false}
                                 tickFormatter={(str) => {
                                   try {
@@ -3774,7 +3822,7 @@ export default function App() {
                               <YAxis 
                                 stroke="#94a3b8" 
                                 fontSize={9} 
-                                tickLine={false}
+                                tickLine={false} 
                                 tickFormatter={(v) => `${v}%`}
                               />
                               <Tooltip
@@ -3787,7 +3835,7 @@ export default function App() {
                                     return d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
                                   } catch { return str; }
                                 }}
-                                formatter={(value: any) => [`${value}%`, 'Variação acumulada (12m)']}
+                                formatter={(value: any) => [`${Number(value).toFixed(2)}%`, 'Variação acumulada (12m)']}
                               />
                               <Area type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={2.5} fillOpacity={1} fill="url(#colorDashboardIcti)" />
                             </AreaChart>
@@ -3800,37 +3848,55 @@ export default function App() {
                   {/* Right Column: Historical Table */}
                   <div className="lg:col-span-5 bg-surface-container-low border border-outline-variant/30 rounded-xl p-4 flex flex-col justify-between font-sans">
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider block mb-3">
-                        Tabela de Índices Divulgados (Últimos 12 Meses)
-                      </span>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider block">
+                          Tabela de Índices Divulgados (Últimos 12 Meses)
+                        </span>
+                        <span className="text-[9px] text-amber-400 font-mono font-bold">
+                          {ictiData.length > 0 ? `${ictiData.length} registros` : ''}
+                        </span>
+                      </div>
                       {ictiLoading ? (
-                        <div className="h-56 flex items-center justify-center text-xs text-on-surface-variant italic">
-                          Carregando dados da tabela...
+                        <div className="h-56 flex flex-col items-center justify-center text-xs text-on-surface-variant italic gap-2">
+                          <RefreshCw className="w-5 h-5 text-amber-400 animate-spin" />
+                          <span>Atualizando tabela...</span>
                         </div>
                       ) : (
                         <div className="overflow-hidden rounded-lg border border-outline-variant/30">
                           <div className="max-h-56 overflow-y-auto custom-scrollbar">
                             <table className="w-full text-left border-collapse text-xs">
                               <thead>
-                                <tr className="bg-surface-container/80 sticky top-0 border-b border-outline-variant/30 text-[9.5px] uppercase font-bold text-on-surface-variant tracking-wider">
-                                  <th className="px-3.5 py-2">Mês de Referência</th>
-                                  <th className="px-3.5 py-2 text-right">Taxa Acumulada 12m</th>
+                                <tr className="bg-surface-container/80 sticky top-0 border-b border-outline-variant/30 text-[9px] uppercase font-bold text-on-surface-variant tracking-wider">
+                                  <th className="px-3 py-2">Mês/Ano</th>
+                                  <th className="px-2 py-2 text-right">Mensal</th>
+                                  <th className="px-2 py-2 text-right">Acum. 12m</th>
+                                  <th className="px-3 py-2 text-right">Nº Índice</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-outline-variant/25 font-mono text-[11px]">
                                 {ictiData.slice(-12).reverse().map((item, idx) => {
                                   try {
                                     const d = new Date(item.date);
-                                    const mesAno = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+                                    const mesAno = d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
                                     const isLatestRow = idx === 0;
+                                    const ym = item.yearMonth || String(item.date).substring(0, 7);
+                                    const matchingIndex = ictiIndexData.find(i => (i.yearMonth || String(i.date).substring(0, 7)) === ym);
+                                    const matchingMensal = ictiMensalData.find(m => (m.yearMonth || String(m.date).substring(0, 7)) === ym);
+
                                     return (
-                                      <tr key={idx} className={`hover:bg-surface-container/50 transition-colors ${isLatestRow ? 'bg-amber-500/5' : ''}`}>
-                                        <td className="px-3.5 py-1.5 text-on-surface font-sans capitalize flex items-center gap-1.5">
-                                          {isLatestRow && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"></span>}
-                                          {mesAno}
+                                      <tr key={idx} className={`hover:bg-surface-container/50 transition-colors ${isLatestRow ? 'bg-amber-500/10' : ''}`}>
+                                        <td className="px-3 py-1.5 text-on-surface font-sans capitalize flex items-center gap-1.5">
+                                          {isLatestRow && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>}
+                                          <span>{mesAno}</span>
                                         </td>
-                                        <td className="px-3.5 py-1.5 text-right font-semibold text-amber-400">
+                                        <td className="px-2 py-1.5 text-right font-medium text-on-surface-variant">
+                                          {matchingMensal ? `${matchingMensal.value >= 0 ? '+' : ''}${matchingMensal.value.toFixed(2)}%` : '—'}
+                                        </td>
+                                        <td className="px-2 py-1.5 text-right font-bold text-amber-400">
                                           {item.value.toFixed(2)}%
+                                        </td>
+                                        <td className="px-3 py-1.5 text-right font-medium text-on-surface">
+                                          {matchingIndex ? matchingIndex.value.toFixed(4) : '—'}
                                         </td>
                                       </tr>
                                     );

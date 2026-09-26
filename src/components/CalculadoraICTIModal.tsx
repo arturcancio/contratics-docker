@@ -304,28 +304,24 @@ export const CalculadoraICTIModal: React.FC<CalculadoraICTIModalProps> = ({
     }
   }, [isOpen, initialContratoId, eligibleContratos, selectedContratoId]);
 
+  const fetchAllIctiSeries = async (force: boolean = false) => {
+    setLoading(true);
+    try {
+      const bundle = await getIctiSeriesBundle(force);
+      setIctiIndexSeries(bundle.seriesIndex);
+      setIcti12mSeries(bundle.series12m);
+      setIctiMensalSeries(bundle.seriesMensal);
+    } catch (err) {
+      console.warn("Aviso ao carregar séries do ICTI:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch ICTI series from Ipeadata service
   useEffect(() => {
     if (!isOpen) return;
-
-    let isMounted = true;
-    const fetchAllIctiSeries = async () => {
-      setLoading(true);
-      try {
-        const bundle = await getIctiSeriesBundle();
-        if (isMounted) {
-          setIctiIndexSeries(bundle.seriesIndex);
-          setIcti12mSeries(bundle.series12m);
-          setIctiMensalSeries(bundle.seriesMensal);
-        }
-      } catch (err) {
-        console.warn("Aviso ao carregar séries do ICTI:", err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    fetchAllIctiSeries();
+    fetchAllIctiSeries(false);
   }, [isOpen]);
 
   // When selected contract changes, populate fields
@@ -563,6 +559,16 @@ Gerado por ContratICS / Sistema de Gestão de Contratações de TIC - SOF/MPO`;
                 <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 dark:bg-amber-500/15 text-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 rounded-md uppercase tracking-wider font-mono">
                   Ipeadata Oficial
                 </span>
+                <button
+                  type="button"
+                  onClick={() => fetchAllIctiSeries(true)}
+                  disabled={loading}
+                  className="px-2 py-0.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 rounded-md text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Recarregar índices diretamente do Ipeadata"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                  <span>{loading ? 'Atualizando...' : 'Atualizar'}</span>
+                </button>
               </div>
               <p className="text-xs text-on-surface-variant">Reajuste contratual monetário pelo Índice de Custos de Tecnologia da Informação</p>
             </div>
