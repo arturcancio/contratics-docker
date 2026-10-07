@@ -60,6 +60,30 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO anon, authenticat
 ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
 ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON ROUTINES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
 
+DO $$ BEGIN
+  CREATE TYPE auth.factor_type AS ENUM ('totp', 'webauthn', 'phone');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+CREATE TABLE IF NOT EXISTS auth.mfa_factors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid,
+  friendly_name text,
+  factor_type text,
+  status text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  secret text
+);
+
+CREATE TABLE IF NOT EXISTS auth.mfa_challenges (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  factor_id uuid,
+  created_at timestamptz DEFAULT now(),
+  verified_at timestamptz,
+  ip_address inet
+);
+
 -- Helper Function: Atomic document merge (support for setDoc with { merge: true })
 CREATE OR REPLACE FUNCTION public.merge_document(tbl TEXT, doc_id TEXT, patch JSONB)
 RETURNS JSONB AS $$
