@@ -3,14 +3,14 @@
 -- Auto-generated with support for all 22 collections, Realtime, GIN indexes and RLS.
 -- ==============================================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE SCHEMA IF NOT EXISTS _realtime;
-GRANT USAGE, CREATE ON SCHEMA _realtime TO postgres;
-
--- Ensure postgres, anon, authenticated, service_role roles exist
+-- Ensure essential Supabase roles exist before any extension creation
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_admin') THEN
+    CREATE ROLE supabase_admin WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
+  ELSE
+    ALTER ROLE supabase_admin WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
     CREATE ROLE postgres WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
   ELSE
@@ -32,18 +32,24 @@ BEGIN
   END IF;
 END $$;
 
--- Grant role memberships so postgres and authenticator can switch to anon/authenticated/service_role
+-- Grant role memberships
 GRANT anon, authenticated, service_role TO authenticator;
 GRANT anon, authenticated, service_role TO postgres;
+GRANT anon, authenticated, service_role TO supabase_admin;
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE SCHEMA IF NOT EXISTS _realtime;
+GRANT USAGE, CREATE ON SCHEMA _realtime TO postgres, supabase_admin;
 
 -- Grant schema permissions
-GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;
-GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role, postgres;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, postgres;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role, postgres;
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
 
 -- Helper Function: Atomic document merge (support for setDoc with { merge: true })
 CREATE OR REPLACE FUNCTION public.merge_document(tbl TEXT, doc_id TEXT, patch JSONB)
