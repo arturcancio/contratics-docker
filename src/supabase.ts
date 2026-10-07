@@ -14,23 +14,14 @@ const getSupabaseUrl = (): string => {
   const envUrl = env?.VITE_SUPABASE_URL;
 
   if (typeof window !== 'undefined' && window.location) {
-    const host = window.location.hostname;
-    const protocol = window.location.protocol;
-
-    if (envUrl) {
-      try {
-        const parsed = new URL(envUrl);
-        // If configured as localhost, 127.0.0.1, 0.0.0.0 or docker0 bridge 172.17.0.1, but browser is accessing via a real IP/domain:
-        const isLocalOrBridge = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '172.17.0.1' || parsed.hostname === '0.0.0.0';
-        const isBrowserRemote = host !== 'localhost' && host !== '127.0.0.1';
-        if (isLocalOrBridge && isBrowserRemote) {
-          return `${protocol}//${host}:${parsed.port || '8000'}`;
-        }
-        return envUrl;
-      } catch (e) {}
+    // If an explicit external remote URL is configured in env, use it:
+    if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+      return envUrl;
     }
-    // Dynamic fallback to port 8000 on same hostname for Kong Gateway
-    return `${protocol}//${host}:8000`;
+    // In browser (both Docker production on port 3001/domain and Vite dev with proxy),
+    // always use window.location.origin so all requests route through Nginx reverse proxy.
+    // This prevents firewall port 8000 blocks and HTTPS mixed-content errors.
+    return window.location.origin;
   }
   return envUrl || 'http://localhost:8000';
 };

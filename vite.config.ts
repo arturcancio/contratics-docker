@@ -12,8 +12,22 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // Proxy transparente para consultas de APIs governamentais (Ipeadata)
+      // Proxy local para serviços do Supabase no ambiente de desenvolvimento
       proxy: {
+        '/rest': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        },
+        '/auth': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        },
+        '/realtime': {
+          target: 'http://127.0.0.1:8000',
+          ws: true,
+          changeOrigin: true,
+        },
+        // Proxy transparente para consultas de APIs governamentais (Ipeadata)
         '/api-ipeadata': {
           target: 'https://www.ipeadata.gov.br',
           changeOrigin: true,

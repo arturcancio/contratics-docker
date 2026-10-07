@@ -202,14 +202,21 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role
 fs.writeFileSync(path.join(targetDir, '01_schema.sql'), schemaSql, 'utf-8');
 console.log('Successfully generated 01_schema.sql');
 
-// 2. Generate 02_real_data.sql from firestore_export.json
-const rawExport = JSON.parse(fs.readFileSync(path.resolve('migration_data/firestore_export.json'), 'utf-8'));
+// 2. Generate 02_real_data.sql from contratics_firestore_dump.json or firestore_export.json
+const dumpFile = fs.existsSync(path.resolve('contratics_firestore_dump.json'))
+  ? path.resolve('contratics_firestore_dump.json')
+  : path.resolve('migration_data/firestore_export.json');
+
+console.log(`Carregando dados de: ${dumpFile}`);
+const rawExport = JSON.parse(fs.readFileSync(dumpFile, 'utf-8'));
 
 let dataSql = `-- ==============================================================================
--- 02_real_data.sql - Real Data Migration from Firebase Firestore
+-- 02_real_data.sql - Real Data Migration from Firebase Firestore Dump
 -- 100% Real production data exported directly from Firestore.
 -- NO MOCK / FICTIONAL DATA INCLUDED.
 -- ==============================================================================
+
+BEGIN;
 
 `;
 
@@ -224,10 +231,12 @@ for (const col of collections) {
     const id = doc.id;
     // Escape single quotes for SQL literal
     const jsonStr = JSON.stringify(doc).replace(/'/g, "''");
-    const escapedId = id.replace(/'/g, "''");
+    const escapedId = String(id).replace(/'/g, "''");
     dataSql += `INSERT INTO public."${col}" (id, data, updated_at) VALUES ('${escapedId}', '${jsonStr}'::jsonb, timezone('utc'::text, now())) ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = timezone('utc'::text, now());\n`;
   }
 }
+
+dataSql += '\nCOMMIT;\n';
 
 fs.writeFileSync(path.join(targetDir, '02_real_data.sql'), dataSql, 'utf-8');
 console.log(`Successfully generated 02_real_data.sql with ${totalRecords} real records.`);
