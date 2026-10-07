@@ -40,7 +40,9 @@ GRANT anon, authenticated, service_role TO supabase_admin;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE SCHEMA IF NOT EXISTS _realtime;
+CREATE SCHEMA IF NOT EXISTS auth;
 GRANT USAGE, CREATE ON SCHEMA _realtime TO postgres, supabase_admin;
+GRANT USAGE, CREATE ON SCHEMA auth TO postgres, supabase_admin, anon, authenticated, service_role, authenticator;
 
 -- Grant schema permissions
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
@@ -50,6 +52,13 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role,
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+
+GRANT ALL ON ALL TABLES IN SCHEMA auth TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
+ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON ROUTINES TO anon, authenticated, service_role, postgres, supabase_admin, authenticator;
 
 -- Helper Function: Atomic document merge (support for setDoc with { merge: true })
 CREATE OR REPLACE FUNCTION public.merge_document(tbl TEXT, doc_id TEXT, patch JSONB)

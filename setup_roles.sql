@@ -5,7 +5,12 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE SCHEMA IF NOT EXISTS _realtime;
-GRANT USAGE, CREATE ON SCHEMA _realtime TO postgres, anon, authenticated, service_role;
+CREATE SCHEMA IF NOT EXISTS auth;
+GRANT USAGE, CREATE ON SCHEMA _realtime TO postgres, anon, authenticated, service_role, supabase_admin;
+GRANT USAGE, CREATE ON SCHEMA auth TO postgres, anon, authenticated, service_role, supabase_admin, authenticator;
+GRANT ALL ON ALL TABLES IN SCHEMA auth TO postgres, anon, authenticated, service_role, supabase_admin, authenticator;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres, anon, authenticated, service_role, supabase_admin, authenticator;
+GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO postgres, anon, authenticated, service_role, supabase_admin, authenticator;
 
 -- 1. Criação das roles essenciais do Supabase se não existirem
 DO $$

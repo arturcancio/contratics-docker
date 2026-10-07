@@ -78,7 +78,7 @@ services:
       DB_HOST: contratics-db
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-postgres}
-      DB_USER: postgres
+      DB_USER: supabase_admin
       DB_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
       DB_AFTER_CONNECT_QUERY: 'SET search_path = _realtime'
       DB_ENC_KEY: supabaserealtimeenckey12345678
@@ -89,6 +89,7 @@ services:
       DNS_NODES: "''"
       RLIMIT_NOFILE: "10000"
       SEED_SELF_HOST: "true"
+      APP_NAME: realtime
     depends_on:
       contratics-db:
         condition: service_healthy
@@ -107,7 +108,7 @@ services:
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: http://localhost:${API_PORT:-8000}/auth/v1
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-contratics_pg_secret_2026}@contratics-db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_admin:${POSTGRES_PASSWORD:-contratics_pg_secret_2026}@contratics-db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
       GOTRUE_SITE_URL: http://localhost:${WEB_PORT:-3000}
       GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
       GOTRUE_JWT_EXP: 3600
