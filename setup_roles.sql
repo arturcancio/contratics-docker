@@ -2,6 +2,11 @@
 -- setup_roles.sql - Criação de Roles e Permissões Supabase para Contratics
 -- ==============================================================================
 
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE SCHEMA IF NOT EXISTS _realtime;
+GRANT USAGE, CREATE ON SCHEMA _realtime TO postgres, anon, authenticated, service_role;
+
 -- 1. Criação das roles essenciais do Supabase se não existirem
 DO $$
 BEGIN

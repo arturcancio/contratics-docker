@@ -9,18 +9,23 @@ echo "=========================================================="
 echo "Importando Schema e Dados Reais para o Contratics..."
 echo "=========================================================="
 
+# 0. Garante a senha do usuário postgres e roles essenciais
+echo "-> 0. Configurando senha do postgres e roles do Supabase..."
+docker exec -i contratics-db psql -U supabase_admin -d postgres -c "ALTER USER postgres WITH PASSWORD 'contratics_pg_secret_2026';" || true
+docker exec -i contratics-db psql -U supabase_admin -d postgres < setup_roles.sql
+
 # 1. Executa o Schema DDL (Tabelas, RLS, Realtime, Views, Roles)
 echo "-> 1. Criando tabelas, roles e schema..."
-docker exec -i contratics-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U supabase_admin -d postgres' < docker/volumes/db/init/01_schema.sql
+docker exec -i contratics-db psql -U supabase_admin -d postgres < docker/volumes/db/init/01_schema.sql
 
 # 2. Executa os Inserts de 100% dos dados reais exportados
-echo "-> 2. Inserindo 475 registros reais (Contratos, DFDs, SIOP, etc)..."
-docker exec -i contratics-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U supabase_admin -d postgres' < docker/volumes/db/init/02_real_data.sql
+echo "-> 2. Inserindo 490 registros reais do Firestore dump..."
+docker exec -i contratics-db psql -U supabase_admin -d postgres < docker/volumes/db/init/02_real_data.sql
 
-# 3. Notifica o PostgREST para recarregar o cache de schemas
-echo "-> 3. Recarregando schema do PostgREST..."
-docker exec -i contratics-db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U supabase_admin -d postgres -c "NOTIFY pgrst, '\''reload schema'\'';"' || true
-docker compose restart contratics-rest
+# 3. Notifica o PostgREST e reinicia os serviços
+echo "-> 3. Notificando schema e reiniciando servicos..."
+docker exec -i contratics-db psql -U supabase_admin -d postgres -c "NOTIFY pgrst, 'reload schema';" || true
+docker compose restart contratics-rest contratics-auth contratics-realtime
 
 echo ""
 echo "=========================================================="
