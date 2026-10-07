@@ -141,6 +141,16 @@ const MONTHS_PT = [
 ];
 const WEEKDAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
+function safeLocalStorageSet(key: string, value: string): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  } catch (e) {
+    // Gracefully ignore QuotaExceededError when real dataset exceeds browser 5MB storage limit
+  }
+}
+
 export default function App() {
   // Global States with local storage hydration
   const [users, setUsers] = useState<User[]>(() => {
@@ -619,7 +629,7 @@ export default function App() {
   const [userManagementTab, setUserManagementTab] = useState<'usuarios' | 'logs'>('usuarios');
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_login_logs', JSON.stringify(loginLogs));
+    safeLocalStorageSet('contratics_login_logs', JSON.stringify(loginLogs));
   }, [loginLogs]);
 
   // Authentication State
@@ -1127,76 +1137,76 @@ export default function App() {
 
   // Sync authentication and GECTI presence states to localStorage
   React.useEffect(() => {
-    localStorage.setItem('contratics_is_logged_in', String(isLoggedIn));
+    safeLocalStorageSet('contratics_is_logged_in', String(isLoggedIn));
   }, [isLoggedIn]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_presenca_gecti', JSON.stringify(presencialDays));
+    safeLocalStorageSet('contratics_presenca_gecti', JSON.stringify(presencialDays));
   }, [presencialDays]);
 
   // Sync state data lists to localStorage for contingency local fallback caching
   React.useEffect(() => {
-    localStorage.setItem('contratics_users', JSON.stringify(users));
+    safeLocalStorageSet('contratics_users', JSON.stringify(users));
   }, [users]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_fornecedores', JSON.stringify(fornecedores));
+    safeLocalStorageSet('contratics_fornecedores', JSON.stringify(fornecedores));
   }, [fornecedores]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_dfds', JSON.stringify(dfds));
+    safeLocalStorageSet('contratics_dfds', JSON.stringify(dfds));
   }, [dfds]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_planejamentos', JSON.stringify(planejamentos));
+    safeLocalStorageSet('contratics_planejamentos', JSON.stringify(planejamentos));
   }, [planejamentos]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_contratos', JSON.stringify(contratos));
+    safeLocalStorageSet('contratics_contratos', JSON.stringify(contratos));
   }, [contratos]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_itensSOF', JSON.stringify(itensSOF));
+    safeLocalStorageSet('contratics_itensSOF', JSON.stringify(itensSOF));
   }, [itensSOF]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_itensPlanejamentoSOF', JSON.stringify(itensPlanejamentoSOF));
+    safeLocalStorageSet('contratics_itensPlanejamentoSOF', JSON.stringify(itensPlanejamentoSOF));
   }, [itensPlanejamentoSOF]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_tarefas', JSON.stringify(tarefas));
+    safeLocalStorageSet('contratics_tarefas', JSON.stringify(tarefas));
   }, [tarefas]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_templates', JSON.stringify(templates));
+    safeLocalStorageSet('contratics_templates', JSON.stringify(templates));
   }, [templates]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_historicoPlanejamentos', JSON.stringify(historicoPlanejamentos));
+    safeLocalStorageSet('contratics_historicoPlanejamentos', JSON.stringify(historicoPlanejamentos));
   }, [historicoPlanejamentos]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_historicosContratuais', JSON.stringify(historicosContratuais));
+    safeLocalStorageSet('contratics_historicosContratuais', JSON.stringify(historicosContratuais));
   }, [historicosContratuais]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_aditivos', JSON.stringify(aditivos));
+    safeLocalStorageSet('contratics_aditivos', JSON.stringify(aditivos));
   }, [aditivos]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_apostilamentos', JSON.stringify(apostilamentos));
+    safeLocalStorageSet('contratics_apostilamentos', JSON.stringify(apostilamentos));
   }, [apostilamentos]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_pagamentos', JSON.stringify(pagamentos));
+    safeLocalStorageSet('contratics_pagamentos', JSON.stringify(pagamentos));
   }, [pagamentos]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_baseConhecimento', JSON.stringify(baseConhecimento));
+    safeLocalStorageSet('contratics_baseConhecimento', JSON.stringify(baseConhecimento));
   }, [baseConhecimento]);
 
   React.useEffect(() => {
-    localStorage.setItem('contratics_faqs', JSON.stringify(faqs));
+    safeLocalStorageSet('contratics_faqs', JSON.stringify(faqs));
   }, [faqs]);
 
   // Single-Selection shortcut helper for direct navigate between pages
