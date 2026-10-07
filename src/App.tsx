@@ -2916,22 +2916,17 @@ export default function App() {
                 const emailClean = emailRaw.trim().toLowerCase();
                 const passClean = passwordRaw.trim();
 
-                // Look for existing user match or fallback
-                let found = users.find(u => 
-                  (u.email.toLowerCase() === emailClean || 
-                   (emailClean.includes('arturcancio') && u.email.toLowerCase().includes('artur')) ||
-                   (emailClean.includes('artur.cancio') && u.email.toLowerCase().includes('artur'))) && 
-                  (u.passwordSimulated === passClean || passClean === 'sof123')
+                // Busca o usuário correspondente pelo e-mail
+                const userMatch = users.find(u => 
+                  u.email.toLowerCase() === emailClean ||
+                  (emailClean === 'arturcancio@gmail.com' && u.email.toLowerCase().includes('artur')) ||
+                  (emailClean === 'artur.cancio@planejamento.gov.br' && u.email.toLowerCase().includes('artur'))
                 );
 
-                if (!found) {
-                  // Check if email matches any of INITIAL_USERS
-                  found = INITIAL_USERS.find(u => u.email.toLowerCase() === emailClean);
-                }
-
-                // If user is trying to log in as Artur Câncio with gmail or gov email, allow with default password 'sof123'
-                if (!found && (emailClean === 'arturcancio@gmail.com' || emailClean === 'artur.cancio@planejamento.gov.br')) {
-                  found = users.find(u => u.id === 'user-1' || u.id === 'user-1b') || INITIAL_USERS[0];
+                // Validação estrita da senha real cadastrada para o usuário
+                let found: User | undefined = undefined;
+                if (userMatch && userMatch.passwordSimulated === passClean) {
+                  found = userMatch;
                 }
 
                 if (found) {
