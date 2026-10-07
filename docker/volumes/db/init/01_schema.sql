@@ -25,12 +25,16 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
     CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticator') THEN
+    CREATE ROLE authenticator WITH LOGIN NOINHERIT PASSWORD 'contratics_pg_secret_2026';
+  ELSE
+    ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD 'contratics_pg_secret_2026';
+  END IF;
 END $$;
 
--- Grant role memberships so postgres can switch to anon/authenticated/service_role
-GRANT anon TO postgres;
-GRANT authenticated TO postgres;
-GRANT service_role TO postgres;
+-- Grant role memberships so postgres and authenticator can switch to anon/authenticated/service_role
+GRANT anon, authenticated, service_role TO authenticator;
+GRANT anon, authenticated, service_role TO postgres;
 
 -- Grant schema permissions
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
