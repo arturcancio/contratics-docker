@@ -81,7 +81,7 @@ services:
       DB_USER: supabase_admin
       DB_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
       DB_AFTER_CONNECT_QUERY: 'SET search_path = _realtime'
-      DB_ENC_KEY: supabaserealtimeenckey12345678
+      DB_ENC_KEY: 1234567890123456
       API_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
       SECRET_KEY_BASE: UpOHxtnl32yB5QWFQxzkNuBc9NUjarA6wvUps0WmQpzoOXoNuBc9NUjarA6wvUps
       ERL_AFLAGS: -proto_dist inet_tcp
