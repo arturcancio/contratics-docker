@@ -227,5 +227,56 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.create_new_user(TEXT, TEXT, TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
 
+-- 8. Função RPC para Usuário Autenticado Alterar a Própria Senha (com validação da senha atual)
+CREATE OR REPLACE FUNCTION public.user_update_password(
+  p_user_id TEXT,
+  p_current_password TEXT,
+  p_new_password TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_cred RECORD;
+  v_hash TEXT;
+BEGIN
+  IF length(trim(p_new_password)) < 6 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'A nova senha deve possuir no mínimo 6 caracteres!');
+  END IF;
+
+  -- Localiza credencial atual do usuário
+  SELECT password_hash INTO v_cred
+  FROM public.user_credentials
+  WHERE user_id = p_user_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Credenciais de acesso não configuradas para este usuário.');
+  END IF;
+
+  -- Valida se a senha atual informada está correta
+  IF v_cred.password_hash != crypt(p_current_password, v_cred.password_hash) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Senha atual incorreta!');
+  END IF;
+
+  -- Gera o novo hash Bcrypt com sal individual
+  v_hash := crypt(trim(p_new_password), gen_salt('bf', 10));
+
+  UPDATE public.user_credentials
+  SET password_hash = v_hash, updated_at = timezone('utc'::text, now())
+  WHERE user_id = p_user_id;
+
+  UPDATE public.users
+  SET data = (data - 'passwordSimulated') || jsonb_build_object('needsPasswordReset', false),
+      updated_at = timezone('utc'::text, now())
+  WHERE id = p_user_id;
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.user_update_password(TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
+
 -- Recarrega o cache do PostgREST para expor as novas funções imediatamente
 NOTIFY pgrst, 'reload schema';

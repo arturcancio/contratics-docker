@@ -109,6 +109,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Menu,
   LogOut,
   CalendarRange,
@@ -1037,6 +1038,14 @@ export default function App() {
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
   const [newPasswordValue, setNewPasswordValue] = useState<string>('sof123');
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+
+  // User profile menu and voluntary password change states
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState<boolean>(false);
+  const [changePassCurrent, setChangePassCurrent] = useState<string>('');
+  const [changePassNew, setChangePassNew] = useState<string>('');
+  const [changePassConfirm, setChangePassConfirm] = useState<string>('');
+  const [changePassLoading, setChangePassLoading] = useState<boolean>(false);
   
   // Pages routing registry
   const [activePage, setActivePage] = useState<'dashboard' | 'dfds' | 'orcamento' | 'planejamentos' | 'contratos' | 'normativos' | 'kanban' | 'presencial' | 'usuarios'>('dashboard');
@@ -3333,26 +3342,87 @@ export default function App() {
               )}
             </button>
 
-            {/* Interactive actor authorization picker */}
-            <div className="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant/60 p-1 px-2.5 rounded-lg" data-tour="header-profile">
-              <ShieldCheck className="w-4 h-4 text-primary" />
-              <span className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider hidden md:inline">Perfil:</span>
-              {currentUser?.role === 'GECTI' ? (
-                <select
-                  value={currentUser?.id || ''}
-                  onChange={e => handleSwitchUser(e.target.value)}
-                  className="bg-transparent text-xs text-on-surface font-semibold outline-none border-none select-none cursor-pointer max-w-[130px] sm:max-w-[180px] truncate text-primary"
-                >
-                  {users.map(u => (
-                    <option key={u.id} value={u.id} className="bg-surface text-on-surface">
-                      {u.name} ({u.role})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-xs text-on-surface font-semibold max-w-[130px] sm:max-w-[180px] truncate text-primary py-0.5">
-                  {currentUser?.name} ({currentUser?.role})
-                </span>
+            {/* Interactive User Profile & Security Menu */}
+            <div className="relative" data-tour="header-profile">
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen(prev => !prev)}
+                className="flex items-center gap-2 bg-surface-container-low hover:bg-surface-container border border-outline-variant/60 hover:border-primary/50 py-1.5 px-3 rounded-lg transition-all cursor-pointer shadow-xs active:scale-98 text-xs"
+                title="Meu Perfil e Segurança"
+              >
+                <div className="w-6 h-6 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center text-primary font-bold text-[11px] shrink-0">
+                  {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="flex flex-col text-left max-w-[120px] sm:max-w-[180px] truncate leading-tight">
+                  <span className="text-xs font-bold text-on-surface truncate">
+                    {currentUser?.name || 'Usuário'}
+                  </span>
+                  <span className="text-[9px] text-primary font-semibold uppercase tracking-wider">
+                    {currentUser?.role || 'Visualizador'}
+                  </span>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-on-surface-variant transition-transform duration-200 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {isProfileMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsProfileMenuOpen(false)} 
+                  />
+                  <div className="absolute right-0 mt-2 w-64 bg-surface border border-outline rounded-xl shadow-2xl py-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3.5 py-2.5 border-b border-outline-variant/50">
+                      <p className="font-bold text-on-surface truncate text-xs">{currentUser?.name}</p>
+                      <p className="text-[10px] text-on-surface-variant font-mono truncate">{currentUser?.email}</p>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-primary/10 border border-primary/25 text-primary uppercase">
+                          Perfil: {currentUser?.role}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          setChangePassCurrent('');
+                          setChangePassNew('');
+                          setChangePassConfirm('');
+                          setIsChangePasswordModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-on-surface hover:bg-surface-container cursor-pointer transition-colors text-left"
+                      >
+                        <Key className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <div>
+                          <p className="font-semibold text-xs">Alterar Minha Senha</p>
+                          <p className="text-[10px] text-on-surface-variant">Trocar sua senha de acesso</p>
+                        </div>
+                      </button>
+                    </div>
+
+                    <div className="pt-1 border-t border-outline-variant/50">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setIsProfileMenuOpen(false);
+                          setIsLoggedIn(false);
+                          safeLocalStorageSet('contratics_is_logged_in', 'false');
+                          try {
+                            await signOut(auth);
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-colors text-left font-semibold"
+                      >
+                        <LogOut className="w-3.5 h-3.5 shrink-0" />
+                        <span>Sair / Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -6702,6 +6772,129 @@ export default function App() {
         onSelectTour={handleSelectTourFromHub}
         onResetTours={handleResetTours}
       />
+
+      {/* Modal de Alteração Voluntária de Senha pelo Próprio Usuário */}
+      {isChangePasswordModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-surface border border-outline rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150 text-xs text-on-surface">
+            <div className="flex items-center justify-between border-b border-outline-variant pb-3">
+              <div className="flex items-center gap-2.5 text-amber-500">
+                <Key className="w-5 h-5" />
+                <h4 className="text-sm font-bold text-on-surface">Alterar Minha Senha</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChangePasswordModalOpen(false)}
+                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-surface-container rounded-lg space-y-1">
+              <p className="font-semibold text-on-surface">{currentUser?.name}</p>
+              <p className="text-[10px] text-on-surface-variant font-mono">{currentUser?.email}</p>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (changePassNew.length < 6) {
+                  alert('A nova senha deve possuir no mínimo 6 caracteres!');
+                  return;
+                }
+                if (changePassNew !== changePassConfirm) {
+                  alert('A confirmação não confere com a nova senha digitada!');
+                  return;
+                }
+                if (changePassCurrent === changePassNew) {
+                  alert('A nova senha deve ser diferente da senha atual!');
+                  return;
+                }
+
+                setChangePassLoading(true);
+                try {
+                  const { data, error } = await supabase.rpc('user_update_password', {
+                    p_user_id: currentUser.id,
+                    p_current_password: changePassCurrent,
+                    p_new_password: changePassNew
+                  });
+
+                  if (error || !data?.success) {
+                    alert(error?.message || data?.error || 'Erro ao alterar a senha. Verifique se a sua senha atual está correta.');
+                    return;
+                  }
+
+                  alert('Senha alterada com sucesso! Suas credenciais foram atualizadas.');
+                  setIsChangePasswordModalOpen(false);
+                  setChangePassCurrent('');
+                  setChangePassNew('');
+                  setChangePassConfirm('');
+                } catch (err: any) {
+                  console.error('Erro ao atualizar senha:', err);
+                  alert('Falha ao processar a alteração da senha. Tente novamente.');
+                } finally {
+                  setChangePassLoading(false);
+                }
+              }}
+              className="space-y-3.5"
+            >
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">Senha Atual</label>
+                <input
+                  type="password"
+                  required
+                  value={changePassCurrent}
+                  onChange={e => setChangePassCurrent(e.target.value)}
+                  placeholder="Digite sua senha atual"
+                  className="w-full bg-surface-container border border-outline rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">Nova Senha</label>
+                <input
+                  type="password"
+                  required
+                  value={changePassNew}
+                  onChange={e => setChangePassNew(e.target.value)}
+                  placeholder="Mínimo de 6 caracteres"
+                  className="w-full bg-surface-container border border-outline rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold tracking-wider text-on-surface-variant">Confirmar Nova Senha</label>
+                <input
+                  type="password"
+                  required
+                  value={changePassConfirm}
+                  onChange={e => setChangePassConfirm(e.target.value)}
+                  placeholder="Repita a nova senha"
+                  className="w-full bg-surface-container border border-outline rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary font-mono"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordModalOpen(false)}
+                  className="flex-1 py-1.5 border border-outline hover:bg-surface-container text-on-surface font-semibold rounded text-xs transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={changePassLoading}
+                  className="flex-1 py-1.5 bg-primary hover:bg-primary/90 text-on-primary font-bold rounded text-xs transition-all cursor-pointer shadow flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {changePassLoading ? 'Atualizando...' : 'Atualizar Senha'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
