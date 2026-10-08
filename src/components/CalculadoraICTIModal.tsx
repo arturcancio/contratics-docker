@@ -548,7 +548,7 @@ Gerado por ContratICS / Sistema de Gestão de Contratações de TIC - SOF/MPO`;
       <div className="bg-surface border border-outline rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden text-on-surface my-auto" data-tour="icti-modal-content">
         
         {/* Modal Header */}
-        <div className="p-4 sm:p-5 border-b border-outline-variant/30 flex items-center justify-between bg-surface-container/60 shrink-0">
+        <div data-tour="icti-modal-header" className="p-4 sm:p-5 border-b border-outline-variant/30 flex items-center justify-between bg-surface-container/60 shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-100 dark:bg-gradient-to-br dark:from-amber-500/20 dark:to-amber-600/10 border border-amber-400 dark:border-amber-500/30 text-amber-900 dark:text-amber-400 rounded-xl shadow-sm">
               <Calculator className="w-6 h-6" />
@@ -727,7 +727,7 @@ Gerado por ContratICS / Sistema de Gestão de Contratações de TIC - SOF/MPO`;
                   </div>
 
                   {/* Legal Base Rule Information Card */}
-                  <div className="bg-amber-100/90 dark:bg-surface-container-low/90 border border-amber-400/80 dark:border-outline-variant/50 rounded-xl p-3.5 text-xs space-y-2 text-slate-900 dark:text-on-surface-variant shadow-xs">
+                  <div data-tour="icti-history-box" className="bg-amber-100/90 dark:bg-surface-container-low/90 border border-amber-400/80 dark:border-outline-variant/50 rounded-xl p-3.5 text-xs space-y-2 text-slate-900 dark:text-on-surface-variant shadow-xs">
                     <div className="flex items-center gap-1.5 text-amber-950 dark:text-amber-300 font-extrabold text-[11px]">
                       <Info className="w-4 h-4 text-amber-800 dark:text-amber-400 shrink-0" />
                       <span>Regra de Contagem da Data-Base (Orçamento Estimado):</span>
@@ -1035,7 +1035,7 @@ Gerado por ContratICS / Sistema de Gestão de Contratações de TIC - SOF/MPO`;
               )}
 
               {/* 3 Prominent KPI Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div data-tour="icti-calc-output" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 
                 {/* KPI 1: Percentual Acumulado */}
                 <div className="bg-amber-100/90 dark:bg-gradient-to-br dark:from-amber-500/15 dark:via-amber-500/5 dark:to-transparent border border-amber-400 dark:border-amber-500/40 rounded-2xl p-4 flex flex-col justify-between shadow-xs">

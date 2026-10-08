@@ -738,6 +738,7 @@ export default function RastreabilidadeModal({
           
           <div className="flex items-center gap-2">
             <button
+              data-tour="rastreabilidade-pdf"
               onClick={handleExportPDF}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-on-primary bg-primary rounded-lg shadow hover:bg-opacity-90 transition-all cursor-pointer focus:outline-none"
             >
@@ -757,7 +758,7 @@ export default function RastreabilidadeModal({
         <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar text-on-surface flex-1">
           
           {/* Main timeline tracker */}
-          <div className="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 select-none">
+          <div data-tour="rastreabilidade-flow" className="bg-surface-container-lowest border border-outline-variant/40 rounded-xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 select-none">
             
             <div className={`flex flex-1 items-center gap-3 p-3 rounded-lg border ${resolvedDfd ? 'bg-primary/5 border-primary/20 text-on-surface' : 'border-dashed border-outline-variant text-on-surface-variant/50'}`}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold bg-primary text-on-primary text-xs shrink-0 font-mono">1</div>

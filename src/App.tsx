@@ -1121,19 +1121,38 @@ export default function App() {
   const handleSelectTourFromHub = (tourId: string) => {
     setIsManualHubOpen(false);
     
-    if (tourId === 'dfds' && activePage !== 'dfds') setActivePage('dfds');
-    else if (tourId === 'planejamentos' && activePage !== 'planejamentos') setActivePage('planejamentos');
-    else if (tourId === 'contratos' && activePage !== 'contratos') setActivePage('contratos');
-    else if (tourId === 'orcamento' && activePage !== 'orcamento') setActivePage('orcamento');
-    else if (tourId === 'kanban' && activePage !== 'kanban') setActivePage('kanban');
-    else if (tourId === 'icti_calculator') setIsIctiCalculatorOpen(true);
-    else if (tourId === 'contrato_details') {
-      setActivePage('contratos');
+    if (tourId === 'main') {
+      if (activePage !== 'dashboard') setActivePage('dashboard');
+    } else if (tourId === 'dfds') {
+      if (activePage !== 'dfds') setActivePage('dfds');
+    } else if (tourId === 'planejamentos') {
+      if (activePage !== 'planejamentos') setActivePage('planejamentos');
+    } else if (tourId === 'contratos') {
+      if (activePage !== 'contratos') setActivePage('contratos');
+    } else if (tourId === 'orcamento') {
+      if (activePage !== 'orcamento') setActivePage('orcamento');
+    } else if (tourId === 'kanban') {
+      if (activePage !== 'kanban') setActivePage('kanban');
+    } else if (tourId === 'presencial') {
+      if (activePage !== 'presencial') setActivePage('presencial');
+    } else if (tourId === 'normativos') {
+      if (activePage !== 'normativos') setActivePage('normativos');
+    } else if (tourId === 'usuarios') {
+      if (activePage !== 'usuarios') setActivePage('usuarios');
+    } else if (tourId === 'icti_calculator') {
+      setIsIctiCalculatorOpen(true);
+    } else if (tourId === 'rastreabilidade') {
+      if (contratos.length > 0) {
+        setLineageTrackItemId(contratos[0].id);
+        setLineageTrackType('contrato');
+      }
+    } else if (tourId === 'contrato_details') {
+      if (activePage !== 'contratos') setActivePage('contratos');
       if (contratos.length > 0) {
         setTourContractId(contratos[0].id);
       }
     } else if (tourId === 'planejamento_details') {
-      setActivePage('planejamentos');
+      if (activePage !== 'planejamentos') setActivePage('planejamentos');
       const nonBudgetPlans = planejamentos.filter(p => !p.isBudgetOnlyItem);
       if (nonBudgetPlans.length > 0) {
         setTourPlanId(nonBudgetPlans[0].id);
@@ -4713,7 +4732,7 @@ export default function App() {
             <div className="w-full max-w-none mx-auto space-y-6 animate-in fade-in duration-100 font-sans">
               
               {/* Page header banner */}
-              <div className="bg-surface border border-outline rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden">
+              <div data-tour="presencial-header" className="bg-surface border border-outline rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden">
                 <div className="space-y-1">
                   <span className="text-[10px] bg-primary/10 border border-primary/25 text-primary px-2.5 py-0.5 rounded-md font-mono uppercase font-bold">Agenda da Equipe GECTI</span>
                   <h3 className="text-xl font-bold text-on-surface mt-1 tracking-tight font-display">Programa de Gestão e Desempenho</h3>
@@ -4729,7 +4748,7 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                 
                 {/* Registration form, visible only if user role === 'GECTI' */}
-                <div className="lg:col-span-4 bg-surface border border-outline rounded-xl p-5 space-y-4 font-sans">
+                <div data-tour="presencial-form" className="lg:col-span-4 bg-surface border border-outline rounded-xl p-5 space-y-4 font-sans">
                   <div className="border-b border-outline-variant pb-2.5">
                     <h4 className="text-xs font-bold uppercase text-primary">Agendar Período Presencial</h4>
                     <p className="text-[10px] text-on-surface-variant mt-0.5">Cadastre o intervalo de trabalho presencial corporativo.</p>
@@ -4827,7 +4846,7 @@ export default function App() {
                 </div>
 
                 {/* Schedules list & visual representation */}
-                <div className="lg:col-span-8 bg-surface border border-outline rounded-xl p-5 space-y-5">
+                <div data-tour="presencial-calendar" className="lg:col-span-8 bg-surface border border-outline rounded-xl p-5 space-y-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-outline-variant/60 pb-3">
                     <div>
                       <h4 className="text-sm font-bold uppercase text-on-surface">Escalas Presenciais de Trabalho</h4>
@@ -5107,7 +5126,7 @@ export default function App() {
             <div className="w-full max-w-none mx-auto space-y-6 animate-in fade-in duration-100 font-sans">
               
               {/* Page header banner */}
-              <div className="bg-surface border border-outline rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden font-sans">
+              <div data-tour="usuarios-header" className="bg-surface border border-outline rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative overflow-hidden font-sans">
                 <div className="space-y-1">
                   <span className="text-[10px] bg-primary/10 border border-primary/25 text-primary px-2.5 py-0.5 rounded-md font-mono uppercase font-bold">Perfis do sistema</span>
                   <h3 className="text-xl font-bold text-on-surface mt-1 tracking-tight font-display animate-none">Gerenciamento de Usuários</h3>
@@ -5115,6 +5134,7 @@ export default function App() {
                 </div>
                 
                 <button
+                  data-tour="usuarios-matriz-btn"
                   onClick={() => {
                     setIsTeamModalOpen(true);
                   }}
@@ -5126,7 +5146,7 @@ export default function App() {
               </div>
 
               {/* Sub-navigation tabs: Users vs Login Logs */}
-              <div className="flex items-center gap-2 border-b border-outline pb-2.5">
+              <div data-tour="usuarios-subtabs" className="flex items-center gap-2 border-b border-outline pb-2.5">
                 <button
                   onClick={() => setUserManagementTab('usuarios')}
                   className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
@@ -5162,7 +5182,7 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                   
                   {/* User registration/editing form */}
-                  <div className="lg:col-span-5 bg-surface border border-outline rounded-xl p-5 space-y-4 font-sans">
+                  <div data-tour="usuarios-form" className="lg:col-span-5 bg-surface border border-outline rounded-xl p-5 space-y-4 font-sans">
                     <div className="border-b border-outline-variant pb-2.5">
                       <h4 className="text-xs font-bold uppercase text-primary">
                         {editingUserId ? 'Editar Integrante' : 'Registrar Novo Integrante'}
@@ -5339,7 +5359,7 @@ export default function App() {
                   </div>
 
                   {/* Users directory */}
-                  <div className="lg:col-span-7 bg-surface border border-outline rounded-xl p-5 space-y-4 font-sans">
+                  <div data-tour="usuarios-directory" className="lg:col-span-7 bg-surface border border-outline rounded-xl p-5 space-y-4 font-sans">
                     <div className="flex justify-between items-center border-b border-outline-variant pb-2.5">
                       <div>
                         <h4 className="text-xs font-bold uppercase text-on-surface animate-none">Diretório de Servidores Ativos</h4>
@@ -5484,7 +5504,7 @@ export default function App() {
                 };
 
                 return (
-                  <div className="space-y-6 font-sans">
+                  <div data-tour="usuarios-logs" className="space-y-6 font-sans">
                     {/* Metric Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="bg-surface border border-outline rounded-xl p-4 flex items-center gap-3">

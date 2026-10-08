@@ -305,7 +305,7 @@ export default function BaseConhecimento({
   return (
     <div className="space-y-6" id="base-knowledge-section">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div data-tour="normativos-header" className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <nav className="flex items-center gap-2 text-on-surface-variant mb-1 text-xs uppercase tracking-wider">
             <span>Repositório</span>
@@ -344,7 +344,7 @@ export default function BaseConhecimento({
       </div>
 
       {/* Main Tabs Navigation */}
-      <div className="flex border-b border-outline-variant gap-1 overflow-x-auto whitespace-nowrap scrollbar-none scroll-smooth shrink-0 pb-px">
+      <div data-tour="normativos-tabs" className="flex border-b border-outline-variant gap-1 overflow-x-auto whitespace-nowrap scrollbar-none scroll-smooth shrink-0 pb-px">
         <button
           onClick={() => setActiveTab('normativos')}
           className={`px-5 py-3 cursor-pointer text-xs font-bold relative transition-colors whitespace-nowrap shrink-0 flex items-center gap-2 ${
@@ -381,7 +381,7 @@ export default function BaseConhecimento({
 
       {/* Main Tab Body */}
       {activeTab === 'normativos' && (
-        <div className="space-y-6">
+        <div data-tour="normativos-content" className="space-y-6">
           {/* Hero Section for SGD/MGI Models */}
           <div className="bg-gradient-to-r from-primary/10 via-surface-container-low to-surface-container border border-primary/25 rounded-xl p-5 shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-outline-variant/30">
