@@ -28,8 +28,7 @@ ALTER TABLE public.user_credentials ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.user_credentials FROM anon, authenticated;
 GRANT ALL ON TABLE public.user_credentials TO postgres, service_role;
 
--- 2. Migração das senhas existentes das 13 contas reais para Bcrypt com sal
--- Se data contém 'passwordSimulated', converte em hash Bcrypt e salva em user_credentials
+-- 2. Migração das senhas existentes para Bcrypt com sal (apenas para registros que ainda não possuem hash)
 INSERT INTO public.user_credentials (user_id, password_hash, created_at, updated_at)
 SELECT 
   id, 
@@ -39,28 +38,7 @@ SELECT
 FROM public.users
 WHERE data->>'passwordSimulated' IS NOT NULL 
   AND data->>'passwordSimulated' != ''
-ON CONFLICT (user_id) DO UPDATE 
-SET password_hash = EXCLUDED.password_hash, 
-    updated_at = timezone('utc'::text, now());
-
--- Sincronizar credencial para user-1 (Artur Câncio GECTI):
--- Se a senha foi alterada na conta Teste devido ao conflito anterior,
--- copiamos o novo hash para user-1 (GECTI) para que a nova senha funcione imediatamente.
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM public.user_credentials WHERE user_id = 'user-1783016954177') THEN
-    UPDATE public.user_credentials
-    SET password_hash = (SELECT password_hash FROM public.user_credentials WHERE user_id = 'user-1783016954177'),
-        updated_at = timezone('utc'::text, now())
-    WHERE user_id = 'user-1';
-
-    -- Restaura a conta de Teste (arturcancio@gmail.com) para sua senha original 'Bb25042014@'
-    UPDATE public.user_credentials
-    SET password_hash = crypt('Bb25042014@', gen_salt('bf', 10)),
-        updated_at = timezone('utc'::text, now())
-    WHERE user_id = 'user-1783016954177';
-  END IF;
-END $$;
+ON CONFLICT (user_id) DO NOTHING;
 
 -- 3. Remover definitivamente o campo 'passwordSimulated' da coluna data de public.users
 UPDATE public.users
@@ -104,19 +82,8 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Credenciais de acesso não configuradas para este usuário.');
   END IF;
 
-  -- Validação criptográfica do hash Bcrypt
-  -- Para a conta user-1 (Artur GECTI), aceita a senha criptografada e também o fallback sof123
-  IF v_cred.password_hash = crypt(p_password, v_cred.password_hash)
-     OR (v_user_row.id = 'user-1' AND v_clean_email = 'artur.cancio@planejamento.gov.br' AND p_password = 'sof123') THEN
-    
-    -- Se logou com sof123 no user-1, atualiza a credencial para sof123
-    IF p_password = 'sof123' AND v_user_row.id = 'user-1' THEN
-      UPDATE public.user_credentials
-      SET password_hash = crypt('sof123', gen_salt('bf', 10)),
-          updated_at = timezone('utc'::text, now())
-      WHERE user_id = 'user-1';
-    END IF;
-
+  -- Validação criptográfica estrita do hash Bcrypt
+  IF v_cred.password_hash = crypt(p_password, v_cred.password_hash) THEN
     -- Retornar os dados do usuário limpos de qualquer credencial ou hash
     v_user_data := (v_user_row.data - 'passwordSimulated' - 'passwordHash') || jsonb_build_object('id', v_user_row.id);
     RETURN jsonb_build_object('success', true, 'user', v_user_data);
