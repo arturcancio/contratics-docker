@@ -3503,7 +3503,7 @@ export default function App() {
               </div>
 
               {/* Fluxo Macrogrupo de Contratações de TIC (Interactive Stepper) */}
-              <div className="bg-surface-container border border-outline-variant/60 rounded-2xl p-5 md:p-6 shadow">
+              <div className="bg-surface-container border border-outline-variant/60 rounded-2xl p-5 md:p-6 shadow" data-tour="dashboard-macrofluxo">
                 <div className="flex items-center gap-2 mb-4 border-b border-outline-variant/20 pb-3">
                   <div className="p-1 bg-primary/10 rounded-lg text-primary">
                     <TrendingUp className="w-4 h-4" />
@@ -3601,7 +3601,7 @@ export default function App() {
               </div>
 
               {/* Bloco Destaque 1: Valores Financeiros e Orçamentários Consolidados do Exercício */}
-              <div className="space-y-2">
+              <div className="space-y-2" data-tour="dashboard-consolidador">
                 <div className="flex items-center gap-2 px-1">
                   <div className="w-1.5 h-4 bg-primary rounded-full" />
                   <h4 className="text-xs uppercase font-extrabold text-on-surface tracking-wider font-display">
@@ -3679,7 +3679,7 @@ export default function App() {
               </div>
 
               {/* Custeio vs Investimento & Histórico Ano a Ano (Ação 8861) */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" data-tour="dashboard-graficos-8861">
                 {/* Donut Chart: Custeio vs Investimento do Ano Selecionado (Col Span 5) */}
                 <div className="lg:col-span-5 bg-surface-container border border-outline-variant/60 rounded-xl p-5 flex flex-col justify-between shadow-md relative lg:order-2">
                   <div className="absolute top-3 right-3 bg-primary/10 border border-primary/20 text-primary text-[8px] font-bold px-1.5 py-0.5 rounded font-mono uppercase tracking-wider">
@@ -3827,7 +3827,7 @@ export default function App() {
               </div>
 
               {/* ICTI Index Historical Series & Table - Dashboard Widget */}
-              <div className="bg-surface-container border border-outline-variant/60 rounded-2xl p-5 md:p-6 shadow space-y-4">
+              <div className="bg-surface-container border border-outline-variant/60 rounded-2xl p-5 md:p-6 shadow space-y-4" data-tour="dashboard-icti-widget">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-outline-variant/20 pb-3">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-lg">
@@ -4035,7 +4035,7 @@ export default function App() {
               </div>
 
               {/* Graphical Analysis with Recharts */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" data-tour="dashboard-execucao-contratos">
                 
                 {/* Pie Chart: Execução Orçamentária Global - Prominent (Col Span 7) */}
                 <div className="lg:col-span-7 bg-surface-container border-2 border-primary/20 rounded-xl p-5 flex flex-col justify-between shadow-md relative">

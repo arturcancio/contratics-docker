@@ -3205,7 +3205,7 @@ export default function OrcamentoAtual({
         const lastManualTime = latestHistoryForYear?.updatedAt || record.manualUpdatedAt || null;
 
         return (
-          <div className="p-6 bg-surface border border-outline rounded-2xl relative overflow-hidden shadow-sm">
+          <div className="p-6 bg-surface border border-outline rounded-2xl relative overflow-hidden shadow-sm" data-tour="orcamento-siop-board">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b border-outline/50 pb-4 gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-600 dark:text-teal-400">
@@ -3742,7 +3742,7 @@ export default function OrcamentoAtual({
       })()}
 
       {/* Dynamic KPI summary row */}
-      <div className={`grid grid-cols-1 ${sumAnnualizedPlanejamentos > 0 ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-4 sm:gap-6`}>
+      <div className={`grid grid-cols-1 ${sumAnnualizedPlanejamentos > 0 ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-3'} gap-4 sm:gap-6`} data-tour="orcamento-kpis">
         
         {/* KPI Panel 1: Soma Contratos Vigentes */}
         <div className="flex items-center justify-between p-6 bg-surface border border-outline rounded-2xl relative overflow-hidden group">
@@ -3895,7 +3895,7 @@ export default function OrcamentoAtual({
       </div>
 
       {/* DFDs Table Panel */}
-      <div className="bg-surface border border-outline rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-surface border border-outline rounded-2xl overflow-hidden shadow-sm" data-tour="orcamento-table">
         <div className="px-6 py-4 border-b border-outline flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-surface-container-low/30">
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-4 bg-teal-500 rounded-full" />

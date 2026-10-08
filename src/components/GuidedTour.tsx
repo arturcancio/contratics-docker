@@ -66,7 +66,7 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
     main: {
       id: 'main',
       title: 'Tour Geral do Sistema CONTRATICS',
-      description: `Conheça os principais módulos, regras e atalhos do CONTRATICS sob a perspectiva do seu perfil (${roleLabel}).`,
+      description: `Conheça todos os módulos, regras e indicadores do CONTRATICS sob a perspectiva do seu perfil (${roleLabel}).`,
       iconName: 'Compass',
       steps: [
         {
@@ -96,26 +96,10 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           position: 'right'
         },
         {
-          targetSelector: '[data-tour="year-selector"]',
-          title: 'Filtro de Exercício Financeiro (Ano)',
-          badge: 'Filtro Global',
-          description: 'Selecione o ano do exercício (2024 a 2027) no topo do Dashboard. Todos os limites do SIOP, DFDs, valores anualizados dos contratos e demonstrativos de descentralização são recalculados instantaneamente para o exercício escolhido.',
-          position: 'bottom'
-        },
-        {
-          targetSelector: '[data-tour="descentralizacao-panel"]',
-          title: 'Painel de Descentralização Orçamentária (MPO ➔ MGI)',
-          badge: 'Gestão de Repasses Colaboragov',
-          description: 'Monitore em tempo real o confronto orçamentário dos contratos do Pregão Colaboragov através das três caixas analíticas: "Deveria ser Descentralizado" (total demandado nas OSs), "Total Descentralizado" (repasses formalizados ao MGI via SEI) e "Saldo não cobrado" (a diferença preservada no teto orçamentário da SOF, protegendo contra perda de recursos).',
-          position: 'top'
-        },
-        {
-          targetSelector: '[data-tour="btn-icti"]',
-          title: 'Calculadora do Índice ICTI (Ipeadata)',
-          badge: 'Ferramenta Inteligente',
-          description: role === 'GECTI' || role === 'Fiscal'
-            ? 'Calcule o reajuste anual pelo ICTI com consulta em tempo real à API oficial do Ipeadata. O cálculo fixa a Data-Base original a partir da Data do Orçamento Estimado do contrato (cumprindo a Lei 14.133/2021 e jurisprudência do TCU), gerando memória detalhada e minuta formatada para o SEI.'
-            : 'Simule e audite a variação acumulada do índice ICTI (Ipeadata), conferindo a aplicação da Data do Orçamento Estimado e as memórias de cálculo dos termos de apostilamento.',
+          targetSelector: '[data-tour="header-manual"]',
+          title: 'Central do Tutorial Guiado & Manuais',
+          badge: 'Treinamento Sempre À Mão',
+          description: `Precisa rever um fluxo ou treinar um módulo específico? Clique neste ícone a qualquer momento para abrir esta Central de Tutoriais e navegar pelos guias passo a passo adaptados ao perfil ${roleLabel}.`,
           position: 'bottom'
         },
         {
@@ -126,11 +110,62 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           position: 'bottom'
         },
         {
-          targetSelector: '[data-tour="header-manual"]',
-          title: 'Central do Tutorial Guiado & Manuais',
-          badge: 'Treinamento Sempre À Mão',
-          description: `Precisa rever um fluxo ou treinar um módulo específico? Clique neste ícone a qualquer momento para abrir esta Central de Tutoriais adaptada ao perfil ${roleLabel}.`,
+          targetSelector: '[data-tour="year-selector"]',
+          title: 'Filtro de Exercício Financeiro (Ano) & UASG',
+          badge: 'Filtro Global',
+          description: 'Selecione o ano do exercício (2024 a 2028) no topo do Dashboard e consulte a UASG Geral 201007 (MPO/SOF). Todos os limites do SIOP, DFDs, valores anualizados dos contratos e demonstrativos de descentralização são recalculados instantaneamente para o exercício escolhido.',
           position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="dashboard-macrofluxo"]',
+          title: 'Macrofluxo das 3 Etapas de Contratação GECTI',
+          badge: 'Esteira de Contratação',
+          description: 'Acompanhe a evolução de todos os processos em tempo real através das 3 macroetapas: Etapa 1 - Fase Interna (Planejamento da Contratação com ETP, TR, Pesquisa de Preços e Mapa de Riscos), Etapa 2 - Seleção do Fornecedor (Sessão Pública e Julgamento de Propostas) e Etapa 3 - Gestão Contratual (Execução e Fiscalização). Clique nos cards para visualizar diretamente os processos de cada fase.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="dashboard-consolidador"]',
+          title: 'Consolidação Orçamentária e Financeira',
+          badge: 'Destaques Orçamentários',
+          description: 'Painel com os 3 grandes agregadores de recursos do exercício: 1. Total Anualizado dos Contratos Vigentes da SOF; 2. Valor Anual dos DFDs Ativos do PCA; e 3. Valor Anual Geral SOF (o somatório consolidado de Contratos Anualizados + DFDs Ativos planejados para o exercício).',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="dashboard-graficos-8861"]',
+          title: 'Segregação Custeio vs Investimento & Histórico Ação 8861',
+          badge: 'Ação 8861 SIOP',
+          description: 'Visão analítica de equilíbrio orçamentário: gráfico de rosca demonstrando a proporção exata de Despesas Correntes/Custeio (GND 3 - sustentação contínua) versus Despesas de Capital/Investimento (GND 4 - novas soluções e ativos), além do comparativo histórico em barras ano a ano da Ação 8861.',
+          position: 'top'
+        },
+        {
+          targetSelector: '[data-tour="dashboard-icti-widget"]',
+          title: 'Acompanhamento do Índice de Custos de TI (ICTI)',
+          badge: 'Ipeadata Oficial',
+          description: 'Série histórica oficial e auditada pelo Ipea/Ipeadata (séries DIMAC12) para fundamentar o reajuste anual de contratos de tecnologia. Apresenta a curva de variação acumulada nos últimos 12 meses e tabela com as divulgações oficiais mais recentes.',
+          position: 'top'
+        },
+        {
+          targetSelector: '[data-tour="btn-icti"]',
+          title: 'Calculadora Inteligente do ICTI (Ipeadata)',
+          badge: 'Ferramenta Inteligente',
+          description: role === 'GECTI' || role === 'Fiscal'
+            ? 'Abra a Calculadora do ICTI com consulta em tempo real à API oficial do Ipeadata. O cálculo fixa a Data-Base original na Data do Orçamento Estimado do contrato (cumprindo o Art. 92, V da Lei 14.133/2021 e jurisprudência do TCU), gerando memória detalhada e minuta formatada para o SEI.'
+            : 'Simule e audite a variação acumulada do índice ICTI (Ipeadata), conferindo a aplicação da Data do Orçamento Estimado e as memórias de cálculo dos termos de apostilamento.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="dashboard-execucao-contratos"]',
+          title: 'Execução Orçamentária dos Contratos (Itens SOF)',
+          badge: 'Execução Financeira',
+          description: 'Demonstrativo visual da execução financeira apurado estritamente sobre os itens sob responsabilidade da SOF em cada contrato: Empenhado (reserva orçamentária), Liquidado (serviços atestados) e Pago (efetivo desembolso), confrontados com a dotação SIOP.',
+          position: 'top'
+        },
+        {
+          targetSelector: '[data-tour="descentralizacao-panel"]',
+          title: 'Painel de Descentralização Orçamentária (MPO ➔ MGI)',
+          badge: 'Gestão de Repasses Colaboragov',
+          description: 'Monitoramento exclusivo para contratos sob a modalidade Pregão Colaboragov através das três caixas analíticas: "Deveria ser Descentralizado" (total demandado nas OSs), "Total Descentralizado" (repasses formalizados ao MGI via SEI) e "Saldo não cobrado" (a diferença preservada no teto orçamentário da SOF, protegendo contra perda de recursos).',
+          position: 'top'
         }
       ]
     },
@@ -144,14 +179,7 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           targetSelector: '[data-tour="dfd-header"]',
           title: 'Gestão de DFDs de TIC (PCA)',
           badge: `PCA & DFDs (${roleLabel})`,
-          description: 'O DFD é o documento de formalização inicial que compõe o Plano de Contratações Anual (PCA). Aqui são registradas todas as demandas e necessidades de TIC da SOF para os exercícios futuros.',
-          position: 'bottom'
-        },
-        {
-          targetSelector: '[data-tour="dfd-stats"]',
-          title: 'Segregação GND 3 (Custeio) vs GND 4 (Investimento)',
-          badge: 'Métricas Orçamentárias',
-          description: 'Acompanhe em tempo real o montante financeiro total dos DFDs alocados em despesas correntes/custeio (manutenção, licenças continuadas) versus investimentos (aquisições de ativos, novos sistemas).',
+          description: 'O DFD é o documento de formalização inicial que compõe o Plano de Contratações Anual (PCA). Aqui são registradas todas as demandas e necessidades de TIC da SOF para os exercícios futuros em cumprimento ao Decreto nº 10.947/2022.',
           position: 'bottom'
         },
         {
@@ -159,20 +187,34 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           title: 'Cadastro, Edição e Exportação de DFDs',
           badge: 'Ações do Perfil',
           description: role === 'GECTI'
-            ? 'Como Administrador GECTI, você pode cadastrar novos DFDs, analisar/aprovar demandas de outras unidades, vincular a processos SEI e exportar o relatório do PCA.'
+            ? 'Como Administrador GECTI, você pode cadastrar novos DFDs, analisar/aprovar demandas de outras unidades, vincular a processos SEI e exportar o relatório oficial do PCA.'
             : role === 'Fiscal'
             ? 'Como Fiscal ou requisitante técnico, elabore propostas de DFDs para sua área de atuação. A consolidação e aprovação final no PCA cabe à GECTI.'
             : role === 'Auditor'
-            ? 'Exporte relatórios em PDF/Excel e audite a conformidade do PCA com o PDTIC e a correta classificação entre Custeio (GND 3) e Investimento (GND 4).'
+            ? 'Exporte relatórios em PDF e audite a conformidade do PCA com o PDTIC e a correta classificação entre Custeio (GND 3) e Investimento (GND 4).'
             : 'Consulte a listagem completa de DFDs e exporte relatórios. As ações de criação e edição ficam restritas no modo somente leitura.',
           position: 'bottom'
         },
         {
+          targetSelector: '[data-tour="dfd-filters"]',
+          title: 'Filtros Dinâmicos de Busca, Ano e Status',
+          badge: 'Filtros Rápidos',
+          description: 'Pesquise por termo no objeto ou UASG, selecione o ano do exercício do PCA e filtre por status do DFD (Não iniciado, Iniciado, Concluído).',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="dfd-stats"]',
+          title: 'Painel de Indicadores & Segregação GND 3 vs 4',
+          badge: 'Métricas Orçamentárias',
+          description: 'Acompanhe em tempo real a quantidade de demandas e o montante financeiro total dos DFDs alocados em despesas de Custeio (GND 3 - sustentação, licenças continuadas) versus Investimentos (GND 4 - aquisições de ativos, novos sistemas).',
+          position: 'bottom'
+        },
+        {
           targetSelector: '[data-tour="dfd-table"]',
-          title: 'Status e Vinculação ao Processo SEI',
+          title: 'Tabela de Demandas e Vinculação ao Processo SEI',
           badge: 'Fluxo Processual',
           description: role === 'GECTI'
-            ? 'Gerencie o ciclo do DFD (Em Elaboração, Aprovado, Vinculado) e realize a conexão direta com o Processo de Planejamento instaurado no SEI.'
+            ? 'Gerencie o ciclo do DFD (Não iniciado, Iniciado, Concluído), confira os valores anualizados proporcionais e realize a conexão direta com o Processo de Planejamento instaurado no SEI.'
             : role === 'Fiscal'
             ? 'Acompanhe o trâmite da sua demanda até a aprovação e vinculação ao respectivo Processo SEI de contratação.'
             : 'Consulte o status do DFD e rastreie a qual Processo SEI a necessidade institucional foi vinculada.',
@@ -190,29 +232,41 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           targetSelector: '[data-tour="plan-header"]',
           title: 'Processos de Planejamento de TIC (SEI)',
           badge: `Planejamentos SEI (${roleLabel})`,
-          description: 'Gerencie os processos instaurados no SEI em observância à IN SGD/ME nº 94/2022 e Lei 14.133/2021. Acompanhe a Equipe de Planejamento da Contratação (EPC), DFDs de origem, prazos e a fase atual da instrução.',
+          description: 'Gerencie os processos instaurados no SEI em estrita observância à IN SGD/ME nº 94/2022 e Lei 14.133/2021. Acompanhe a Equipe de Planejamento da Contratação (EPC), DFDs de origem, prazos e a fase atual da instrução.',
           position: 'bottom'
         },
         {
-          targetSelector: '[data-tour="plan-stages"]',
-          title: 'Estágios Regulatórios da IN SGD/ME',
-          badge: 'Fases da Instrução',
+          targetSelector: '[data-tour="plan-actions"]',
+          title: 'Cadastro de Processo SEI & Exportação',
+          badge: 'Ações do Perfil',
           description: role === 'GECTI'
-            ? 'Monitore e atualize a esteira de instrução: Instauração ➔ ETP (Estudo Técnico Preliminar) ➔ Mapa de Riscos ➔ TR (Termo de Referência) ➔ Parecer CONJUR ➔ Sessão Pública ➔ Contratação Concluída.'
+            ? 'Como Administrador GECTI, cadastre novos Processos de Planejamento SEI, defina o layout/modalidade (Pregão SOF, Contratação Direta - Dispensa ou Inexigibilidade), designe os membros da EPC e exporte relatórios consolidados em PDF.'
             : role === 'Fiscal'
-            ? 'Como membro da EPC, produza os artefatos técnicos (ETP, TR, Pesquisa de Preços) e acompanhe a evolução de cada etapa da instrução.'
+            ? 'Acompanhe os processos em que foi designado como integrante da EPC e exporte a relação de processos para planejamento das atividades.'
             : role === 'Auditor'
-            ? 'Fiscalize o cumprimento dos ritos da IN SGD/ME, pareceres da CONJUR, prazos de publicidade e a conformidade da instrução processual.'
-            : 'Consulte a evolução das fases e o histórico processual dos planejamentos de TIC da SOF em modo somente leitura.',
+            ? 'Audite os processos instaurados, a formalização das portarias de EPC e exporte relatórios de conformidade regulatória.'
+            : 'Consulte a relação de processos SEI em instrução e exporte dados em modo de leitura protegida.',
           position: 'bottom'
         },
         {
-          targetSelector: '[data-tour="plan-sof-items"]',
-          title: 'Reserva e Vinculação de Itens SOF',
-          badge: 'Orçamento SIOP',
-          description: role === 'GECTI' || role === 'Fiscal'
-            ? 'Vincule os itens orçamentários da Ação 8861 ao planejamento para assegurar a reserva e adequação orçamentária prévia ao lançamento da licitação.'
-            : 'Verifique a reserva e conformidade orçamentária dos itens da Ação 8861 vinculados ao processo de contratação.',
+          targetSelector: '[data-tour="plan-risk-card"]',
+          title: 'Previsão Orçamentária & Gráfico de Risco (Em Elaboração)',
+          badge: 'Análise de Risco & Custo',
+          description: 'Card analítico dos processos atualmente com status "Em Elaboração": totaliza os recursos previstos e apresenta o gráfico Donut de distribuição entre Custeio (GND 3) e Investimento (GND 4) para subsidiar a programação financeira da SOF.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="plan-filters"]',
+          title: 'Barra de Busca Textual e Filtro por Status',
+          badge: 'Filtros da Esteira',
+          description: 'Pesquise por número do Processo SEI, objeto ou integrante da EPC, e filtre por estágio regulatório: Seleção Fornecedor, Em Elaboração, Gerou Contrato ou Arquivado.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="plan-table"]',
+          title: 'Tabela de Processos e Acesso à Ficha Completa',
+          badge: 'Processos Ativos',
+          description: 'Tabela completa com número SEI, modalidade, objeto resumido, estimativa de custo e status. Clique em qualquer processo para abrir a sua Ficha Detalhada, contendo o Fluxo BPMN 2.0 e o Quadro Kanban.',
           position: 'top'
         }
       ]
@@ -227,7 +281,7 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           targetSelector: '[data-tour="plan-detail-header"]',
           title: 'Identificação e Navegação do Processo SEI',
           badge: `Navegação SEI (${roleLabel})`,
-          description: 'Barra superior com o número do Processo SEI, tipo de processo/layout, DFD de origem no PCA, contrato originado e botões para Rastreabilidade Completa e acionamento deste Tutorial.',
+          description: 'Barra superior com o número do Processo SEI, layout do processo, DFD de origem no PCA, contrato originado e botões para Rastreabilidade Completa e acionamento deste Tutorial.',
           position: 'bottom'
         },
         {
@@ -262,30 +316,39 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           targetSelector: '[data-tour="plan-detail-tabs"]',
           title: 'Sub-abas de Gestão do Planejamento',
           badge: 'Abas de Gestão',
-          description: 'Navegação entre as 3 visões detalhadas do processo: Histórico Processual SEI, Quadro Kanban de Tarefas da Equipe e Itens da SOF Orçados (Ação 8861).',
+          description: 'Navegação entre as visões integradas do processo: "Fluxo e Kanban" (diagrama BPMN 2.0 e quadro Kanban de tarefas), "Itens SOF Orçados" (reserva na Ação 8861) e "Histórico Processual" (registro cronológico de despachos SEI).',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="bpmn-flow-board"]',
+          title: 'Fluxo BPMN 2.0 Oficial da Contratação',
+          badge: 'Modelagem BPMN 2.0',
+          description: role === 'GECTI' || role === 'Fiscal'
+            ? 'Diagrama interativo em notação oficial BPMN 2.0 com raias de responsabilidade (Área Requisitante, Equipe de Planejamento, Área de TIC e Autoridade Competente), tarefas retangulares, gateways de decisão e setas ortogonais em ângulos retos de 90°. Permite adicionar novas etapas, alterar papéis, conectar passos e modelar fluxos padronizados da IN SGD/ME 94/2022.'
+            : 'Diagrama visual do macroprocesso de contratação em notação oficial BPMN 2.0 com raias de responsabilidade, gateways e conexões canônicas em ângulos retos de 90° em modo de consulta protegida.',
           position: 'top'
         },
         {
-          targetSelector: '[data-tour="plan-tab-historico"]',
-          title: 'Aba 1: Histórico Processual SEI',
-          badge: 'Eventos SEI',
-          description: 'Registro cronológico dos eventos do processo SEI: despachos, pareceres jurídicos da CONJUR, aprovações de ETP/TR, publicação de edital e notas técnicas.',
-          position: 'top'
-        },
-        {
-          targetSelector: '[data-tour="plan-tab-tarefas"]',
-          title: 'Aba 2: Tarefas da Equipe (Quadro Kanban)',
+          targetSelector: '[data-tour="kanban-board"]',
+          title: 'Quadro Kanban de Execução de Tarefas da Equipe',
           badge: 'Quadro Kanban',
           description: role === 'GECTI' || role === 'Fiscal'
-            ? 'Quadro interativo para a equipe de planejamento acompanhar e concluir tarefas (elaboração de artefatos da IN SGD/ME: ETP, TR, Matriz de Riscos e Pesquisa de Preços).'
-            : 'Quadro informativo de tarefas da equipe de planejamento em modo de consulta.',
+            ? 'Quadro interativo para a equipe de planejamento gerenciar as tarefas da instrução processual organizadas nas 4 colunas: "Pendentes", "Em Elaboração", "Aguardando Assinatura" e "Concluídas". Arraste os cards entre as colunas, abra para conferir os checklists de artefatos da IN SGD/ME (ETP, TR, Matriz de Riscos, Pesquisa de Preços) e registre os prazos.'
+            : 'Quadro visual de acompanhamento da execução das tarefas da equipe de planejamento em modo de leitura. Clique em qualquer card para inspecionar os artefatos técnicos e prazos da instrução.',
           position: 'top'
         },
         {
           targetSelector: '[data-tour="plan-tab-itens-sof"]',
-          title: 'Aba 3: Itens da SOF Orçados (Ação 8861)',
-          badge: 'Itens SIOP',
-          description: 'Quadro de itens orçamentários da Ação 8861 vinculados ao processo, assegurando a reserva e conformidade orçamentária prévia à licitação.',
+          title: 'Sub-aba: Itens da SOF Orçados (Ação 8861)',
+          badge: 'Reserva Orçamentária SIOP',
+          description: 'Quadro de itens do catálogo da Ação 8861 alocados a este planejamento, garantindo a reserva prévia e compatibilidade orçamentária antes do lançamento da licitação.',
+          position: 'top'
+        },
+        {
+          targetSelector: '[data-tour="plan-tab-historico"]',
+          title: 'Sub-aba: Histórico Processual SEI & Auditoria',
+          badge: 'Eventos SEI',
+          description: 'Registro cronológico de despachos, pareceres jurídicos da CONJUR, saneamentos técnicos, aprovações de ETP/TR e publicação de editais com rastreabilidade formal do SEI.',
           position: 'top'
         }
       ]
@@ -310,25 +373,51 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           position: 'bottom'
         },
         {
-          targetSelector: '[data-tour="contract-alterations"]',
-          title: 'Aditivos, Apostilamentos & Data-Base do Orçamento',
-          badge: 'Alterações Contratuais',
+          targetSelector: '[data-tour="contract-actions"]',
+          title: 'Ações: Exportar PDF, Fornecedores e Novo Contrato',
+          badge: 'Ações de Gestão',
           description: role === 'GECTI'
-            ? 'Gerencie Termos Aditivos (prorrogação de vigência e acréscimos até o limite legal de 25%) e Apostilamentos de reajuste anual pelo ICTI calculados a partir da Data do Orçamento Estimado.'
+            ? 'Exporte relatórios em PDF, gerencie a base cadastral de empresas/fornecedores e cadastre novos contratos formalizados.'
             : role === 'Fiscal'
-            ? 'Acompanhe os prazos de renovação e solicite a formalização do reajuste anual pelo ICTI antes do vencimento do ciclo anual.'
-            : role === 'Auditor'
-            ? 'Cheque se os aditivos respeitam os tetos legais e se os apostilamentos utilizam a variação correta do ICTI sobre a data-base do orçamento original.'
-            : 'Consulte o histórico de aditivos de prazo e apostilamentos de reajuste financeiro registrados no contrato.',
+            ? 'Exporte dados e consulte a base de fornecedores e seus respectivos prepostos designados.'
+            : 'Exporte relatórios oficiais e consulte os dados cadastrais das empresas contratadas.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="contract-alerts"]',
+          title: 'Painel de Alertas de Vencimento de Contratos Ativos',
+          badge: 'Vigência 30/60/90/180 dias',
+          description: 'Monitoramento proativo dos prazos de término de vigência dos contratos da SOF classificados por faixas de severidade (Crítico <30d, Alto Risco <60d, Alerta <90d e Preventivo <180d) com botão para iniciar prorrogações tempestivas.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="contract-alterations"]',
+          title: 'Acompanhamento do ICTI & Reajustes de Contratos',
+          badge: 'Reajuste pelo ICTI',
+          description: 'Painel integrado à API oficial do Ipeadata com série histórica dos últimos 12 meses, curva de variação do índice e simulador para aplicação de termos de apostilamento ancorados na Data do Orçamento Estimado.',
           position: 'bottom'
         },
         {
           targetSelector: '[data-tour="contract-icti-btn"]',
-          title: 'Cálculo Direto do ICTI Integrado à Ficha',
-          badge: 'Reajuste Automatizado',
+          title: 'Calculadora Oficial do ICTI Integrada',
+          badge: 'Calculadora Ipeadata',
           description: role === 'GECTI' || role === 'Fiscal'
-            ? 'Abra a Calculadora ICTI diretamente da ficha do contrato. A Data do Orçamento Estimado e os valores contratuais são carregados automaticamente para fundamentar o processo de apostilamento.'
-            : 'Abra a Calculadora ICTI para simular e conferir os índices do Ipeadata aplicáveis ao contrato.',
+            ? 'Abra a Calculadora ICTI diretamente deste painel para calcular memórias de reajuste e gerar textos padronizados para o processo SEI.'
+            : 'Abra a Calculadora ICTI para simular e conferir os índices do Ipeadata aplicáveis aos contratos.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="contract-filters"]',
+          title: 'Filtros por Termo, Processo e Vigência Ativa',
+          badge: 'Filtros Dinâmicos',
+          description: 'Busque rapidamente por número de contrato, processo SEI ou objeto, e filtre pelas faixas de vigência (Vigente, A Vencer, Encerrado).',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="contract-table"]',
+          title: 'Tabela de Contratos Vigentes & Valores Anualizados',
+          badge: 'Listagem Contratual',
+          description: 'Tabela completa com número do contrato, processo SEI, fornecedor, objeto, vigências e o Valor Anualizado da SOF no exercício. Clique em qualquer contrato para acessar a Ficha Detalhada.',
           position: 'top'
         }
       ]
@@ -357,14 +446,14 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           targetSelector: '[data-tour="contrato-detail-info"]',
           title: 'Objeto, Fornecedor e Equipe de Fiscalização',
           badge: 'Fiscalização Designada',
-          description: 'Apresenta a descrição formal do Objeto, dados cadastrais do fornecedor, preposto formal com contatos e a Equipe de Fiscalização organizada por cards estruturados: Gestor (Titular/Substituto), Fiscal Técnico (Titular/Substituto), Fiscal Administrativo (Titular/Substituto), Fiscal Requisitante / Setorial (Titular/Substituto) e a Portaria formal com número SEI.',
+          description: 'Apresenta a descrição formal do Objeto, dados cadastrais do fornecedor com CNPJ e contatos, e a Equipe de Fiscalização organizada por cards estruturados: Gestor (Titular/Substituto), Fiscal Técnico (Titular/Substituto), Fiscal Administrativo (Titular/Substituto), Fiscal Requisitante / Setorial (Titular/Substituto) e a Portaria formal com número SEI.',
           position: 'bottom'
         },
         {
           targetSelector: '[data-tour="contrato-detail-metrics"]',
-          title: '4 Cards Analíticos & Módulos de Execução SOF',
-          badge: 'Métricas & Orçamento',
-          description: 'Painel analítico completo: 4 Cards principais (Valor Global Atualizado com acréscimos/reajustes; Itens SOF do exercício com total anualizado e % de participação; Periodicidade de Pagamento; e Saldo SOF a Executar com total pago) e 2 Módulos Gráficos Dedicados (Segregação GND 3 vs GND 4 em anel e Execução Orçamentária dos Itens SOF).',
+          title: 'Métricas Analíticas, Prazos & Execução Orçamentária',
+          badge: 'Valores & Prazos',
+          description: 'Painel analítico completo: Valor Global Atualizado, Itens SOF do exercício com total anualizado e % de participação, Periodicidade de Pagamento, Saldo SOF a Executar, Datas Limites de Vigências (com destaque para a Data do Orçamento Estimado) e os gráficos de Segregação GND 3 vs GND 4 e Execução Orçamentária dos Itens SOF.',
           position: 'left'
         },
         {
@@ -436,21 +525,49 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           targetSelector: '[data-tour="orcamento-header"]',
           title: 'Ação Orçamentária 8861 do SIOP',
           badge: `Orçamento SOF (${roleLabel})`,
-          description: 'Acompanhe os limites orçamentários oficiais da SOF no SIOP para a Ação 8861 (Sustentação de TIC do Sistema de Planejamento e Orçamento Federal).',
+          description: 'Acompanhe os limites orçamentários oficiais da SOF no SIOP para a Ação 8861 (Sustentação da Tecnologia da Informação do Sistema de Planejamento Nacional e do Orçamento Federal).',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="orcamento-actions"]',
+          title: 'Ações Orçamentárias & Ferramentas de Projeção',
+          badge: 'Ações do Orçamento',
+          description: 'Simule prorrogações automáticas de contratos para exercícios futuros, gere a planilha interativa de projeção orçamentária oficial e exporte o relatório executivo em PDF.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="orcamento-siop-board"]',
+          title: 'Painel de Monitoramento da Ação 8861 (SIOP)',
+          badge: 'Dotação & Execução SIOP',
+          description: 'Quadro com os dados oficiais do SIOP: Dotação Inicial, Dotação Atualizada, Empenhado, Liquidado e Pago, com histórico de atualizações e segregação por Custeio e Investimento.',
+          position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="orcamento-kpis"]',
+          title: 'KPIs Consolidados do Exercício',
+          badge: 'Consolidação de Despesas',
+          description: 'Cards com os somatórios das despesas de TIC: Total Anualizado dos Contratos Vigentes, Soma dos DFDs Anualizada (PCA), Processos em Planejamento (SEI) e o Valor Anual Geral SOF planejado para o exercício.',
           position: 'bottom'
         },
         {
           targetSelector: '[data-tour="orcamento-gnd"]',
-          title: 'Dotação Inicial, Atualizada e Empenhos Globais',
-          badge: 'Execução Orçamentária',
+          title: 'Segregação GND 3 (Custeio) vs GND 4 (Investimento)',
+          badge: 'Equilíbrio Orçamentário',
           description: role === 'GECTI'
-            ? 'Gerencie o saldo disponível, remanejamentos de dotação e empenhos globais calculados exclusivamente sobre os itens de responsabilidade da SOF por Custeio (GND 3) e Investimento (GND 4).'
+            ? 'Gerencie o saldo disponível, remanejamentos de dotação e limites calculados sobre os itens da SOF por Custeio (GND 3) e Investimento (GND 4).'
             : role === 'Fiscal'
             ? 'Acompanhe a disponibilidade orçamentária e a emissão de Notas de Empenho vinculadas aos itens dos seus contratos.'
             : role === 'Auditor'
             ? 'Audite a execução da Ação 8861, verificando o confronto de Notas de Empenho (NE), Liquidações (NS) e a conformidade dos limites anuais aprovados na LOA.'
             : 'Consulte os totais de dotação aprovada, empenhos emitidos e saldos orçamentários do exercício.',
           position: 'bottom'
+        },
+        {
+          targetSelector: '[data-tour="orcamento-table"]',
+          title: 'Tabelas Detalhadas das Linhas Orçamentárias',
+          badge: 'Detalhamento Analítico',
+          description: 'Tabelas analíticas completas discriminando individualmente: 1. Demandas do PCA (DFDs); 2. Processos em Planejamento (SEI); e 3. Contratos Vigentes de TIC com cálculo proporcional do exercício.',
+          position: 'top'
         }
       ]
     },
@@ -469,23 +586,23 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
         },
         {
           targetSelector: '[data-tour="kanban-pipeline"]',
-          title: 'Macroprocesso e Esteira BPMN (IN SGD/ME)',
+          title: 'Macroprocesso e Esteira da Contratação',
           badge: 'Estágios Regulatórios',
-          description: 'Visualizador interativo do fluxo composto pelas 5 macroetapas da contratação de TIC: Estudos Técnicos (ETP), Termo de Referência (TR), Parecer CONJUR, Sessão Pública e Contratação Concluída.',
+          description: 'Visualizador interativo do fluxo composto pelas macroetapas da contratação de TIC da IN SGD/ME 94/2022: Estudos Técnicos (ETP), Termo de Referência (TR), Parecer CONJUR, Sessão Pública e Contratação Concluída.',
           position: 'bottom'
         },
         {
           targetSelector: '[data-tour="kanban-actions"]',
-          title: 'Modelos de Fluxo e Criação de Tarefas',
+          title: 'Modelos de Fluxo, Busca e Criação de Tarefas',
           badge: 'Ações & Templates',
           description: role === 'GECTI' || role === 'Fiscal'
-            ? 'Importe modelos de fluxo padronizados (DFD Comum, Licitação de TIC, Dispensa/Inexigibilidade), customize templates e cadastre novas tarefas com prazos e responsáveis.'
-            : 'Consulte os modelos de fluxo e a distribuição das tarefas do processo. O cadastro e movimentação de cards ficam protegidos para o seu perfil.',
+            ? 'Importe modelos de fluxo padronizados (DFD Comum, Licitação de TIC, Dispensa/Inexigibilidade), busque cards no quadro e cadastre novas tarefas com prazos e responsáveis.'
+            : 'Consulte os modelos de fluxo e a distribuição das tarefas do processo em modo somente leitura.',
           position: 'bottom'
         },
         {
           targetSelector: '[data-tour="kanban-board"]',
-          title: 'Quadro de Colunas e Movimentação',
+          title: 'Quadro Kanban com Colunas de Execução',
           badge: role === 'Visualizador' || role === 'Auditor' ? 'Modo Consulta' : 'Arrastar / Avançar',
           description: role === 'GECTI' || role === 'Fiscal'
             ? 'Gerencie os cards organizados nas colunas: "Pendentes", "Em Elaboração", "Aguardando Assinatura" e "Concluídas". Arraste os cards ou use as setas para transicionar o status.'
@@ -722,7 +839,7 @@ export const GuidedTourOverlay: React.FC<GuidedTourOverlayProps> = ({
       if (currentStep.targetSelector) {
         const el = document.querySelector(currentStep.targetSelector);
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
           const rect = el.getBoundingClientRect();
           setTargetRect(rect);
           return;
@@ -796,22 +913,37 @@ export const GuidedTourOverlay: React.FC<GuidedTourOverlayProps> = ({
     const spaceBelow = window.innerHeight - targetRect.bottom;
     const spaceAbove = targetRect.top;
     const spaceRight = window.innerWidth - targetRect.right;
+    const spaceLeft = targetRect.left;
 
-    if (currentStep.position === 'right' && spaceRight > 380) {
+    if (currentStep.position === 'right' && spaceRight > 420) {
       cardStyle = {
         position: 'fixed',
         top: Math.max(20, Math.min(window.innerHeight - 380, targetRect.top)),
         left: targetRect.right + 16,
         zIndex: 9999
       };
-    } else if (spaceBelow > 320 || currentStep.position === 'bottom') {
+    } else if (currentStep.position === 'left' && spaceLeft > 420) {
       cardStyle = {
         position: 'fixed',
-        top: Math.min(window.innerHeight - 340, targetRect.bottom + 16),
+        top: Math.max(20, Math.min(window.innerHeight - 380, targetRect.top)),
+        left: Math.max(16, targetRect.left - 440),
+        zIndex: 9999
+      };
+    } else if (currentStep.position === 'top' && spaceAbove > 330) {
+      cardStyle = {
+        position: 'fixed',
+        top: Math.max(20, targetRect.top - 330),
         left: Math.max(16, Math.min(window.innerWidth - 420, targetRect.left)),
         zIndex: 9999
       };
-    } else if (spaceAbove > 320 || currentStep.position === 'top') {
+    } else if (spaceBelow > 320 || currentStep.position === 'bottom') {
+      cardStyle = {
+        position: 'fixed',
+        top: Math.min(window.innerHeight - 340, Math.max(20, targetRect.bottom + 16)),
+        left: Math.max(16, Math.min(window.innerWidth - 420, targetRect.left)),
+        zIndex: 9999
+      };
+    } else {
       cardStyle = {
         position: 'fixed',
         top: Math.max(20, targetRect.top - 330),

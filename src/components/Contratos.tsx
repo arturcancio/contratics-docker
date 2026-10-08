@@ -2961,7 +2961,7 @@ export default function Contratos({
               </p>
             </div>
             
-            <div className="flex gap-2.5">
+            <div className="flex gap-2.5" data-tour="contract-actions">
               <button
                 onClick={exportContratosToPDF}
                 className="flex items-center gap-2 px-3 py-2 border border-outline-variant/60 rounded-lg text-xs bg-surface-container hover:text-primary transition-all cursor-pointer font-semibold"
@@ -2987,7 +2987,7 @@ export default function Contratos({
           </div>
 
           {/* Section: Prominent Expiration Alerts Dashboard Panel - Full Width and Collapsed by default */}
-          <div className="bg-surface border border-outline rounded-xl p-5 shadow-sm space-y-4 border-l-4 border-l-rose-500/80 mb-6 select-none">
+          <div className="bg-surface border border-outline rounded-xl p-5 shadow-sm space-y-4 border-l-4 border-l-rose-500/80 mb-6 select-none" data-tour="contract-alerts">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-outline-variant/60">
               <div className="flex items-start sm:items-center gap-3">
                 <div className="p-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl animate-pulse shrink-0 mt-0.5 sm:mt-0">
@@ -3644,7 +3644,7 @@ export default function Contratos({
           </div>
 
           {/* Table Filters */}
-          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 flex flex-col md:flex-row items-stretch md:items-center gap-5">
+          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 flex flex-col md:flex-row items-stretch md:items-center gap-5" data-tour="contract-filters">
             <div className="flex-1 space-y-2">
               <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Filtrar por Termo / Processo / Nº Contrato</label>
               <input
@@ -3684,7 +3684,7 @@ export default function Contratos({
           </div>
 
           {/* Contracts table list */}
-          <div className="overflow-x-auto font-sans">
+          <div className="overflow-x-auto font-sans" data-tour="contract-table">
             <table className="w-full min-w-[1000px] text-left border-separate border-spacing-y-2">
               <thead>
                 <tr className="text-on-surface-variant">

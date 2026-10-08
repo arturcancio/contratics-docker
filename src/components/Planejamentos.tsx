@@ -947,7 +947,7 @@ export default function Planejamentos({
               </p>
             </div>
             
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5" data-tour="plan-actions">
               <button
                 onClick={exportPlanejamentosToPDF}
                 className="flex items-center gap-2 px-3 py-2 border border-outline-variant/60 rounded-lg text-xs bg-surface-container hover:text-primary transition-all cursor-pointer font-semibold"
@@ -993,7 +993,7 @@ export default function Planejamentos({
           </div>
 
           {/* Card de Análise de Risco & Previsão de Investimentos/Custeio (Processos "Em Elaboração") */}
-          <div className="bg-surface-container-low border border-outline-variant/80 rounded-2xl p-5 md:p-6 shadow-sm space-y-5">
+          <div className="bg-surface-container-low border border-outline-variant/80 rounded-2xl p-5 md:p-6 shadow-sm space-y-5" data-tour="plan-risk-card">
             {/* Top Bar of Risk Card */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-outline-variant/40 pb-4">
               <div className="flex items-start md:items-center gap-3">
@@ -1180,7 +1180,7 @@ export default function Planejamentos({
           </div>
 
           {/* Filtering bar */}
-          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 flex flex-col md:flex-row items-stretch md:items-center gap-5" data-tour="plan-stages">
+          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 flex flex-col md:flex-row items-stretch md:items-center gap-5" data-tour="plan-filters">
             <div className="flex-1 space-y-2">
               <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Busca por Processo/Requisitante/Tipo</label>
               <input
@@ -1220,7 +1220,7 @@ export default function Planejamentos({
           </div>
 
           {/* Plan list view */}
-          <div className="overflow-x-auto font-sans">
+          <div className="overflow-x-auto font-sans" data-tour="plan-table">
             <table className="w-full min-w-[1000px] text-left border-separate border-spacing-y-2">
               <thead>
                 <tr className="text-on-surface-variant">
