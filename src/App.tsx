@@ -3302,7 +3302,7 @@ export default function App() {
       <div className="flex-1 h-screen flex flex-col overflow-hidden max-w-full">
         
         {/* Main top header with actor authorization switcher */}
-        <header className="h-16 border-b border-outline bg-surface px-4 md:px-6 flex justify-between items-center shrink-0 font-sans z-10 w-full">
+        <header className="h-16 border-b border-outline bg-surface px-4 md:px-6 flex justify-between items-center shrink-0 font-sans relative z-30 w-full">
           <div className="flex items-center gap-3">
             <button
                onClick={() => setMobileMenuOpen(true)}
@@ -3343,7 +3343,7 @@ export default function App() {
             </button>
 
             {/* Interactive User Profile & Security Menu */}
-            <div className="relative" data-tour="header-profile">
+            <div className="relative z-50" data-tour="header-profile">
               <button
                 type="button"
                 onClick={() => setIsProfileMenuOpen(prev => !prev)}
