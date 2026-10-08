@@ -8,7 +8,7 @@ export interface User {
   name: string;
   email: string;
   role: 'GECTI' | 'Fiscal' | 'Auditor' | 'Visualizador';
-  passwordSimulated: string;
+  passwordSimulated?: string;
   needsPasswordReset: boolean;
 }
 

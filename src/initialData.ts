@@ -150,7 +150,6 @@ export const INITIAL_USERS: User[] = [
     name: "Artur Câncio",
     email: "artur.cancio@planejamento.gov.br",
     role: "GECTI",
-    passwordSimulated: "sof123",
     needsPasswordReset: false
   },
   {
@@ -158,7 +157,6 @@ export const INITIAL_USERS: User[] = [
     name: "Artur Câncio (Gmail)",
     email: "arturcancio@gmail.com",
     role: "GECTI",
-    passwordSimulated: "sof123",
     needsPasswordReset: false
   }
 ];

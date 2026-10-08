@@ -51,6 +51,7 @@ import DFDsComponent from './components/DFDs';
 import { 
   db, 
   auth, 
+  supabase,
   handleFirestoreError, 
   OperationType,
   collection, 
@@ -242,7 +243,7 @@ export default function App() {
       root.classList.remove('light');
       root.classList.add('dark');
     }
-    localStorage.setItem('contratics_theme', theme);
+    safeLocalStorageSet('contratics_theme', theme);
   }, [theme]);
 
   // Sync users with Firebase
@@ -289,7 +290,7 @@ export default function App() {
     const found = users.find(u => u.id === userId);
     if (found) {
       setCurrentUser(found);
-      localStorage.setItem('contratics_active_user_id', userId);
+      safeLocalStorageSet('contratics_active_user_id', userId);
       recordLoginLog(found, 'Troca de Perfil em Sessão');
     }
   };
@@ -354,7 +355,7 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         setIsLoggedIn(true);
-        localStorage.setItem('contratics_is_logged_in', 'true');
+        safeLocalStorageSet('contratics_is_logged_in', 'true');
         
         const userEmail = firebaseUser.email?.toLowerCase();
         if (userEmail) {
@@ -382,7 +383,6 @@ export default function App() {
                   name: firebaseUser.displayName || 'Gestor',
                   email: userEmail,
                   role: (userEmail === 'arturcancio@gmail.com' || userEmail === 'artur.cancio@planejamento.gov.br') ? 'GECTI' : 'Visualizador',
-                  passwordSimulated: 'sof123',
                   needsPasswordReset: false
                 };
                 await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
@@ -422,6 +422,11 @@ export default function App() {
     const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
       const list = snapshot.docs.map(doc => doc.data() as User);
       setUsers(list);
+      setCurrentUser(prev => {
+        if (!prev) return prev;
+        const matching = list.find(u => u.id === prev.id);
+        return matching ? { ...prev, ...matching } : prev;
+      });
     }, err => handleFirestoreError(err, OperationType.LIST, 'users'));
 
     const unsubFornecedores = onSnapshot(collection(db, 'fornecedores'), (snapshot) => {
@@ -2916,32 +2921,41 @@ export default function App() {
                 const emailClean = emailRaw.trim().toLowerCase();
                 const passClean = passwordRaw.trim();
 
-                // Busca o usuário correspondente pelo e-mail
-                const userMatch = users.find(u => 
-                  u.email.toLowerCase() === emailClean ||
-                  (emailClean === 'arturcancio@gmail.com' && u.email.toLowerCase().includes('artur')) ||
-                  (emailClean === 'artur.cancio@planejamento.gov.br' && u.email.toLowerCase().includes('artur'))
-                );
+                try {
+                  const { data, error } = await supabase.rpc('authenticate_user', {
+                    p_email: emailClean,
+                    p_password: passClean
+                  });
 
-                // Validação estrita da senha real cadastrada para o usuário
-                let found: User | undefined = undefined;
-                if (userMatch && userMatch.passwordSimulated === passClean) {
-                  found = userMatch;
-                }
-
-                if (found) {
-                  try {
-                    await signInAnonymously(auth);
-                  } catch (authErr: any) {
-                    console.warn('Info: Conexão direta estabelecida com o banco (autenticação anônima desabilitada ou restrita no Firebase Console).');
+                  if (error) {
+                    console.error('Erro na autenticação RPC:', error);
+                    alert('Erro ao conectar ao servidor de autenticação. Por favor, tente novamente.');
+                    return;
                   }
-                  setCurrentUser(found);
-                  setIsLoggedIn(true);
-                  localStorage.setItem('contratics_is_logged_in', 'true');
-                  localStorage.setItem('contratics_active_user_id', found.id);
-                  recordLoginLog(found, 'Sucesso');
-                } else {
-                  alert('E-mail institucional ou senha incorretos! Por favor verifique suas credenciais e tente novamente.');
+
+                  if (data && data.success && data.user) {
+                    const authenticatedUser = data.user as User;
+                    try {
+                      await signInAnonymously(auth);
+                    } catch (authErr: any) {
+                      console.warn('Info: Conexão direta estabelecida com o banco.');
+                    }
+                    setCurrentUser(authenticatedUser);
+                    setIsLoggedIn(true);
+                    safeLocalStorageSet('contratics_is_logged_in', 'true');
+                    safeLocalStorageSet('contratics_active_user_id', authenticatedUser.id);
+                    recordLoginLog(authenticatedUser, 'Sucesso');
+                  } else {
+                    const errorMsg = data?.error || 'E-mail institucional ou senha incorretos! Por favor verifique suas credenciais e tente novamente.';
+                    alert(errorMsg);
+                    const attemptedUser = users.find(u => u.email.toLowerCase() === emailClean);
+                    if (attemptedUser) {
+                      recordLoginLog(attemptedUser, 'Falha de Autenticação');
+                    }
+                  }
+                } catch (err: any) {
+                  console.error('Falha no login:', err);
+                  alert('Falha ao autenticar usuário. Por favor, tente novamente.');
                 }
               }}
               className="space-y-4"
@@ -3022,18 +3036,22 @@ export default function App() {
                 }
 
                 try {
+                  const { data, error } = await supabase.rpc('change_user_password', {
+                    p_user_id: currentUser.id,
+                    p_new_password: newPassword
+                  });
+
+                  if (error || !data?.success) {
+                    alert(error?.message || data?.error || 'Erro ao sincronizar nova senha com o servidor. Por favor, tente novamente.');
+                    return;
+                  }
+
                   const updatedUser: User = {
                     ...currentUser,
-                    passwordSimulated: newPassword,
                     needsPasswordReset: false
                   };
 
-                  // Update the user document in Firestore
-                  await setDoc(doc(db, 'users', currentUser.id), updatedUser);
-                  
-                  // Update current user state
                   setCurrentUser(updatedUser);
-                  
                   alert('Senha cadastrada com sucesso! Bem-vindo ao Contratics.');
                 } catch (err) {
                   console.error('Erro ao atualizar senha no banco:', err);
@@ -3075,7 +3093,7 @@ export default function App() {
                 type="button"
                 onClick={async () => {
                   setIsLoggedIn(false);
-                  localStorage.setItem('contratics_is_logged_in', 'false');
+                  safeLocalStorageSet('contratics_is_logged_in', 'false');
                   try {
                     await signOut(auth);
                   } catch (err) {
@@ -3199,7 +3217,7 @@ export default function App() {
             onClick={async () => {
               setIsLoggedIn(false);
               setMobileMenuOpen(false);
-              localStorage.setItem('contratics_is_logged_in', 'false');
+              safeLocalStorageSet('contratics_is_logged_in', 'false');
               try {
                 await signOut(auth);
               } catch (err) {
@@ -3248,7 +3266,7 @@ export default function App() {
             <button
               onClick={async () => {
                 setIsLoggedIn(false);
-                localStorage.setItem('contratics_is_logged_in', 'false');
+                safeLocalStorageSet('contratics_is_logged_in', 'false');
                 try {
                   await signOut(auth);
                 } catch (err) {
@@ -5126,23 +5144,30 @@ export default function App() {
                             }
                           }
                         } else {
-                          const newUsr: User = {
-                            id: `user-${Date.now()}`,
-                            name: usrFormName,
-                            email: usrFormEmail,
-                            role: usrFormRole,
-                            passwordSimulated: usrFormPass,
-                            needsPasswordReset: true
-                          };
+                          const newUserId = `user-${Date.now()}`;
+                          const initialPass = usrFormPass.trim() || 'sof123';
                           try {
-                            await handleAddUser(newUsr);
-                            alert(`Usuário "${usrFormName}" habilitado com perfil "${usrFormRole}"!`);
+                            const { data, error } = await supabase.rpc('create_new_user', {
+                              p_user_id: newUserId,
+                              p_name: usrFormName,
+                              p_email: usrFormEmail,
+                              p_role: usrFormRole,
+                              p_initial_password: initialPass
+                            });
+
+                            if (error || !data?.success) {
+                              alert(error?.message || data?.error || 'Erro ao habilitar integrante no servidor.');
+                              return;
+                            }
+
+                            alert(`Usuário "${usrFormName}" habilitado com perfil "${usrFormRole}"! Senha provisória: "${initialPass}".`);
                             setUsrFormName('');
                             setUsrFormEmail('');
                             setUsrFormRole('GECTI');
                             setUsrFormPass('sof123');
                           } catch (error) {
-                            handleFirestoreError(error, OperationType.CREATE, `users/${newUsr.id}`);
+                            console.error('Erro ao criar usuário:', error);
+                            alert('Erro ao habilitar usuário.');
                           }
                         }
                       }}
@@ -5627,15 +5652,21 @@ export default function App() {
                           onClick={async () => {
                             const finalPass = newPasswordValue.trim() || 'sof123';
                             try {
-                              await setDoc(doc(db, 'users', targetU.id), {
-                                ...targetU,
-                                passwordSimulated: finalPass,
-                                needsPasswordReset: true
+                              const { data, error } = await supabase.rpc('admin_reset_user_password', {
+                                p_target_user_id: targetU.id,
+                                p_temp_password: finalPass
                               });
-                              alert(`Senha de "${targetU.name}" redefinida provisoriamente para "${finalPass}" com sucesso!`);
+
+                              if (error || !data?.success) {
+                                alert(error?.message || data?.error || 'Erro ao redefinir senha no servidor.');
+                                return;
+                              }
+
+                              alert(`Senha de "${targetU.name}" redefinida provisoriamente para "${finalPass}" com sucesso! O integrante precisará cadastrar uma nova senha no próximo acesso.`);
                               setResetPasswordUserId(null);
                             } catch (err) {
-                              handleFirestoreError(err, OperationType.UPDATE, `users/${targetU.id}`);
+                              console.error('Erro ao redefinir senha:', err);
+                              alert('Erro ao redefinir senha no banco de dados.');
                             }
                           }}
                           className="flex-1 py-1.5 bg-amber-500 text-black font-extrabold rounded hover:opacity-95 text-xs transition-opacity cursor-pointer shadow"
@@ -5768,19 +5799,28 @@ export default function App() {
                         alert('E-mail em formato inválido!');
                         return;
                       }
-                      const newUsr: User = {
-                        id: `user-${Date.now()}`,
-                        name: newMemberName,
-                        email: newMemberEmail,
-                        role: newMemberRole,
-                        passwordSimulated: newMemberPass,
-                        needsPasswordReset: false
-                      };
-                      handleAddUser(newUsr);
-                      alert(`Usuário "${newMemberName}" cadastrado com perfil de "${newMemberRole}" com sucesso!`);
-                      setNewMemberName('');
-                      setNewMemberEmail('');
-                      setNewMemberRole('Fiscal');
+                      const newUserId = `user-${Date.now()}`;
+                      const initialPass = newMemberPass.trim() || 'sof123';
+                      supabase.rpc('create_new_user', {
+                        p_user_id: newUserId,
+                        p_name: newMemberName,
+                        p_email: newMemberEmail,
+                        p_role: newMemberRole,
+                        p_initial_password: initialPass
+                      }).then(({ data, error }) => {
+                        if (error || !data?.success) {
+                          alert(error?.message || data?.error || 'Erro ao cadastrar integrante no servidor.');
+                          return;
+                        }
+                        alert(`Usuário "${newMemberName}" cadastrado com perfil de "${newMemberRole}" com sucesso! Senha provisória: "${initialPass}".`);
+                        setNewMemberName('');
+                        setNewMemberEmail('');
+                        setNewMemberRole('Fiscal');
+                        setNewMemberPass('sof123');
+                      }).catch((err) => {
+                        console.error('Erro ao cadastrar novo integrante:', err);
+                        alert('Erro ao cadastrar integrante.');
+                      });
                     }}
                     className="space-y-3.5"
                   >

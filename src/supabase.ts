@@ -144,6 +144,10 @@ function getOrCreateCache(tableName: string): CollectionCache {
           if (Array.isArray(arr)) {
             for (const item of arr) {
               if (item && item.id) {
+                if (tableName === 'users') {
+                  delete item.passwordSimulated;
+                  delete item.passwordHash;
+                }
                 docs.set(item.id, item);
               }
             }
@@ -204,6 +208,10 @@ function ensureRealtimeChannel(tableName: string) {
       } else if (data) {
         for (const row of data) {
           const docData = row.data && typeof row.data === 'object' ? { ...row.data, id: row.id } : { id: row.id };
+          if (tableName === 'users') {
+            delete docData.passwordSimulated;
+            delete docData.passwordHash;
+          }
           cache.docs.set(row.id, docData);
         }
         cache.loaded = true;
@@ -232,6 +240,10 @@ function ensureRealtimeChannel(tableName: string) {
               const docData = newRow.data && typeof newRow.data === 'object'
                 ? { ...newRow.data, id: newRow.id }
                 : { ...newRow, id: newRow.id };
+              if (tableName === 'users') {
+                delete docData.passwordSimulated;
+                delete docData.passwordHash;
+              }
               cache.docs.set(newRow.id, docData);
               notifyCollectionListeners(tableName);
             }
@@ -301,6 +313,11 @@ export async function setDoc(
     finalData = { ...existing, ...data, id };
   } else {
     finalData = { ...data, id };
+  }
+
+  if (tableName === 'users' && finalData) {
+    delete finalData.passwordSimulated;
+    delete finalData.passwordHash;
   }
 
   // 1. Optimistic instant local update (UI responds in 0ms, persisted to localStorage)
