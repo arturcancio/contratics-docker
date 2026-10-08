@@ -5,7 +5,6 @@
       "name": "Artur Câncio",
       "email": "artur.cancio@planejamento.gov.br",
       "role": "GECTI",
-      "passwordSimulated": "sof123",
       "needsPasswordReset": false
     },
     {
@@ -13,28 +12,24 @@
       "role": "GECTI",
       "name": "Jorge da Silva Leal",
       "email": "jorge.leal@planejamento.gov.br",
-      "passwordSimulated": "Contratics123",
       "needsPasswordReset": false
     },
     {
       "id": "user-1779969818650",
       "role": "GECTI",
       "name": "Monade Rassa",
-      "passwordSimulated": "MrSc1981",
       "email": "monade.costa@planejamento.gov.br",
       "needsPasswordReset": false
     },
     {
       "id": "user-1783005559570",
       "needsPasswordReset": false,
-      "passwordSimulated": "Ven765",
       "role": "Visualizador",
       "email": "ramon.brandao@planejamento.gov.br",
       "name": "RAMON GOMES BRANDÃO"
     },
     {
       "id": "user-1783016782778",
-      "passwordSimulated": "Bl@d3Runn3r",
       "email": "karlei.rodrigues@planejamento.gov.br",
       "role": "Visualizador",
       "needsPasswordReset": false,
@@ -45,7 +40,6 @@
       "name": " Everton Batista Ramos",
       "email": "everton.ramos@planejamento.gov.br",
       "role": "Visualizador",
-      "passwordSimulated": "sof123",
       "needsPasswordReset": true
     },
     {
@@ -53,7 +47,6 @@
       "email": "darlan.venturelli@planejamento.gov.br",
       "name": "DARLAN HENRIQUE DA SILVA VENTURELLI",
       "needsPasswordReset": true,
-      "passwordSimulated": "sof123",
       "role": "Visualizador"
     },
     {
@@ -61,20 +54,17 @@
       "name": "Teste",
       "needsPasswordReset": false,
       "role": "Visualizador",
-      "passwordSimulated": "Bb25042014@",
       "email": "arturcancio@gmail.com"
     },
     {
       "id": "user-1786132554368",
       "needsPasswordReset": true,
       "role": "Visualizador",
-      "passwordSimulated": "sof123",
       "name": "Thiago Fernandes Neves",
       "email": "thiago.neves@planejamento.gov.br"
     },
     {
       "id": "user-1786539455715",
-      "passwordSimulated": "sof123456",
       "name": "Felipe Cesar Araujo da Silva",
       "email": "felipe.csilva@planejamento.gov.br",
       "needsPasswordReset": false,
@@ -82,7 +72,6 @@
     },
     {
       "id": "user-1787576615442",
-      "passwordSimulated": "sof123",
       "needsPasswordReset": true,
       "name": "Anderson Trindade Melchiades",
       "email": "anderson.melchiades@planejamento.gov.br",
@@ -93,7 +82,6 @@
       "email": "sabrina.cherman@planejamento.gov.br",
       "name": "Sabrina Leao Rangel Cherman",
       "role": "Visualizador",
-      "passwordSimulated": "sof123",
       "needsPasswordReset": true
     }
   ],

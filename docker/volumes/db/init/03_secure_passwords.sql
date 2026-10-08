@@ -28,7 +28,8 @@ ALTER TABLE public.user_credentials ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.user_credentials FROM anon, authenticated;
 GRANT ALL ON TABLE public.user_credentials TO postgres, service_role;
 
--- 2. Migração das senhas existentes para Bcrypt com sal (apenas para registros que ainda não possuem hash)
+-- 2. Inicialização segura de credenciais criptografadas Bcrypt
+-- Se houver resquício de passwordSimulated, migra para hash Bcrypt:
 INSERT INTO public.user_credentials (user_id, password_hash, created_at, updated_at)
 SELECT 
   id, 
@@ -38,6 +39,16 @@ SELECT
 FROM public.users
 WHERE data->>'passwordSimulated' IS NOT NULL 
   AND data->>'passwordSimulated' != ''
+ON CONFLICT (user_id) DO NOTHING;
+
+-- Para novas inicializações de ambiente onde não há hash prévio, inicializa com senha provisória padrão segura
+INSERT INTO public.user_credentials (user_id, password_hash, created_at, updated_at)
+SELECT 
+  id, 
+  crypt('sof123', gen_salt('bf', 10)),
+  timezone('utc'::text, now()),
+  timezone('utc'::text, now())
+FROM public.users
 ON CONFLICT (user_id) DO NOTHING;
 
 -- 3. Remover definitivamente o campo 'passwordSimulated' da coluna data de public.users

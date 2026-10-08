@@ -191,10 +191,6 @@ export default function App() {
   const [firebaseAuthError, setFirebaseAuthError] = useState<string | null>(null);
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
-  const [newMemberName, setNewMemberName] = useState('');
-  const [newMemberEmail, setNewMemberEmail] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState<'GECTI' | 'Fiscal' | 'Auditor' | 'Visualizador'>('Fiscal');
-  const [newMemberPass, setNewMemberPass] = useState('sof123');
 
   // ICTI OData API states from Ipeadata for Dashboard
   const [ictiLoading, setIctiLoading] = useState(false);
@@ -5828,291 +5824,187 @@ export default function App() {
         </main>
       </div>
 
-      {/* Stateful Team and Profile Registration Modal */}
-      {isTeamModalOpen && currentUser?.role === 'GECTI' && (
+      {/* Stateful Team and Profile Registration Modal - Matriz de Controles e Direitos de Seguranca */}
+      {isTeamModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-surface border border-outline w-full max-w-5xl h-[85vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col font-sans">
+          <div className="bg-surface border border-outline w-full max-w-5xl max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col font-sans">
             
             {/* Modal Header */}
             <div className="bg-surface-container-high px-6 py-4 border-b border-outline flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="p-1.5 bg-primary/10 border border-primary/20 text-primary rounded-lg">
-                  <Users className="w-5 h-5" />
+                <div className="p-2 bg-primary/10 border border-primary/20 text-primary rounded-xl">
+                  <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-on-surface">Gerenciamento de Equipe e Matriz de Perfis</h3>
-                  <p className="text-[10px] text-on-surface-variant font-medium mt-0.5">Cadastre usuários, mude de operador e audite as permissões de conformidade do sistema.</p>
+                  <h3 className="text-sm font-bold text-on-surface">Matriz de Controles e Direitos de Segurança do Sistema</h3>
+                  <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">Auditoria de conformidade e mapeamento dos privilégios de acesso por perfil operacional.</p>
                 </div>
               </div>
               <button 
-                onClick={() => {
-                  setIsTeamModalOpen(false);
-                  setNewMemberName('');
-                  setNewMemberEmail('');
-                  setNewMemberRole('Fiscal');
-                  setNewMemberPass('sof123');
-                }} 
+                onClick={() => setIsTeamModalOpen(false)} 
                 className="text-on-surface-variant hover:text-on-surface p-1.5 hover:bg-surface-container/60 rounded-lg cursor-pointer transition-colors"
+                title="Fechar"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 custom-scrollbar">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                {/* Section 1: Staff Registration Form */}
-                <div className="lg:col-span-5 bg-surface-container-low border border-outline-variant/60 rounded-xl p-5 space-y-4 shadow-sm self-start">
-                  <h4 className="text-[11px] uppercase font-bold tracking-wider text-primary flex items-center gap-1.5">
-                    <UserPlus className="w-4 h-4" />
-                    Novo Integrante
-                  </h4>
-                  
-                  <form 
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (!newMemberName || !newMemberEmail || !newMemberPass) {
-                        alert('Por favor, preencha todos os campos obrigatórios!');
-                        return;
-                      }
-                      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                      if (!emailRegex.test(newMemberEmail)) {
-                        alert('E-mail em formato inválido!');
-                        return;
-                      }
-                      const newUserId = `user-${Date.now()}`;
-                      const initialPass = newMemberPass.trim() || 'sof123';
-                      supabase.rpc('create_new_user', {
-                        p_user_id: newUserId,
-                        p_name: newMemberName,
-                        p_email: newMemberEmail,
-                        p_role: newMemberRole,
-                        p_initial_password: initialPass
-                      }).then(({ data, error }) => {
-                        if (error || !data?.success) {
-                          alert(error?.message || data?.error || 'Erro ao cadastrar integrante no servidor.');
-                          return;
-                        }
-                        alert(`Usuário "${newMemberName}" cadastrado com perfil de "${newMemberRole}" com sucesso! Senha provisória: "${initialPass}".`);
-                        setNewMemberName('');
-                        setNewMemberEmail('');
-                        setNewMemberRole('Fiscal');
-                        setNewMemberPass('sof123');
-                      }).catch((err) => {
-                        console.error('Erro ao cadastrar novo integrante:', err);
-                        alert('Erro ao cadastrar integrante.');
-                      });
-                    }}
-                    className="space-y-3.5"
-                  >
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Nome do Servidor / Técnico</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Nome completo ex: Maria Silva"
-                        value={newMemberName}
-                        onChange={(e) => setNewMemberName(e.target.value)}
-                        className="w-full bg-surface-container border border-outline rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">E-mail Institucional</label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="Ex: servidor@mpo.gov.br"
-                        value={newMemberEmail}
-                        onChange={(e) => setNewMemberEmail(e.target.value)}
-                        className="w-full bg-surface-container border border-outline rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary placeholder-on-surface-variant/40 font-mono"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Perfil Operacional</label>
-                        <select
-                          value={newMemberRole}
-                          onChange={(e) => setNewMemberRole(e.target.value as any)}
-                          className="w-full bg-surface-container border border-outline rounded px-2 py-1.5 text-xs text-on-surface font-semibold focus:outline-none focus:border-primary cursor-pointer text-primary"
-                        >
-                          <option value="GECTI">GECTI (Admin)</option>
-                          <option value="Fiscal">Fiscal</option>
-                          <option value="Auditor">Auditor</option>
-                          <option value="Visualizador">Visualizador</option>
-                        </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Senha Provisória</label>
-                        <input
-                          type="password"
-                          required
-                          value={newMemberPass}
-                          onChange={(e) => setNewMemberPass(e.target.value)}
-                          className="w-full bg-surface-container border border-outline rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-2 bg-primary text-on-primary font-bold rounded text-xs select-none hover:bg-opacity-95 active:scale-98 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
-                      Registrar e Habilitar Integrante
-                    </button>
-                  </form>
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar">
+              
+              {/* Role Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <div className="bg-surface-container-low border border-outline rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 border border-primary/25 text-primary font-mono">
+                      GECTI (Admin)
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-bold font-mono">Acesso Total</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-on-surface">Gestor de TIC</h4>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Administrador geral. Controle orçamentário (DFDs), instrução processual, edição de contratos, gestão de equipe e redefinição de senhas provisórias.
+                  </p>
                 </div>
 
-                {/* Section 2: Active Team List Grid */}
-                <div className="lg:col-span-7 col-span-1 border border-outline rounded-xl overflow-hidden flex flex-col justify-between bg-surface-container-low min-h-[300px]">
-                  <div className="flex-1">
-                    <div className="bg-surface px-4 py-3 border-b border-outline flex justify-between items-center">
-                      <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider flex items-center gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                        Membros Cadastrados e Habilitados
-                      </span>
-                      <span className="bg-surface-container text-on-surface text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-outline-variant/40">
-                        {users.length} ativos
-                      </span>
-                    </div>
-                    
-                    <div className="divide-y divide-outline border-b border-outline max-h-[320px] overflow-y-auto custom-scrollbar">
-                      {users.map(u => {
-                        const isCurrent = u.id === currentUser.id;
-                        const isBuiltIn = u.id === "user-1" || u.id === "user-2";
-                        
-                        let roleColor = "bg-primary/10 border-primary/20 text-primary";
-                        if (u.role === "Fiscal") roleColor = "bg-teal-500/10 border-teal-500/25 text-teal-300";
-                        if (u.role === "Auditor") roleColor = "bg-amber-500/10 border-amber-500/25 text-amber-300";
-                        if (u.role === "Visualizador") roleColor = "bg-surface-container-high border-outline-variant text-on-surface-variant";
-
-                        return (
-                          <div key={u.id} className="p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-surface-container/20 group transition-all">
-                            <div className="space-y-0.5 min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <strong className="text-on-surface font-semibold block truncate leading-none">{u.name}</strong>
-                                <span className={`text-[9px] uppercase font-bold font-mono px-1.5 py-0.25 rounded border ${roleColor}`}>
-                                  {u.role}
-                                </span>
-                                {isCurrent && (
-                                  <span className="bg-emerald-500/10 text-emerald-300 px-1 py-0.25 rounded text-[8px] font-bold border border-emerald-500/20 uppercase tracking-widest leading-none">
-                                    Atual
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[10px] text-on-surface-variant/80 font-mono block truncate">{u.email}</span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {/* Switch instantly to this user */}
-                              {!isCurrent && (
-                                <button
-                                  onClick={() => {
-                                    handleSwitchUser(u.id);
-                                    alert(`Perfil operacional de teste chaveado para: ${u.name}`);
-                                  }}
-                                  className="px-2 py-1 bg-surface border border-outline text-[10px] font-bold rounded text-on-surface hover:border-primary hover:text-primary cursor-pointer transition-all"
-                                  title="Chavear para esta credencial"
-                                >
-                                  Chavear
-                                </button>
-                              )}
-                              
-                              {/* Excluir customized staff */}
-                              {!isBuiltIn && !isCurrent ? (
-                                <button
-                                  onClick={async () => {
-                                    if (confirm(`Deseja revogar o acesso de "${u.name}" do sistema?`)) {
-                                      try {
-                                        await deleteDoc(doc(db, 'users', u.id));
-                                        alert('Acesso revogado com sucesso.');
-                                      } catch (error) {
-                                        handleFirestoreError(error, OperationType.DELETE, `users/${u.id}`);
-                                      }
-                                    }
-                                  }}
-                                  className="p-1 text-on-surface-variant hover:text-rose-400 hover:bg-rose-500/10 rounded cursor-pointer transition-colors"
-                                  title="Revogar credencial"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                <div className="bg-surface-container-low border border-outline rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/25 text-teal-400 font-mono">
+                      Fiscal Técnico
+                    </span>
+                    <span className="text-[10px] text-teal-300 font-bold font-mono">Operacional</span>
                   </div>
-                  
-                  <div className="p-3.5 bg-surface-container-low text-[10px] text-on-surface-variant flex items-center gap-1.5 font-mono select-none">
-                    <Info className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span>Para preservar a segurança corporativa, usuários raiz não podem ser excluídos pelo sandbox.</span>
-                  </div>
+                  <h4 className="text-xs font-bold text-on-surface">Gestão Contratual</h4>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Responsável pela instrução processual, movimentação de fases no Kanban, gerenciamento de aditivos, ateste de faturas e acompanhamento de itens.
+                  </p>
                 </div>
 
+                <div className="bg-surface-container-low border border-outline rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 font-mono">
+                      Auditor Fiscal
+                    </span>
+                    <span className="text-[10px] text-amber-300 font-bold font-mono">Controle</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-on-surface">Auditoria e Compliance</h4>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Acesso analítico e fiscalizatório a todos os processos, contratos, valores e trilhas de auditoria em modo exclusivo de leitura, sem edição.
+                  </p>
+                </div>
+
+                <div className="bg-surface-container-low border border-outline rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-surface-container-high border border-outline-variant text-on-surface-variant font-mono">
+                      Visualizador Geral
+                    </span>
+                    <span className="text-[10px] text-on-surface-variant font-bold font-mono">Consulta</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-on-surface">Visualização Ampla</h4>
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    Consulta a painéis gerenciais, dashboards e relatórios consolidados em modo de leitura, sem permissões de gravação ou alteração.
+                  </p>
+                </div>
               </div>
 
               {/* Permissions Matrix Table */}
-              <div className="space-y-3 border-t border-outline-variant/30 pt-6">
-                <div className="flex items-center gap-2">
-                  <span className="p-1 px-1.5 bg-primary/10 border border-primary/25 text-primary rounded text-[9px] uppercase font-bold font-mono">Regras de Negócio</span>
-                  <h4 className="text-xs font-bold text-on-surface">Matriz de Controles e Direitos de Segurança do Sistema</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1 px-1.5 bg-primary/10 border border-primary/25 text-primary rounded text-[9px] uppercase font-bold font-mono">
+                      Mapeamento
+                    </span>
+                    <h4 className="text-xs font-bold text-on-surface">Direitos de Acesso por Módulo e Operação</h4>
+                  </div>
+                  <span className="text-[10px] text-on-surface-variant font-mono">Governança Contratics</span>
                 </div>
                 
                 <div className="overflow-x-auto border border-outline rounded-xl bg-surface-container-lowest shadow-sm">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="bg-surface-container border-b border-outline text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-                        <th className="px-4 py-2.5">Funcionalidade / Ações do Mapeamento</th>
-                        <th className="px-4 py-2.5 text-center">GECTI (Admin)</th>
-                        <th className="px-4 py-2.5 text-center">Fiscal Técnico</th>
-                        <th className="px-4 py-2.5 text-center">Auditor Fiscal</th>
-                        <th className="px-4 py-2.5 text-center">Visualizador Geral</th>
+                        <th className="px-4 py-3">Funcionalidade / Ações do Mapeamento</th>
+                        <th className="px-4 py-3 text-center">GECTI (Admin)</th>
+                        <th className="px-4 py-3 text-center">Fiscal Técnico</th>
+                        <th className="px-4 py-3 text-center">Auditor Fiscal</th>
+                        <th className="px-4 py-3 text-center">Visualizador Geral</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline">
-                      <tr className="hover:bg-surface-container/10">
+                      <tr className="hover:bg-surface-container/20 transition-colors">
                         <td className="px-4 py-2.5 font-medium text-on-surface">Cadastrar / Retificar DFD no Planejamento Orçamentário</td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-on-surface-variant/60 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-on-surface-variant/60 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-on-surface-variant/60 italic">Não (Leitura)</td>
                       </tr>
-                      <tr className="hover:bg-surface-container/10">
+                      <tr className="hover:bg-surface-container/20 transition-colors">
                         <td className="px-4 py-2.5 font-medium text-on-surface">Instrução processual e Alterar Fases (Mover Kanban)</td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-on-surface-variant/60 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-on-surface-variant/60 italic">Não (Leitura)</td>
                       </tr>
-                      <tr className="hover:bg-surface-container/10">
+                      <tr className="hover:bg-surface-container/20 transition-colors">
                         <td className="px-4 py-2.5 font-medium text-on-surface">Editar Contratos, Aditivos, Faturas e Pagamentos</td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-on-surface-variant/60 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-on-surface-variant/60 italic">Não (Leitura)</td>
                       </tr>
-                      <tr className="hover:bg-surface-container/10">
-                        <td className="px-4 py-2.5 font-medium text-on-surface">Retificar CNPJ e Deletar Cadastros Gerais (Fornecedores, Contratos)</td>
+                      <tr className="hover:bg-surface-container/20 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-on-surface">Retificar CNPJ e Excluir Cadastros Mestres (Fornecedores, Contratos)</td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
                       </tr>
-                      <tr className="hover:bg-surface-container/10">
-                        <td className="px-4 py-2.5 font-medium text-on-surface">Habilitar Servidores e Modificar Perfis (Gerenciar Equipe)</td>
+                      <tr className="hover:bg-surface-container/20 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-on-surface">Cadastrar Servidores e Modificar Perfis (Gerenciar Equipe)</td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não</td>
-                        <td className="px-4 py-2.5 text-center text-rose-400/50 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                      </tr>
+                      <tr className="hover:bg-surface-container/20 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-on-surface">Redefinir Senha Provisória de Usuários (Reset de Senha GECTI)</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                      </tr>
+                      <tr className="hover:bg-surface-container/20 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-on-surface">Alteração da Própria Senha Pessoal (Menu de Perfil)</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                      </tr>
+                      <tr className="hover:bg-surface-container/20 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-on-surface">Visualização de Painéis, Dashboards e Relatórios Gerenciais</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                      </tr>
+                      <tr className="hover:bg-surface-container/20 transition-colors">
+                        <td className="px-4 py-2.5 font-medium text-on-surface">Auditoria de Logs de Login e Rastreabilidade do Sistema</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-400">Sim (Leitura)</td>
+                        <td className="px-4 py-2.5 text-center text-rose-400/60 italic">Não</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              {/* Informational Security Notice */}
+              <div className="p-3.5 bg-surface-container-low border border-outline rounded-xl flex items-center gap-2.5 text-[11px] text-on-surface-variant">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  <strong>Diretriz de Segurança:</strong> As permissões são aplicadas a nível de interface e reforçadas por segurança criptográfica Bcrypt e Row Level Security (RLS) no PostgreSQL.
+                </span>
               </div>
 
             </div>
@@ -6120,13 +6012,8 @@ export default function App() {
             {/* Modal Footer */}
             <div className="bg-surface-container-high px-6 py-3 border-t border-outline flex justify-end shrink-0">
               <button
-                onClick={() => {
-                  setIsTeamModalOpen(false);
-                  setNewMemberName('');
-                  setNewMemberEmail('');
-                  setNewMemberRole('Fiscal');
-                }}
-                className="px-5 py-2 bg-primary text-on-primary rounded text-xs font-bold hover:opacity-95 shadow cursor-pointer"
+                onClick={() => setIsTeamModalOpen(false)}
+                className="px-5 py-2 bg-primary text-on-primary rounded text-xs font-bold hover:opacity-95 shadow cursor-pointer transition-opacity"
               >
                 Fechar
               </button>
