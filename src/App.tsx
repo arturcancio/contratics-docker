@@ -3104,6 +3104,9 @@ export default function App() {
                   setIsLoggedIn(false);
                   safeLocalStorageSet('contratics_is_logged_in', 'false');
                   try {
+                    localStorage.removeItem('contratics_active_user_id');
+                  } catch (e) {}
+                  try {
                     await signOut(auth);
                   } catch (err) {
                     console.error(err);
@@ -3228,6 +3231,9 @@ export default function App() {
               setMobileMenuOpen(false);
               safeLocalStorageSet('contratics_is_logged_in', 'false');
               try {
+                localStorage.removeItem('contratics_active_user_id');
+              } catch (e) {}
+              try {
                 await signOut(auth);
               } catch (err) {
                 console.error(err);
@@ -3276,6 +3282,9 @@ export default function App() {
               onClick={async () => {
                 setIsLoggedIn(false);
                 safeLocalStorageSet('contratics_is_logged_in', 'false');
+                try {
+                  localStorage.removeItem('contratics_active_user_id');
+                } catch (e) {}
                 try {
                   await signOut(auth);
                 } catch (err) {
@@ -3409,6 +3418,9 @@ export default function App() {
                           setIsProfileMenuOpen(false);
                           setIsLoggedIn(false);
                           safeLocalStorageSet('contratics_is_logged_in', 'false');
+                          try {
+                            localStorage.removeItem('contratics_active_user_id');
+                          } catch (e) {}
                           try {
                             await signOut(auth);
                           } catch (err) {

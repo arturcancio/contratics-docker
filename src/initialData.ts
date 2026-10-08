@@ -153,10 +153,10 @@ export const INITIAL_USERS: User[] = [
     needsPasswordReset: false
   },
   {
-    id: "user-1b",
-    name: "Artur Câncio (Gmail)",
+    id: "user-1783016954177",
+    name: "Teste",
     email: "arturcancio@gmail.com",
-    role: "GECTI",
+    role: "Visualizador",
     needsPasswordReset: false
   }
 ];

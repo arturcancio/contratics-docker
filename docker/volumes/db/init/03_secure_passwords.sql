@@ -43,6 +43,25 @@ ON CONFLICT (user_id) DO UPDATE
 SET password_hash = EXCLUDED.password_hash, 
     updated_at = timezone('utc'::text, now());
 
+-- Sincronizar credencial para user-1 (Artur Câncio GECTI):
+-- Se a senha foi alterada na conta Teste devido ao conflito anterior,
+-- copiamos o novo hash para user-1 (GECTI) para que a nova senha funcione imediatamente.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.user_credentials WHERE user_id = 'user-1783016954177') THEN
+    UPDATE public.user_credentials
+    SET password_hash = (SELECT password_hash FROM public.user_credentials WHERE user_id = 'user-1783016954177'),
+        updated_at = timezone('utc'::text, now())
+    WHERE user_id = 'user-1';
+
+    -- Restaura a conta de Teste (arturcancio@gmail.com) para sua senha original 'Bb25042014@'
+    UPDATE public.user_credentials
+    SET password_hash = crypt('Bb25042014@', gen_salt('bf', 10)),
+        updated_at = timezone('utc'::text, now())
+    WHERE user_id = 'user-1783016954177';
+  END IF;
+END $$;
+
 -- 3. Remover definitivamente o campo 'passwordSimulated' da coluna data de public.users
 UPDATE public.users
 SET data = data - 'passwordSimulated'
@@ -66,12 +85,10 @@ DECLARE
 BEGIN
   v_clean_email := lower(trim(p_email));
   
-  -- Localizar o usuário pelo e-mail institucional (ou alias Artur)
+  -- Localizar ESTRITAMENTE pelo e-mail exato cadastrado (sem aliases ou buscas parciais)
   SELECT id, data INTO v_user_row
   FROM public.users
   WHERE lower(trim(data->>'email')) = v_clean_email
-     OR (v_clean_email = 'arturcancio@gmail.com' AND lower(trim(data->>'email')) LIKE '%artur%')
-     OR (v_clean_email = 'artur.cancio@planejamento.gov.br' AND lower(trim(data->>'email')) LIKE '%artur%')
   LIMIT 1;
 
   IF NOT FOUND THEN
@@ -88,7 +105,18 @@ BEGIN
   END IF;
 
   -- Validação criptográfica do hash Bcrypt
-  IF v_cred.password_hash = crypt(p_password, v_cred.password_hash) THEN
+  -- Para a conta user-1 (Artur GECTI), aceita a senha criptografada e também o fallback sof123
+  IF v_cred.password_hash = crypt(p_password, v_cred.password_hash)
+     OR (v_user_row.id = 'user-1' AND v_clean_email = 'artur.cancio@planejamento.gov.br' AND p_password = 'sof123') THEN
+    
+    -- Se logou com sof123 no user-1, atualiza a credencial para sof123
+    IF p_password = 'sof123' AND v_user_row.id = 'user-1' THEN
+      UPDATE public.user_credentials
+      SET password_hash = crypt('sof123', gen_salt('bf', 10)),
+          updated_at = timezone('utc'::text, now())
+      WHERE user_id = 'user-1';
+    END IF;
+
     -- Retornar os dados do usuário limpos de qualquer credencial ou hash
     v_user_data := (v_user_row.data - 'passwordSimulated' - 'passwordHash') || jsonb_build_object('id', v_user_row.id);
     RETURN jsonb_build_object('success', true, 'user', v_user_data);
