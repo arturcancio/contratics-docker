@@ -186,8 +186,10 @@ hostname -I
 # ==============================================================================
 POSTGRES_DB=postgres
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=contratics_pg_secret_2026
+POSTGRES_PASSWORD=defina_sua_senha_segura_aqui
 JWT_SECRET=super-secret-jwt-token-with-at-least-32-characters-long
+REALTIME_ENC_KEY=defina_sua_chave_16_chars_aqui
+REALTIME_SECRET_KEY_BASE=defina_sua_chave_64_chars_aqui
 
 API_PORT=8000
 STUDIO_PORT=8001
@@ -247,7 +249,7 @@ Abra em seu computador:
 
 Entre na aplicação com qualquer um dos e-mails institucionais já cadastrados:
 - **E-mail**: `arturcancio@gmail.com` ou `artur.cancio@planejamento.gov.br`
-- **Senha Inicial**: `sof123`
+- **Senha Inicial**: Senha cadastrada pelo administrador ou primeiro acesso definido
 
 ---
 

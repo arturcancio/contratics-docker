@@ -9,9 +9,8 @@ echo "=========================================================="
 echo "Importando Schema e Dados Reais para o Contratics..."
 echo "=========================================================="
 
-# 0. Garante a senha do usuário postgres e roles essenciais
-echo "-> 0. Configurando senha do postgres e roles do Supabase..."
-docker exec -i contratics-db psql -U supabase_admin -d postgres -c "ALTER USER postgres WITH PASSWORD 'contratics_pg_secret_2026';" || true
+# 0. Garante a configuração das roles essenciais do Supabase
+echo "-> 0. Configurando roles e permissões do Supabase..."
 docker exec -i contratics-db psql -U supabase_admin -d postgres < setup_roles.sql
 
 # 1. Executa o Schema DDL (Tabelas, RLS, Realtime, Views, Roles)

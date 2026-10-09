@@ -1028,11 +1028,11 @@ export default function App() {
   const [usrFormName, setUsrFormName] = useState<string>('');
   const [usrFormEmail, setUsrFormEmail] = useState<string>('');
   const [usrFormRole, setUsrFormRole] = useState<'GECTI' | 'Fiscal' | 'Auditor' | 'Visualizador'>('GECTI');
-  const [usrFormPass, setUsrFormPass] = useState<string>('sof123');
+  const [usrFormPass, setUsrFormPass] = useState<string>('');
   
   // Custom dialog modals for safe iframe interaction
   const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
-  const [newPasswordValue, setNewPasswordValue] = useState<string>('sof123');
+  const [newPasswordValue, setNewPasswordValue] = useState<string>('');
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
   // User profile menu and voluntary password change states
@@ -5236,14 +5236,18 @@ export default function App() {
                               setUsrFormName('');
                               setUsrFormEmail('');
                               setUsrFormRole('GECTI');
-                              setUsrFormPass('sof123');
+                              setUsrFormPass('');
                             } catch (error) {
                               handleFirestoreError(error, OperationType.UPDATE, `users/${editingUserId}`);
                             }
                           }
                         } else {
                           const newUserId = `user-${Date.now()}`;
-                          const initialPass = usrFormPass.trim() || 'sof123';
+                          const initialPass = usrFormPass.trim();
+                          if (!initialPass || initialPass.length < 6) {
+                            alert('Por favor, informe uma senha inicial com pelo menos 6 caracteres.');
+                            return;
+                          }
                           try {
                             const { data, error } = await supabase.rpc('create_new_user', {
                               p_user_id: newUserId,
@@ -5258,11 +5262,11 @@ export default function App() {
                               return;
                             }
 
-                            alert(`Usuário "${usrFormName}" habilitado com perfil "${usrFormRole}"! Senha provisória: "${initialPass}".`);
+                            alert(`Usuário "${usrFormName}" habilitado com perfil "${usrFormRole}"! Senha provisória configurada com sucesso.`);
                             setUsrFormName('');
                             setUsrFormEmail('');
                             setUsrFormRole('GECTI');
-                            setUsrFormPass('sof123');
+                            setUsrFormPass('');
                           } catch (error) {
                             console.error('Erro ao criar usuário:', error);
                             alert('Erro ao habilitar usuário.');
@@ -5347,7 +5351,7 @@ export default function App() {
                               setUsrFormName('');
                               setUsrFormEmail('');
                               setUsrFormRole('GECTI');
-                              setUsrFormPass('sof123');
+                              setUsrFormPass('');
                             }}
                             className="px-3 py-2 border border-outline hover:bg-surface-container text-on-surface font-semibold rounded text-xs transition-colors cursor-pointer"
                           >
@@ -5418,7 +5422,7 @@ export default function App() {
                               <button
                                 onClick={() => {
                                   setResetPasswordUserId(u.id);
-                                  setNewPasswordValue('sof123');
+                                  setNewPasswordValue('');
                                 }}
                                 className="p-1.5 text-amber-500 hover:bg-amber-500/10 rounded-lg cursor-pointer transition-colors border border-outline-variant/30 hover:border-amber-500/40"
                                 title="Resetar senha"
@@ -5729,7 +5733,7 @@ export default function App() {
                           type="text"
                           value={newPasswordValue}
                           onChange={e => setNewPasswordValue(e.target.value)}
-                          placeholder="Digite ou use a senha provisória padrão"
+                          placeholder="Digite a senha provisória (mínimo 6 chars)"
                           className="w-full bg-surface-container border border-outline rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-amber-500 font-mono"
                         />
                         <p className="text-[10px] text-on-surface-variant">O integrante será obrigado a cadastrar uma nova senha no próximo login devido ao reset.</p>
@@ -5740,6 +5744,7 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             setResetPasswordUserId(null);
+                            setNewPasswordValue('');
                           }}
                           className="flex-1 py-1.5 border border-outline hover:bg-surface-container text-on-surface font-semibold rounded text-xs transition-colors cursor-pointer"
                         >
@@ -5748,7 +5753,11 @@ export default function App() {
                         <button
                           type="button"
                           onClick={async () => {
-                            const finalPass = newPasswordValue.trim() || 'sof123';
+                            const finalPass = newPasswordValue.trim();
+                            if (!finalPass || finalPass.length < 6) {
+                              alert('Por favor, informe uma senha provisória com pelo menos 6 caracteres.');
+                              return;
+                            }
                             try {
                               const { data, error } = await supabase.rpc('admin_reset_user_password', {
                                 p_target_user_id: targetU.id,
@@ -5760,8 +5769,9 @@ export default function App() {
                                 return;
                               }
 
-                              alert(`Senha de "${targetU.name}" redefinida provisoriamente para "${finalPass}" com sucesso! O integrante precisará cadastrar uma nova senha no próximo acesso.`);
+                              alert(`Senha de "${targetU.name}" redefinida provisoriamente com sucesso! O integrante precisará cadastrar uma nova senha no próximo acesso.`);
                               setResetPasswordUserId(null);
+                              setNewPasswordValue('');
                             } catch (err) {
                               console.error('Erro ao redefinir senha:', err);
                               alert('Erro ao redefinir senha no banco de dados.');

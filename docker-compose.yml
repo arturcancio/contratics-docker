@@ -55,10 +55,10 @@ services:
     image: postgrest/postgrest:v12.0.2
     restart: unless-stopped
     environment:
-      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD:-contratics_pg_secret_2026}@contratics-db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_URI: postgres://postgres:${POSTGRES_PASSWORD}@contratics-db:5432/${POSTGRES_DB:-postgres}
       PGRST_DB_SCHEMAS: public
       PGRST_DB_ANON_ROLE: anon
-      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
       PGRST_DB_USE_LEGACY_GUCS: "false"
     depends_on:
       contratics-db:
@@ -79,11 +79,11 @@ services:
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-postgres}
       DB_USER: supabase_admin
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_AFTER_CONNECT_QUERY: 'SET search_path = _realtime'
-      DB_ENC_KEY: 1234567890123456
-      API_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
-      SECRET_KEY_BASE: UpOHxtnl32yB5QWFQxzkNuBc9NUjarA6wvUps0WmQpzoOXoNuBc9NUjarA6wvUps
+      DB_ENC_KEY: ${REALTIME_ENC_KEY}
+      API_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${REALTIME_SECRET_KEY_BASE}
       ERL_AFLAGS: -proto_dist inet_tcp
       ENABLE_TAILSCALE: "false"
       DNS_NODES: "''"
@@ -108,9 +108,9 @@ services:
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: http://localhost:${API_PORT:-8000}/auth/v1
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_admin:${POSTGRES_PASSWORD:-contratics_pg_secret_2026}@contratics-db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_admin:${POSTGRES_PASSWORD}@contratics-db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
       GOTRUE_SITE_URL: http://localhost:${WEB_PORT:-3000}
-      GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: 3600
       GOTRUE_DISABLE_SIGNUP: "false"
     depends_on:
@@ -130,11 +130,11 @@ services:
       - "${STUDIO_PORT:-8001}:3000"
     environment:
       STUDIO_PG_META_URL: http://contratics-kong:8000/pg
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SUPABASE_URL: http://contratics-kong:8000
       SUPABASE_REST_URL: http://contratics-kong:8000/rest/v1/
-      SUPABASE_ANON_KEY: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNjcwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.UTHCBq0o_4VwW1RzPp0OOg8njzim5F3KAi7HCD-4bVc}
-      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE2NzAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.iqGJWfsZCgqGFsAKakdKT8KoXbC6AnoUF8OXDx5a_3o}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
     depends_on:
       contratics-kong:
         condition: service_started
@@ -152,7 +152,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-contratics_pg_secret_2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
       POSTGRES_HOST: /var/run/postgresql
     volumes:

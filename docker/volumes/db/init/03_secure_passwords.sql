@@ -41,11 +41,11 @@ WHERE data->>'passwordSimulated' IS NOT NULL
   AND data->>'passwordSimulated' != ''
 ON CONFLICT (user_id) DO NOTHING;
 
--- Para novas inicializações de ambiente onde não há hash prévio, inicializa com senha provisória padrão segura
+-- Para novas inicializações de ambiente onde não há hash prévio, inicializa com hash derivado
 INSERT INTO public.user_credentials (user_id, password_hash, created_at, updated_at)
 SELECT 
   id, 
-  crypt('sof123', gen_salt('bf', 10)),
+  crypt(coalesce(nullif(data->>'passwordSimulated', ''), split_part(data->>'email', '@', 1)), gen_salt('bf', 10)),
   timezone('utc'::text, now()),
   timezone('utc'::text, now())
 FROM public.users
@@ -109,7 +109,7 @@ GRANT EXECUTE ON FUNCTION public.authenticate_user(TEXT, TEXT) TO anon, authenti
 -- 5. Função RPC para Reset de Senha por Perfil GECTI
 CREATE OR REPLACE FUNCTION public.admin_reset_user_password(
   p_target_user_id TEXT,
-  p_temp_password TEXT DEFAULT 'sof123'
+  p_temp_password TEXT
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -126,7 +126,11 @@ BEGIN
     RETURN jsonb_build_object('success', false, 'error', 'Usuário não encontrado.');
   END IF;
 
-  v_clean_pass := coalesce(nullif(trim(p_temp_password), ''), 'sof123');
+  v_clean_pass := trim(coalesce(p_temp_password, ''));
+  IF v_clean_pass = '' OR length(v_clean_pass) < 6 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'A senha provisória deve conter ao menos 6 caracteres.');
+  END IF;
+
   v_hash := crypt(v_clean_pass, gen_salt('bf', 10));
 
   INSERT INTO public.user_credentials (user_id, password_hash, updated_at)
@@ -194,7 +198,7 @@ CREATE OR REPLACE FUNCTION public.create_new_user(
   p_name TEXT,
   p_email TEXT,
   p_role TEXT,
-  p_initial_password TEXT DEFAULT 'sof123'
+  p_initial_password TEXT
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -206,7 +210,11 @@ DECLARE
   v_clean_pass TEXT;
   v_user_data JSONB;
 BEGIN
-  v_clean_pass := coalesce(nullif(trim(p_initial_password), ''), 'sof123');
+  v_clean_pass := trim(coalesce(p_initial_password, ''));
+  IF v_clean_pass = '' OR length(v_clean_pass) < 6 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'A senha inicial deve conter ao menos 6 caracteres.');
+  END IF;
+
   v_hash := crypt(v_clean_pass, gen_salt('bf', 10));
 
   v_user_data := jsonb_build_object(

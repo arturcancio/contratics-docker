@@ -5,30 +5,50 @@
 
 -- Ensure essential Supabase roles exist before any extension creation
 DO $$
+DECLARE
+  v_pwd text;
 BEGIN
+  -- Obtain the password hash configured for the postgres role by the Docker container
+  SELECT rolpassword INTO v_pwd FROM pg_authid WHERE rolname = 'postgres';
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'supabase_admin') THEN
-    CREATE ROLE supabase_admin WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
+    IF v_pwd IS NOT NULL THEN
+      EXECUTE format('CREATE ROLE supabase_admin WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD %L', v_pwd);
+    ELSE
+      CREATE ROLE supabase_admin WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION;
+    END IF;
   ELSE
-    ALTER ROLE supabase_admin WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
+    IF v_pwd IS NOT NULL THEN
+      EXECUTE format('ALTER ROLE supabase_admin WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD %L', v_pwd);
+    END IF;
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
-    CREATE ROLE postgres WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
-  ELSE
-    ALTER ROLE postgres WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
+    CREATE ROLE postgres WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION;
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     CREATE ROLE anon NOLOGIN NOINHERIT;
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     CREATE ROLE authenticated NOLOGIN NOINHERIT;
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
     CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
   END IF;
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticator') THEN
-    CREATE ROLE authenticator WITH LOGIN NOINHERIT PASSWORD 'contratics_pg_secret_2026';
+    IF v_pwd IS NOT NULL THEN
+      EXECUTE format('CREATE ROLE authenticator WITH LOGIN NOINHERIT PASSWORD %L', v_pwd);
+    ELSE
+      CREATE ROLE authenticator WITH LOGIN NOINHERIT;
+    END IF;
   ELSE
-    ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD 'contratics_pg_secret_2026';
+    IF v_pwd IS NOT NULL THEN
+      EXECUTE format('ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD %L', v_pwd);
+    END IF;
   END IF;
 END $$;
 

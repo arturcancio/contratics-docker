@@ -14,7 +14,12 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA auth TO postgres, anon, authenticated, servi
 
 -- 1. Criação das roles essenciais do Supabase se não existirem
 DO $$
+DECLARE
+  v_pwd text;
 BEGIN
+  -- Obtain the password hash configured for the postgres role by the Docker container
+  SELECT rolpassword INTO v_pwd FROM pg_authid WHERE rolname = 'postgres';
+
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     CREATE ROLE anon NOLOGIN NOINHERIT;
   END IF;
@@ -28,15 +33,19 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
-    CREATE ROLE postgres WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
-  ELSE
-    ALTER ROLE postgres WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION PASSWORD 'contratics_pg_secret_2026';
+    CREATE ROLE postgres WITH LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticator') THEN
-    CREATE ROLE authenticator WITH LOGIN NOINHERIT PASSWORD 'contratics_pg_secret_2026';
+    IF v_pwd IS NOT NULL THEN
+      EXECUTE format('CREATE ROLE authenticator WITH LOGIN NOINHERIT PASSWORD %L', v_pwd);
+    ELSE
+      CREATE ROLE authenticator WITH LOGIN NOINHERIT;
+    END IF;
   ELSE
-    ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD 'contratics_pg_secret_2026';
+    IF v_pwd IS NOT NULL THEN
+      EXECUTE format('ALTER ROLE authenticator WITH LOGIN NOINHERIT PASSWORD %L', v_pwd);
+    END IF;
   END IF;
 END $$;
 
