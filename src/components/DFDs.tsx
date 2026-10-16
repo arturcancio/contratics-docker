@@ -6,10 +6,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { DFD, Planejamento, Contrato, StatusDFD, PeriodicidadePagamento, TermoAditivo, TermoApostilamento, Pagamento, ItemContratoSOF } from '../types';
 import { formatCurrency, formatDate, isModifiedRecently, getVigenciaFinal, getFractionalMonths, parseMonetaryValue } from '../utils';
-import { FileText, Plus, Search, Calendar, Landmark, CheckSquare, Layers, Download, X, AlertCircle, Trash2, Edit, ChevronLeft, ChevronRight, Shuffle, ChevronUp, ChevronDown, TrendingUp, Eye } from 'lucide-react';
+import { FileText, Plus, Search, Calendar, Landmark, CheckSquare, Layers, Download, X, AlertCircle, Trash2, Edit, ChevronLeft, ChevronRight, Shuffle, ChevronUp, ChevronDown, TrendingUp, Eye, FileSpreadsheet } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { CopyButton, CopyableText } from './CopyButton';
 import { CurrencyInput } from './CurrencyInput';
+import { exportPCAtoExcel } from '../excelUtils';
 
 interface DFDsProps {
   dfds: DFD[];
@@ -698,6 +699,24 @@ export default function DFDs({
     }
   };
 
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+
+  const handleExportExcel = async () => {
+    try {
+      setIsExportingExcel(true);
+      const targetYearNum = selectedYear === 'Todos' ? currentYear : selectedYear;
+      await exportPCAtoExcel({
+        dfds: filteredDFDs,
+        targetYear: targetYearNum,
+        getDfdAnnualizedValue: getDfdAnnualizedValueLocal,
+      });
+    } catch (err) {
+      console.error('Erro ao exportar PCA para Excel:', err);
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     let computedValue: any = value;
@@ -823,6 +842,15 @@ export default function DFDs({
         </div>
         
         <div className="flex items-center gap-2.5" data-tour="dfd-actions">
+          <button
+            onClick={handleExportExcel}
+            disabled={isExportingExcel}
+            className="flex items-center gap-2 px-3 py-2 border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg text-xs transition-all cursor-pointer font-semibold shadow-xs disabled:opacity-50"
+            title="Exportar dados do PCA / DFDs para arquivo Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+            {isExportingExcel ? 'Exportando...' : 'Exportar Excel'}
+          </button>
           <button
             onClick={exportDFDsToPDF}
             className="flex items-center gap-2 px-3 py-2 border border-outline-variant/60 rounded-lg text-xs bg-surface-container hover:text-primary transition-all cursor-pointer font-semibold"

@@ -195,9 +195,11 @@ function ensureRealtimeChannel(tableName: string) {
   if (cache.channel) return;
 
   // Initial fetch from PostgreSQL
-  supabase
+  const query = supabase
     .from(tableName)
-    .select('id, data')
+    .select('id, data');
+
+  Promise.resolve(query)
     .then(({ data, error }) => {
       if (error) {
         console.warn(`Initial fetch warning for ${tableName}:`, error.message);

@@ -55,6 +55,7 @@ import {
   handleFirestoreError, 
   OperationType 
 } from '../supabase';
+import { exportOrcamentoProjectionToExcel } from '../excelUtils';
 
 // Helper to calculate the simulated end date of a contract when renewed ONE time
 const getSimulatedContractEndDate = (c: Contrato, currentEndDate: Date): Date => {
@@ -1007,7 +1008,7 @@ export default function OrcamentoAtual({
           isOverridden,
           isTodayDefault,
           isSessionDate,
-          isOneOff,
+          isOneOff: false,
           baseCost
         };
       } else {
@@ -2337,218 +2338,19 @@ export default function OrcamentoAtual({
     }
   };
 
-  const exportSpreadsheetToCSV = () => {
-    const yearLabel = selectedYear === 'Todos' ? currentYear : selectedYear;
-    
-    const formatDateExcel = (dateStr: string) => {
-      if (!dateStr || dateStr === '-' || dateStr === '—') return '-';
-      const formatted = formatDate(dateStr);
-      return formatted === '—' ? '-' : formatted;
-    };
-    
-    // Sums
-    const totalGlobal = spreadsheetItems.reduce((acc, curr) => acc + (Number(curr.valorGlobal) || 0), 0);
-    const totalEstimado = spreadsheetItems.reduce((acc, curr) => acc + (Number(curr.gastoEstimado) || 0), 0);
-
-    const htmlContent = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <meta charset="utf-8">
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>Levantamento Projecao</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        <style>
-          body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            color: #000000;
-          }
-          table {
-            border-collapse: collapse;
-          }
-          td, th {
-            border: 0.5pt solid #8faadc;
-            padding: 8px 10px;
-            font-size: 10pt;
-            vertical-align: middle;
-          }
-          .title-cell {
-            background-color: #1f4e78;
-            color: #ffffff;
-            font-weight: bold;
-            font-size: 13pt;
-            text-align: center;
-            height: 40px;
-            border: 0.5pt solid #1f4e78;
-          }
-          .meta-label {
-            background-color: #d9e1f2;
-            color: #1f4e78;
-            font-weight: bold;
-            font-size: 10pt;
-            text-align: left;
-            border: 0.5pt solid #8faadc;
-          }
-          .meta-value {
-            background-color: #d9e1f2;
-            color: #000000;
-            font-weight: 500;
-            font-size: 10pt;
-            text-align: left;
-            border: 0.5pt solid #8faadc;
-          }
-          .header-cell {
-            background-color: #2f5597;
-            color: #ffffff;
-            font-weight: bold;
-            font-size: 10pt;
-            text-align: center;
-            height: 35px;
-            border: 0.5pt solid #1f4e78;
-          }
-          .row-even {
-            background-color: #f2f2f2;
-          }
-          .row-odd {
-            background-color: #ffffff;
-          }
-          .text-center {
-            text-align: center;
-          }
-          .text-right {
-            text-align: right;
-          }
-          .text-left {
-            text-align: left;
-          }
-          .total-label {
-            background-color: #d9d9d9;
-            color: #000000;
-            font-weight: bold;
-            font-size: 10pt;
-            text-align: right;
-            border: 1pt solid #7f7f7f;
-          }
-          .total-val-global {
-            background-color: #d9d9d9;
-            color: #000000;
-            font-weight: bold;
-            font-size: 10pt;
-            text-align: right;
-            border: 1pt solid #7f7f7f;
-          }
-          .total-val-estimado {
-            background-color: #e2efda;
-            color: #375623;
-            font-weight: bold;
-            font-size: 10pt;
-            text-align: right;
-            border: 1pt solid #375623;
-          }
-        </style>
-      </head>
-      <body>
-        <table>
-          <!-- Merged Title Block -->
-          <tr>
-            <td colspan="14" class="title-cell">
-              LEVANTAMENTO DOS CONTRATOS VIGENTES E PROJEÇÃO DE CONTRATAÇÕES PARA ${yearLabel}
-            </td>
-          </tr>
-          
-          <!-- Spacers & Metadata -->
-          <tr style="height: 15px;"><td colspan="14" style="border: none;"></td></tr>
-          
-          <tr>
-            <td colspan="2" class="meta-label">Unidade Responsável:</td>
-            <td colspan="12" class="meta-value">${spreadsheetUnidade}</td>
-          </tr>
-          <tr>
-            <td colspan="2" class="meta-label">Ação Orçamentária:</td>
-            <td colspan="12" class="meta-value">${spreadsheetAcao} - Sustentação da TI do Planejamento Nacional e do Orçamento Federal</td>
-          </tr>
-          <tr>
-            <td colspan="2" class="meta-label">Plano Orçamentário (PO):</td>
-            <td colspan="12" class="meta-value">${spreadsheetPO}</td>
-          </tr>
-          
-          <tr style="height: 15px;"><td colspan="14" style="border: none;"></td></tr>
-          
-          <!-- Table Headers -->
-          <tr>
-            <th class="header-cell" style="width: 40px;">Item</th>
-            <th class="header-cell" style="width: 150px;">Tipo da Demanda</th>
-            <th class="header-cell" style="width: 120px;">Processo SEI</th>
-            <th class="header-cell" style="width: 110px;">Nº do Contrato</th>
-            <th class="header-cell" style="width: 250px;">Objeto Resumido</th>
-            <th class="header-cell" style="width: 200px;">Empresa Contratada</th>
-            <th class="header-cell" style="width: 100px;">Data Vigência Início</th>
-            <th class="header-cell" style="width: 100px;">Data Vigência Fim</th>
-            <th class="header-cell" style="width: 90px;">GND</th>
-            <th class="header-cell" style="width: 120px;">Valor Global</th>
-            <th class="header-cell" style="width: 110px;">Mês do Reajuste</th>
-            <th class="header-cell" style="width: 150px;">Índice/Motivo do Reajuste</th>
-            <th class="header-cell" style="width: 200px;">Observações</th>
-            <th class="header-cell" style="width: 140px;">Gasto Estimado (${yearLabel})</th>
-          </tr>
-          
-          <!-- Table Body Rows -->
-          ${spreadsheetItems.map((item, index) => {
-            const rowClass = index % 2 === 0 ? 'row-even' : 'row-odd';
-            const escapedObjeto = (item.objetoResumido || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            const escapedEmpresa = (item.empresaContratada || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            const escapedObservacao = (item.observacao || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            return `
-              <tr class="${rowClass}">
-                <td class="text-center" style="mso-number-format:'\\@';">${item.item}</td>
-                <td>${item.tipoDemanda || ''}</td>
-                <td class="text-center" style="mso-number-format:'\\@';">${item.processoSei || '-'}</td>
-                <td class="text-center" style="mso-number-format:'\\@';">${item.numContrato || '-'}</td>
-                <td>${escapedObjeto}</td>
-                <td>${escapedEmpresa}</td>
-                <td class="text-center" style="mso-number-format:'dd\\/mm\\/yyyy';">${formatDateExcel(item.vigenciaInicio)}</td>
-                <td class="text-center" style="mso-number-format:'dd\\/mm\\/yyyy';">${formatDateExcel(item.vigenciaFim)}</td>
-                <td class="text-center">${item.gnd || ''}</td>
-                <td class="text-right" style="mso-number-format:'\\R\\$\\ #\\,##0\\.00';">${(Number(item.valorGlobal) || 0).toFixed(2).replace('.', ',')}</td>
-                <td class="text-center">${item.mesReajuste || '-'}</td>
-                <td>${item.indiceReajuste || '-'}</td>
-                <td>${escapedObservacao || '-'}</td>
-                <td class="text-right" style="mso-number-format:'\\R\\$\\ #\\,##0\\.00'; font-weight: bold; color: #1f4e78;">${(Number(item.gastoEstimado) || 0).toFixed(2).replace('.', ',')}</td>
-              </tr>
-            `;
-          }).join('')}
-          
-          <!-- Table Footer / Totals Row -->
-          <tr>
-            <td colspan="9" class="total-label">TOTAL GERAL:</td>
-            <td class="total-val-global" style="mso-number-format:'\\R\\$\\ #\\,##0\\.00';">${(Number(totalGlobal) || 0).toFixed(2).replace('.', ',')}</td>
-            <td colspan="3" class="total-label" style="background-color: #d9d9d9;"></td>
-            <td class="total-val-estimado" style="mso-number-format:'\\R\\$\\ #\\,##0\\.00';">${(Number(totalEstimado) || 0).toFixed(2).replace('.', ',')}</td>
-          </tr>
-        </table>
-      </body>
-      </html>
-    `;
-
-    // Download file with .xls extension
-    const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Levantamento_Contratos_Projecao_${yearLabel}.xls`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportSpreadsheetToCSV = async () => {
+    const yearLabel = String(selectedYear === 'Todos' ? currentYear : selectedYear);
+    try {
+      await exportOrcamentoProjectionToExcel({
+        yearLabel,
+        unidade: spreadsheetUnidade,
+        acao: spreadsheetAcao,
+        po: spreadsheetPO,
+        items: spreadsheetItems,
+      });
+    } catch (err) {
+      console.error('Erro ao exportar planilha para Excel:', err);
+    }
   };
 
   // --- END SPREADSHEET PROJECTION METHODS ---
@@ -5105,7 +4907,7 @@ export default function OrcamentoAtual({
                   onClick={exportSpreadsheetToCSV}
                   type="button"
                   className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm shadow-emerald-600/15"
-                  title="Exporta a planilha atualizada para um arquivo Excel (CSV)"
+                  title="Exporta a planilha atualizada para um arquivo Excel (.xlsx)"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Exportar para Excel</span>
