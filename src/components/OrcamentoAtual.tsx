@@ -216,6 +216,7 @@ export default function OrcamentoAtual({
   const [customPlanGND, setCustomPlanGND] = useState<'3 - Custeio' | '4 - Investimento'>('3 - Custeio');
   const [customPlanData, setCustomPlanData] = useState('');
   const [customPlanTipo, setCustomPlanTipo] = useState('Pregão SOF');
+  const [customPlanPeriodicidade, setCustomPlanPeriodicidade] = useState<'Mensal' | 'Anual' | 'Total'>('Mensal');
 
   // Helper to dynamically calculate planning cost based on active SOF planning items
   const getPlanningCusto = (p: Planejamento) => {
@@ -318,6 +319,7 @@ export default function OrcamentoAtual({
         Plano_Orcamentario: '0000',
         GND: customPlanGND,
         Natureza_Objeto: customPlanGND === '4 - Investimento' ? 'Bem' : 'Serviço',
+        Periodicidade_Pagamento: customPlanPeriodicidade,
         Contabilizar_Orcamento: true,
         updatedAt: new Date().toISOString(),
         isBudgetOnlyItem: true,
@@ -331,6 +333,7 @@ export default function OrcamentoAtual({
       setCustomPlanObjeto('');
       setCustomPlanEstimativa('');
       setCustomPlanGND('3 - Custeio');
+      setCustomPlanPeriodicidade('Mensal');
       setCustomPlanData('');
       setCustomPlanTipo('Pregão SOF');
       setIsAddCustomPlanModalOpen(false);
@@ -838,7 +841,13 @@ export default function OrcamentoAtual({
       return conclYear === year ? baseValue : 0;
     }
 
-    // 3. Continuous Service/Subscription ('Mensal' or 'Anual' like a backup solution)
+    // 3. Pagamento Anual: o desembolso cobre o ciclo de 1 ano completo a partir da data de início/conclusão,
+    // demandando o montante integral de 1 ano naquele mês sem corte proporcional (pro-rata) de meses até 31 de dezembro.
+    if (dfd.Periodicidade_Pagamento === 'Anual') {
+      return baseValue;
+    }
+
+    // 4. Continuous Service/Subscription ('Mensal')
     if (conclYear < year) {
       // In subsequent years, continuous services impact the full year (12 months)
       return baseValue;
@@ -946,10 +955,13 @@ export default function OrcamentoAtual({
       (p as any).Modalidade_Contratacao?.toLowerCase().includes('dispensa') ||
       (p as any).Modalidade_Contratacao?.toLowerCase().includes('direta');
 
+    const linkedDfd = dfds.find(d => d.id === p.DFD_PNCP || d.Num_DFD === p.DFD_PNCP || d.Planejamento_Vinculado === p.SEI_Processo);
+    const periodicidade: PeriodicidadePagamento = p.Periodicidade_Pagamento || linkedDfd?.Periodicidade_Pagamento || 'Mensal';
+
     const isOneOff = isContratacaoDireta ||
                      p.GND === '4 - Investimento' || 
                      p.Natureza_Objeto === 'Bem' ||
-                     p.Periodicidade_Pagamento === 'Total' ||
+                     periodicidade === 'Total' ||
                      p.Objeto?.toLowerCase().includes('aquisição') || 
                      p.Objeto?.toLowerCase().includes('compra') ||
                      p.Objeto?.toLowerCase().includes('inscrição') ||
@@ -997,6 +1009,22 @@ export default function OrcamentoAtual({
         value: val,
         monthsRemaining: 12,
         activeMonthsDesc: isContratacaoDireta ? 'Contratação Direta (Valor Integral)' : 'Aquisição Pontual / Investimento',
+        startDateStr,
+        isOverridden,
+        isTodayDefault,
+        isSessionDate,
+        isOneOff,
+        baseCost
+      };
+    } else if (periodicidade === 'Anual') {
+      // Pagamento Anual: o desembolso cobre 1 ano inteiro de contrato a partir da data de início,
+      // demandando o valor integral de 1 ano no exercício sem corte proporcional (pro-rata) de meses até 31 de dezembro.
+      return {
+        value: baseCost,
+        monthsRemaining: 12,
+        activeMonthsDesc: startYear === year 
+          ? `Pagamento Anual (Valor integral de 1 ano a partir de ${formatDate(startDateStr)})`
+          : '12 meses (Ano integral - Pagamento Anual)',
         startDateStr,
         isOverridden,
         isTodayDefault,
@@ -1185,40 +1213,51 @@ export default function OrcamentoAtual({
 
     const periodicidade = c.Periodicidade_Pagamento || 'Mensal';
 
-    if (periodicidade === 'Mensal' || periodicidade === 'Anual') {
-      let baseMonthly = 0;
-      if (periodicidade === 'Mensal') {
-        if (source === 'items') {
-          baseMonthly = baseValue / (Number(c.Vigencia_Inicial_Meses) || 12);
-        } else {
-          baseMonthly = baseValue / 12;
-        }
-      } else { // Anual
-        if (source === 'items') {
-          baseMonthly = ((baseValue / (Number(c.Vigencia_Inicial_Meses) || 12)) * 12) / 12;
-        } else {
-          baseMonthly = baseValue / 12;
-        }
+    // Check for Index adjustments under simulation mode
+    let reajusteRate = 0;
+    if (isSimMode && c.Indice_Reajuste && c.Indice_Reajuste !== 'Sem Reajuste' && c.Indice_Reajuste !== 'Não se aplica') {
+      const matched = c.Indice_Reajuste.match(/([\d.,]+)\s*%/);
+      if (matched) {
+        reajusteRate = parseFloat(matched[1].replace(',', '.')) / 100;
+      } else if (['ICTI', 'IPCA', 'IGP-M', 'IGPM'].includes(c.Indice_Reajuste.toUpperCase())) {
+        reajusteRate = 0.045; // Default 4.5% standard simulation index rate
+      }
+    }
+
+    const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    let rMonthIdx = -1;
+    if (c.Mes_Reajuste) {
+      rMonthIdx = months.indexOf(c.Mes_Reajuste);
+    } else if (c.Vigencia_Inicio) {
+      rMonthIdx = new Date(c.Vigencia_Inicio).getUTCMonth();
+    }
+
+    const annualContractValue = source === 'items'
+      ? (baseValue / (Number(c.Vigencia_Inicial_Meses) || 12)) * 12
+      : baseValue;
+
+    if (periodicidade === 'Anual') {
+      // Para pagamento Anual, o desembolso é feito de forma integral para cobrir 1 ano de contrato,
+      // sem sofrer corte proporcional (pro-rata) de meses restantes até 31 de dezembro.
+      const anniversaryMonth = startVal.getUTCMonth();
+      const anniversaryDay = startVal.getUTCDate();
+      const anniversaryThisYear = new Date(Date.UTC(year, anniversaryMonth, anniversaryDay));
+
+      const isDueThisYear = (startVal.getUTCFullYear() === year) || 
+                            (anniversaryThisYear >= startVal && anniversaryThisYear <= endVal);
+
+      if (!isDueThisYear) {
+        return 0;
       }
 
-      // Check for Index adjustments under simulation mode
-      let reajusteRate = 0;
-      if (isSimMode && c.Indice_Reajuste && c.Indice_Reajuste !== 'Sem Reajuste' && c.Indice_Reajuste !== 'Não se aplica') {
-        const matched = c.Indice_Reajuste.match(/([\d.,]+)\s*%/);
-        if (matched) {
-          reajusteRate = parseFloat(matched[1].replace(',', '.')) / 100;
-        } else if (['ICTI', 'IPCA', 'IGP-M', 'IGPM'].includes(c.Indice_Reajuste.toUpperCase())) {
-          reajusteRate = 0.045; // Default 4.5% standard simulation index rate
-        }
+      let rate = 1;
+      if (isSimMode && reajusteRate > 0 && rMonthIdx !== -1 && anniversaryMonth >= rMonthIdx) {
+        rate = 1 + reajusteRate;
       }
 
-      const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-      let rMonthIdx = -1;
-      if (c.Mes_Reajuste) {
-        rMonthIdx = months.indexOf(c.Mes_Reajuste);
-      } else if (c.Vigencia_Inicio) {
-        rMonthIdx = new Date(c.Vigencia_Inicio).getUTCMonth();
-      }
+      return annualContractValue * rate;
+    } else if (periodicidade === 'Mensal') {
+      const baseMonthly = annualContractValue / 12;
 
       let calculatedYearTotal = 0;
       for (let m = 0; m < 12; m++) {
@@ -1409,7 +1448,7 @@ export default function OrcamentoAtual({
         isTodayDefaultDate: planCalc.isTodayDefault,
         isSessionDate: planCalc.isSessionDate,
         monthsRemaining: planCalc.monthsRemaining,
-        Periodicidade_Pagamento: isOneOff || invSum > custSum ? 'Total' : 'Mensal',
+        Periodicidade_Pagamento: p.Periodicidade_Pagamento || (isOneOff || invSum > custSum ? 'Total' : 'Mensal'),
         Valor_Anual_Proporcional: annualizedValue,
         Contabilizar_Orcamento: isContabilizado,
         updatedAt: p.updatedAt,
@@ -1422,9 +1461,11 @@ export default function OrcamentoAtual({
         observacoes_planejamento: p.isBudgetOnlyItem ? 'Adicionado por decisão da chefia' : obs,
         calculo_detalhado: isOneOff 
           ? 'Valor integral no exercício de início' 
-          : (planCalc.monthsRemaining >= 12 
-              ? 'Exercício integral (12 meses)' 
-              : `R$ ${totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} × ${planCalc.monthsRemaining.toFixed(1)} / 12 meses`)
+          : (p.Periodicidade_Pagamento === 'Anual'
+              ? 'Pagamento Anual (Valor integral de 1 ano no exercício)'
+              : (planCalc.monthsRemaining >= 12 
+                  ? 'Exercício integral (12 meses)' 
+                  : `R$ ${totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} × ${planCalc.monthsRemaining.toFixed(1)} / 12 meses`))
       };
       return mockDfd;
     })
@@ -3124,15 +3165,23 @@ export default function OrcamentoAtual({
       {/* Ação Orçamentária info alert */}
       <div className="flex gap-3.5 p-4 rounded-xl border border-teal-400/80 dark:border-teal-500/30 bg-teal-100/70 dark:bg-surface-container-low items-start shadow-xs">
         <Info className="w-5 h-5 mt-0.5 shrink-0 text-teal-800 dark:text-teal-400" />
-        <div className="text-xs space-y-1">
-          <p className="font-extrabold uppercase tracking-wider text-[10px] text-teal-950 dark:text-teal-300">
-            Ação Orçamentária 8861
-          </p>
+        <div className="text-xs space-y-1.5">
+          <div className="flex items-center gap-2">
+            <p className="font-extrabold uppercase tracking-wider text-[10px] text-teal-950 dark:text-teal-300">
+              Ação Orçamentária 8861 & Projeção PLOA vs PCA
+            </p>
+          </div>
           <p className="font-bold text-sm text-slate-950 dark:text-on-surface leading-snug">
             Sustentação da Tecnologia da Informação do Sistema de Planejamento Nacional e do Orçamento Federal
           </p>
           <p className="text-xs text-slate-900 dark:text-on-surface-variant font-medium leading-relaxed pt-0.5">
-            Esta ação consolida os recursos previstos para o ano corrente. Os valores dos DFDs (<span className="font-bold text-slate-950 dark:text-on-surface">"Não iniciado"</span> e <span className="font-bold text-slate-950 dark:text-on-surface">"Iniciado"</span> com status de orçamento ativo) são anualizados proporcionalmente da data de conclusão estimada até 31 de dezembro. Contratos vigentes que requerem desembolso no exercício também são listados com seu correspondente <span className="font-bold text-slate-950 dark:text-on-surface">"Valor Anual SOF"</span>.
+            <strong>Composição da Projeção para a PLOA:</strong> Esta tela projeta os valores previstos a desembolsar no exercício selecionado para compor a proposta orçamentária (PLOA). O cálculo consolida: <em>1)</em> Contratos vigentes que se estendem ao exercício (com simulação de renovação e reajustes por índices oficiais); <em>2)</em> Processos de planejamento e licitações em andamento no SEI que devem iniciar no ano; e <em>3)</em> Novas demandas de TIC planejadas formalizadas em DFDs.
+          </p>
+          <p className="text-xs text-slate-900 dark:text-on-surface-variant font-medium leading-relaxed">
+            <strong>Diferença entre PCA e PLOA:</strong> O <em>Plano de Contratações Anual (PCA)</em> formaliza as intenções de compras e contratações do órgão condicionadas à existência de orçamento (por isso, o valor global do PCA pode ser superior ao teto da PLOA). Entretanto, para ser executada no ano seguinte, qualquer contratação deve obrigatoriamente constar no PCA.
+          </p>
+          <p className="text-xs text-slate-900 dark:text-on-surface-variant font-medium leading-relaxed">
+            <strong>Lógica das Periodicidades de Pagamento:</strong> Processos com pagamento <em>"Mensal"</em> são calculados proporcionalmente aos meses ativos restantes no ano (pro-rata até 31/12). Para pagamentos <em>"Anual"</em> e <em>"Total"</em>, o valor é provisionado de forma <strong>integral (100%)</strong> no exercício em que o contrato/compra inicia, pois o desembolso cobre 1 ano inteiro de vigência ou pagamento pontual único.
           </p>
         </div>
       </div>
@@ -5963,10 +6012,10 @@ export default function OrcamentoAtual({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">
-                      Estimativa de Custo (R$) <span className="text-red-500">*</span>
+                      Estimativa Custo (R$) <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -5992,7 +6041,22 @@ export default function OrcamentoAtual({
 
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">
-                      Data de Início Estimada
+                      Periodicidade <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={customPlanPeriodicidade}
+                      onChange={(e: any) => setCustomPlanPeriodicidade(e.target.value)}
+                      className="w-full px-3 py-2 text-xs border border-outline rounded bg-surface text-on-surface focus:outline-none focus:border-primary"
+                    >
+                      <option value="Mensal">Mensal (Anualizado)</option>
+                      <option value="Anual">Anual (Integral)</option>
+                      <option value="Total">Total (Único)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant mb-1 uppercase tracking-wider">
+                      Data Início Estimada
                     </label>
                     <input
                       type="date"

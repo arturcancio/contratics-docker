@@ -343,6 +343,11 @@ export default function DFDs({
     if (conclYear < year) {
       return dfd.Valor_Estimado;
     } else if (conclYear === year) {
+      // Pagamento Anual: o desembolso cobre 1 ano inteiro de contrato a partir da data estimada de início,
+      // demandando o montante integral naquele exercício sem corte proporcional (pro-rata) de meses até 31 de dezembro.
+      if (dfd.Periodicidade_Pagamento === 'Anual') {
+        return dfd.Valor_Estimado;
+      }
       const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
       const activeMonths = getFractionalMonths(conclDate, yearEnd);
       return dfd.Valor_Estimado * (activeMonths / 12);
@@ -387,7 +392,8 @@ export default function DFDs({
   };
 
   const exportDFDsToPDF = () => {
-    const totalDFDsAnualValue = filteredDFDs.reduce((sum, d) => sum + (d.Valor_Anual_Proporcional || d.Valor_Estimado || 0), 0);
+    const targetYearNum = selectedYear === 'Todos' ? (parseInt(currentYear, 10) || 2026) : (parseInt(selectedYear, 10) || 2026);
+    const totalDFDsAnualValue = filteredDFDs.reduce((sum, d) => sum + getDfdAnnualizedValueLocal(d, targetYearNum), 0);
 
     const SOF_LOGO_SVG = `
       <svg width="220" height="70" viewBox="0 0 240 80" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;">
@@ -633,7 +639,7 @@ export default function DFDs({
                     </td>
                     <td class="font-mono text-right">
                       <div class="${isBudgetActive ? 'budget-active' : 'budget-ignored'}" style="font-weight: 700;">
-                        R$ ${(dfd.Valor_Anual_Proporcional || dfd.Valor_Estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        R$ ${getDfdAnnualizedValueLocal(dfd, targetYearNum).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                       <span style="font-size: 9px; color: #64748b;">${dfd.Periodicidade_Pagamento || 'Único'}</span>
                     </td>
@@ -937,12 +943,18 @@ export default function DFDs({
         </div>
       </div>
 
-      {/* Help message regarding double budgeting */}
-      <div className="bg-surface-container/60 border border-outline-variant/30 rounded-xl px-4 py-2.5 text-xs text-on-surface-variant flex items-center gap-2">
-        <AlertCircle className="w-4 h-4 text-primary shrink-0" />
-        <span>
-          <strong>Lógica de Cálculo dos Valores dos DFDs:</strong> A <em>Soma DFDs Anualizada</em> representa o cálculo de proporcionalidade de meses restantes no ano desde a Data de Conclusão Estimada até 31 de Dezembro (com exceção para parcelas marcadas com periodicidade de pagamento "Total" que mantêm 100% do seu valor). A <em>Soma Bruta Simplificada</em> traz o somatório simples acumulado sem considerar datas estimadas de início.
-        </span>
+      {/* Help message regarding double budgeting, PCA vs PLOA, and payment frequencies */}
+      <div className="bg-surface-container/60 border border-outline-variant/30 rounded-xl px-4 py-3 text-xs text-on-surface-variant space-y-1.5">
+        <div className="flex items-center gap-2 text-primary font-bold">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>Diretrizes Orçamentárias: Diferença entre PCA e PLOA & Lógica de Pagamento</span>
+        </div>
+        <p className="leading-relaxed">
+          <strong>PCA vs PLOA:</strong> O <em>Plano de Contratações Anual (PCA)</em> consolida todas as intenções e necessidades de compras e contratações de TIC do órgão (formalizadas nos DFDs) que se pretende realizar caso haja disponibilidade orçamentária. Já a <em>PLOA (Aba Orçamento Atual)</em> projeta os valores que de fato pretendemos desembolsar no ano seguinte, englobando contratos vigentes estendidos, renovações, licitações em andamento e novos DFDs. Por isso, o total do PCA pode ser superior ao PLOA, mas qualquer contratação a ser realizada deve obrigatoriamente constar no PCA.
+        </p>
+        <p className="leading-relaxed text-[11px] text-on-surface-variant/85">
+          <strong>Periodicidades de Pagamento:</strong> Para demandas com pagamento <em>"Mensal"</em>, o valor no exercício de conclusão é proporcional aos meses restantes até 31 de dezembro. Já para pagamentos <em>"Anual"</em> e <em>"Total"</em>, o desembolso é computado de forma <strong>integral (100%)</strong> no ano de início, pois é necessário dispor do montante integral naquele mês para custear o ciclo anual de 1 ano de contrato.
+        </p>
       </div>
 
       {/* DFD Grid/List */}

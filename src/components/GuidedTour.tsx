@@ -177,9 +177,9 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
       steps: [
         {
           targetSelector: '[data-tour="dfd-header"]',
-          title: 'Gestão de DFDs de TIC (PCA)',
+          title: 'Gestão de DFDs de TIC (PCA) & Distinção com a PLOA',
           badge: `PCA & DFDs (${roleLabel})`,
-          description: 'O DFD é o documento de formalização inicial que compõe o Plano de Contratações Anual (PCA). Aqui são registradas todas as demandas e necessidades de TIC da SOF para os exercícios futuros em cumprimento ao Decreto nº 10.947/2022.',
+          description: 'O DFD é o documento de formalização inicial que compõe o Plano de Contratações Anual (PCA). O PCA consolida todas as intenções e necessidades de TIC que se pretende contratar caso haja disponibilidade orçamentária. Toda contratação a ser realizada no ano seguinte obrigatoriamente deve constar no PCA, mesmo que o somatório do PCA supere os limites orçamentários da PLOA.',
           position: 'bottom'
         },
         {
@@ -211,13 +211,13 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
         },
         {
           targetSelector: '[data-tour="dfd-table"]',
-          title: 'Tabela de Demandas e Vinculação ao Processo SEI',
-          badge: 'Fluxo Processual',
+          title: 'Tabela de Demandas e Lógica de Pagamento',
+          badge: 'Fluxo Processual & Cálculos',
           description: role === 'GECTI'
-            ? 'Gerencie o ciclo do DFD (Não iniciado, Iniciado, Concluído), confira os valores anualizados proporcionais e realize a conexão direta com o Processo de Planejamento instaurado no SEI.'
+            ? 'Gerencie o ciclo do DFD (Não iniciado, Iniciado, Concluído), confira os valores anualizados calculados (Mensal pro-rata até 31/12 vs Anual/Total integral no exercício de início) e realize a conexão com o Processo SEI.'
             : role === 'Fiscal'
-            ? 'Acompanhe o trâmite da sua demanda até a aprovação e vinculação ao respectivo Processo SEI de contratação.'
-            : 'Consulte o status do DFD e rastreie a qual Processo SEI a necessidade institucional foi vinculada.',
+            ? 'Acompanhe o trâmite da sua demanda e a estimativa de impacto financeiro (com valor integral em periodicidade Anual e Total, ou proporcional em Mensal).'
+            : 'Consulte o status do DFD, sua periodicidade de desembolso e rastreie a qual Processo SEI a necessidade institucional foi vinculada.',
           position: 'top'
         }
       ]
@@ -523,16 +523,16 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
       steps: [
         {
           targetSelector: '[data-tour="orcamento-header"]',
-          title: 'Ação Orçamentária 8861 do SIOP',
-          badge: `Orçamento SOF (${roleLabel})`,
-          description: 'Acompanhe os limites orçamentários oficiais da SOF no SIOP para a Ação 8861 (Sustentação da Tecnologia da Informação do Sistema de Planejamento Nacional e do Orçamento Federal).',
+          title: 'Projeção para a PLOA & Ação Orçamentária 8861',
+          badge: `PLOA & Orçamento SOF (${roleLabel})`,
+          description: 'Acompanhe a projeção dos desembolsos para compor a proposta orçamentária (PLOA) do exercício e os dados do SIOP para a Ação 8861. A PLOA difere do PCA: consolida o que de fato pretendemos desembolsar, englobando contratos vigentes estendidos, renovações simuladas, processos em planejamento (SEI) e novos DFDs.',
           position: 'bottom'
         },
         {
           targetSelector: '[data-tour="orcamento-actions"]',
           title: 'Ações Orçamentárias & Ferramentas de Projeção',
           badge: 'Ações do Orçamento',
-          description: 'Simule prorrogações automáticas de contratos para exercícios futuros, gere a planilha interativa de projeção orçamentária oficial e exporte o relatório executivo em PDF.',
+          description: 'Simule prorrogações automáticas de contratos com índices de reajuste, inclua planejamentos ou DFDs customizados diretamente na projeção, gere a planilha oficial de levantamento e exporte o relatório executivo em PDF.',
           position: 'bottom'
         },
         {
@@ -544,9 +544,9 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
         },
         {
           targetSelector: '[data-tour="orcamento-kpis"]',
-          title: 'KPIs Consolidados do Exercício',
+          title: 'KPIs Consolidados do Exercício & Regras de Pagamento',
           badge: 'Consolidação de Despesas',
-          description: 'Cards com os somatórios das despesas de TIC: Total Anualizado dos Contratos Vigentes, Soma dos DFDs Anualizada (PCA), Processos em Planejamento (SEI) e o Valor Anual Geral SOF planejado para o exercício.',
+          description: 'Cards com os somatórios das despesas de TIC: Contratos Vigentes, DFDs Anualizados e Processos SEI. Demandas com pagamento Mensal são calculadas pro-rata até 31/12; demandas com pagamento Anual e Total demandam o montante integral (100%) no exercício de início para cobrir 1 ano de vigência ou pagamento pontual.',
           position: 'bottom'
         },
         {
@@ -566,7 +566,7 @@ export function getToursConfig(userRole: UserRole | string = 'GECTI'): Record<st
           targetSelector: '[data-tour="orcamento-table"]',
           title: 'Tabelas Detalhadas das Linhas Orçamentárias',
           badge: 'Detalhamento Analítico',
-          description: 'Tabelas analíticas completas discriminando individualmente: 1. Demandas do PCA (DFDs); 2. Processos em Planejamento (SEI); e 3. Contratos Vigentes de TIC com cálculo proporcional do exercício.',
+          description: 'Tabelas analíticas completas discriminando: 1. Demandas do PCA (DFDs); 2. Processos em Planejamento (SEI); e 3. Contratos Vigentes de TIC. Permite incluir itens customizados, definir periodicidade (Mensal, Anual ou Total) e ativar/desativar a contabilização individual no orçamento.',
           position: 'top'
         }
       ]

@@ -78,7 +78,7 @@ export interface Planejamento {
   Plano_Orcamentario?: string;
   GND?: '3 - Custeio' | '4 - Investimento';
   Natureza_Objeto?: 'Bem' | 'Serviço';
-  Periodicidade_Pagamento?: 'Mensal' | 'Total';
+  Periodicidade_Pagamento?: PeriodicidadePagamento;
   Modalidade_Contratacao?: string;
   updatedAt: string;
   Contabilizar_Orcamento?: boolean;

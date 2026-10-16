@@ -236,6 +236,7 @@ export default function Planejamentos({
     Tipo_Processo: 'Pregão SOF',
     Natureza_Objeto: 'Serviço',
     GND: '3 - Custeio',
+    Periodicidade_Pagamento: 'Mensal',
   });
 
   const [histFormData, setHistFormData] = useState<Partial<HistoricoPlanejamento>>({
@@ -757,6 +758,7 @@ export default function Planejamentos({
         Tipo_Processo: planFormData.Tipo_Processo || 'Pregão SOF',
         Natureza_Objeto: planFormData.Natureza_Objeto || 'Serviço',
         GND: planFormData.GND || '3 - Custeio',
+        Periodicidade_Pagamento: planFormData.Periodicidade_Pagamento || 'Mensal',
         updatedAt: new Date(currentLocalTime).toISOString(),
       };
       onAddPlanejamento(newPlan);
@@ -981,6 +983,7 @@ export default function Planejamentos({
                     Tipo_Processo: 'Pregão SOF',
                     Natureza_Objeto: 'Serviço',
                     GND: '3 - Custeio',
+                    Periodicidade_Pagamento: 'Mensal',
                   });
                   setIsPlanModalOpen(true);
                 }}
@@ -1741,7 +1744,7 @@ export default function Planejamentos({
                     <div className="flex items-center justify-between gap-1 text-[8.5px] text-on-surface-variant mt-1.5 pt-1.5 border-t border-outline-variant/20 min-w-0">
                       <span className="truncate">Origem PCA: DFD {selectedPlan?.DFD_PNCP} ({selectedPlan?.Ano_PCA_Vinculado})</span>
                       <span className="font-mono font-bold text-on-surface shrink-0">
-                        {selectedPlan?.Natureza_Objeto || 'Serviço'} &bull; {selectedPlan?.GND || '3 - Custeio'}
+                        {selectedPlan?.Natureza_Objeto || 'Serviço'} &bull; {selectedPlan?.GND || '3 - Custeio'} &bull; {selectedPlan?.Periodicidade_Pagamento || 'Mensal'}
                       </span>
                     </div>
                   </div>
@@ -2053,8 +2056,8 @@ export default function Planejamentos({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/20 pt-3">
-                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-outline-variant/20 pt-3">
+                <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-on-surface-variant uppercase">Natureza do Objeto</label>
                   <select
                     name="Natureza_Objeto"
@@ -2067,7 +2070,7 @@ export default function Planejamentos({
                   </select>
                 </div>
 
-                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-on-surface-variant uppercase">Grupo de Natureza (GND)</label>
                   <select
                     name="GND"
@@ -2077,6 +2080,20 @@ export default function Planejamentos({
                   >
                     <option value="3 - Custeio">3 - Custeio</option>
                     <option value="4 - Investimento">4 - Investimento</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-on-surface-variant uppercase">Periodicidade Pagamento</label>
+                  <select
+                    name="Periodicidade_Pagamento"
+                    value={planFormData.Periodicidade_Pagamento || 'Mensal'}
+                    onChange={handlePlanFormChange}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded px-3 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                  >
+                    <option value="Mensal">Mensal (Anualizado)</option>
+                    <option value="Anual">Anual (Integral)</option>
+                    <option value="Total">Total (Único)</option>
                   </select>
                 </div>
               </div>
@@ -2134,19 +2151,13 @@ export default function Planejamentos({
                           className="bg-surface-container border border-outline-variant rounded px-2 py-0.5 text-[9px] text-primary focus:outline-none max-w-[170px] truncate"
                           value={dfds.some(d => d.Num_DFD === planFormData.DFD_PNCP) ? planFormData.DFD_PNCP : ''}
                           onChange={(e) => {
-                            if (e.target.value) {
+                              const selectedDfd = dfds.find(d => d.Num_DFD === e.target.value);
                               setPlanFormData(prev => ({
                                 ...prev,
-                                DFD_PNCP: e.target.value
+                                DFD_PNCP: e.target.value,
+                                Ano_PCA_Vinculado: selectedDfd?.Ano_PCA || prev.Ano_PCA_Vinculado,
+                                Periodicidade_Pagamento: selectedDfd?.Periodicidade_Pagamento || prev.Periodicidade_Pagamento || 'Mensal'
                               }));
-                              const selectedDfd = dfds.find(d => d.Num_DFD === e.target.value);
-                              if (selectedDfd && selectedDfd.Ano_PCA) {
-                                setPlanFormData(prev => ({
-                                  ...prev,
-                                  Ano_PCA_Vinculado: selectedDfd.Ano_PCA
-                                }));
-                              }
-                            }
                           }}
                         >
                           <option value="">-- Manual/Externo --</option>
