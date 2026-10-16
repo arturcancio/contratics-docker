@@ -861,19 +861,22 @@ export default function DFDs({
           <button
             onClick={handleOpenExportExcelModal}
             disabled={isExportingExcel}
-            className="flex items-center gap-2 px-3 py-2 border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg text-xs transition-all cursor-pointer font-semibold shadow-xs disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl h-[38px] transition-all cursor-pointer shadow-sm shadow-emerald-600/20 disabled:opacity-50"
             title="Exportar dados do PCA / DFDs para arquivo Excel (.xlsx)"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-            {isExportingExcel ? 'Exportando...' : 'Exportar Excel'}
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>{isExportingExcel ? 'Exportando...' : 'Exportar Excel'}</span>
           </button>
+          
           <button
             onClick={exportDFDsToPDF}
-            className="flex items-center gap-2 px-3 py-2 border border-outline-variant/60 rounded-lg text-xs bg-surface-container hover:text-primary transition-all cursor-pointer font-semibold"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-on-primary text-xs font-bold rounded-xl h-[38px] transition-all cursor-pointer shadow-sm shadow-primary/20"
+            title="Exportar dados do PCA / DFDs para PDF"
           >
-            <Download className="w-4 h-4 text-primary" />
-            Exportar PDF
+            <Download className="w-4 h-4" />
+            <span>Exportar PDF</span>
           </button>
+          
           <button
             onClick={() => {
               setEditingDfd(null);
@@ -893,10 +896,10 @@ export default function DFDs({
               setAttachedFileData('');
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 border border-primary/30 rounded-lg text-sm bg-primary/10 text-primary hover:bg-primary/20 transition-all active:scale-95 cursor-pointer font-medium"
+            className="flex items-center gap-2 px-4 py-2 border border-primary/30 rounded-xl text-xs bg-primary/10 text-primary hover:bg-primary/20 transition-all active:scale-95 cursor-pointer font-bold h-[38px]"
           >
             <Plus className="w-4 h-4" />
-            Cadastrar DFD
+            <span>Cadastrar DFD</span>
           </button>
         </div>
       </div>
