@@ -700,16 +700,32 @@ export default function DFDs({
   };
 
   const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExportExcelModalOpen, setIsExportExcelModalOpen] = useState(false);
+  const [pcaSeiProcessNumber, setPcaSeiProcessNumber] = useState('');
 
-  const handleExportExcel = async () => {
+  const handleOpenExportExcelModal = () => {
+    const targetYearNum = selectedYear === 'Todos' ? currentYear : selectedYear;
+    const savedSei = localStorage.getItem(`contratics_pca_sei_${targetYearNum}`) || '';
+    setPcaSeiProcessNumber(savedSei || (targetYearNum === '2026' ? '03101.000902/2026-43' : `03101.000902/${targetYearNum}-43`));
+    setIsExportExcelModalOpen(true);
+  };
+
+  const handleConfirmExportExcel = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     try {
       setIsExportingExcel(true);
       const targetYearNum = selectedYear === 'Todos' ? currentYear : selectedYear;
+      const cleanSei = pcaSeiProcessNumber.trim();
+      if (cleanSei) {
+        localStorage.setItem(`contratics_pca_sei_${targetYearNum}`, cleanSei);
+      }
       await exportPCAtoExcel({
         dfds: filteredDFDs,
         targetYear: targetYearNum,
         getDfdAnnualizedValue: getDfdAnnualizedValueLocal,
+        seiProcessNumber: cleanSei,
       });
+      setIsExportExcelModalOpen(false);
     } catch (err) {
       console.error('Erro ao exportar PCA para Excel:', err);
     } finally {
@@ -843,7 +859,7 @@ export default function DFDs({
         
         <div className="flex items-center gap-2.5" data-tour="dfd-actions">
           <button
-            onClick={handleExportExcel}
+            onClick={handleOpenExportExcelModal}
             disabled={isExportingExcel}
             className="flex items-center gap-2 px-3 py-2 border border-emerald-600/30 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-lg text-xs transition-all cursor-pointer font-semibold shadow-xs disabled:opacity-50"
             title="Exportar dados do PCA / DFDs para arquivo Excel (.xlsx)"
@@ -1977,6 +1993,69 @@ export default function DFDs({
                 Confirmar Exclusão
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Informar Processo SEI antes de Exportar PCA Excel */}
+      {isExportExcelModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-100">
+          <div className="bg-surface-container border border-outline-variant w-full max-w-md rounded-xl p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-100">
+            <div className="flex items-center justify-between border-b border-outline-variant/60 pb-3">
+              <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400">
+                <FileSpreadsheet className="w-5 h-5 shrink-0" />
+                <h4 className="text-base font-bold text-on-surface">Exportar PCA para Excel</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportExcelModalOpen(false)}
+                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Informe o número do processo SEI correspondente ao <strong>PCA {selectedYear === 'Todos' ? currentYear : selectedYear}</strong>. Esse número será exibido no cabeçalho oficial da planilha.
+            </p>
+
+            <form onSubmit={handleConfirmExportExcel} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-on-surface-variant uppercase">
+                  Número do Processo SEI do PCA <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={pcaSeiProcessNumber}
+                  onChange={(e) => setPcaSeiProcessNumber(e.target.value)}
+                  placeholder="Ex: 03101.000902/2026-43"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-outline-variant bg-surface-container-low text-on-surface font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                />
+                <span className="text-[11px] text-on-surface-variant/80 block">
+                  Exibição no cabeçalho: <span className="font-mono text-primary font-semibold">{pcaSeiProcessNumber ? (pcaSeiProcessNumber.toLowerCase().startsWith('processo') ? pcaSeiProcessNumber : `Processo ${pcaSeiProcessNumber}`) : 'Processo 03101.000902/...'}</span>
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsExportExcelModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isExportingExcel || !pcaSeiProcessNumber.trim()}
+                  className="px-4 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-md active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  {isExportingExcel ? 'Gerando planilha...' : 'Exportar Planilha (.xlsx)'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

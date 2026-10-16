@@ -69,8 +69,9 @@ export async function exportPCAtoExcel(params: {
   dfds: DFD[];
   targetYear: string;
   getDfdAnnualizedValue: (dfd: DFD, year: number) => number;
+  seiProcessNumber?: string;
 }): Promise<void> {
-  const { dfds, targetYear, getDfdAnnualizedValue } = params;
+  const { dfds, targetYear, getDfdAnnualizedValue, seiProcessNumber } = params;
   const targetYearNum = parseInt(targetYear, 10) || 2026;
 
   const workbook = new ExcelJS.Workbook();
@@ -123,7 +124,11 @@ export async function exportPCAtoExcel(params: {
 
   worksheet.mergeCells('D2:I2');
   const titleCell2 = worksheet.getCell('D2');
-  titleCell2.value = 'Processo 03101.000902/2026-43';
+  const rawSei = seiProcessNumber?.trim() || '';
+  const seiTitle = rawSei
+    ? (rawSei.toLowerCase().startsWith('processo') ? rawSei : `Processo ${rawSei}`)
+    : `Processo 03101.000902/${targetYear}-43`;
+  titleCell2.value = seiTitle;
   titleCell2.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
   titleCell2.alignment = { horizontal: 'center', vertical: 'middle' };
 
