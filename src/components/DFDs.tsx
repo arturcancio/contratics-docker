@@ -340,19 +340,31 @@ export default function DFDs({
 
     const conclYear = conclDate.getUTCFullYear();
     
+    // 1. Se o ano da conclusão/início for posterior ao ano analisado, não há desembolso ainda
+    if (conclYear > year) {
+      return 0;
+    }
+
+    const periodicidade: PeriodicidadePagamento = dfd.Periodicidade_Pagamento || 'Mensal';
+
+    // 2. Pagamento Total (Único / pontual): pago integralmente no ano de conclusão
+    if (periodicidade === 'Total') {
+      return conclYear === year ? dfd.Valor_Estimado : 0;
+    }
+
+    // 3. Pagamento Anual: desembolso integral de 1 ano completo sem corte pro-rata
+    if (periodicidade === 'Anual') {
+      return dfd.Valor_Estimado;
+    }
+
+    // 4. Pagamento Mensal:
     if (conclYear < year) {
       return dfd.Valor_Estimado;
-    } else if (conclYear === year) {
-      // Pagamento Anual: o desembolso cobre 1 ano inteiro de contrato a partir da data estimada de início,
-      // demandando o montante integral naquele exercício sem corte proporcional (pro-rata) de meses até 31 de dezembro.
-      if (dfd.Periodicidade_Pagamento === 'Anual') {
-        return dfd.Valor_Estimado;
-      }
+    } else {
+      // conclYear === year: proporcional dos meses restantes até 31 de dezembro
       const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
       const activeMonths = getFractionalMonths(conclDate, yearEnd);
       return dfd.Valor_Estimado * (activeMonths / 12);
-    } else {
-      return 0;
     }
   };
 

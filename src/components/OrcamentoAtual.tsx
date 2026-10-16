@@ -254,7 +254,7 @@ export default function OrcamentoAtual({
         UASG: '925001',
         Data_conclusao_estimada: dateToUse,
         Periodicidade_Pagamento: customDfdPeriodicidade,
-        Valor_Anual_Proporcional: customDfdPeriodicidade === 'Total' ? valNum : (valNum / 12),
+        Valor_Anual_Proporcional: (customDfdPeriodicidade === 'Total' || customDfdPeriodicidade === 'Anual') ? valNum : (valNum / 12),
         Contabilizar_Orcamento: true,
         updatedAt: new Date().toISOString(),
         Valor_Custeio: customDfdGND === '3 - Custeio' ? valNum : 0,
@@ -814,46 +814,31 @@ export default function OrcamentoAtual({
 
     const conclYear = conclDate.getUTCFullYear();
     
-    // 1. If target simulation year is before conclusion year, there is no impact yet
+    // 1. Se o ano de conclusão/início estimado for posterior ao ano analisado, não há desembolso ainda
     if (conclYear > year) {
       return 0;
     }
 
-    // 2. One-off/Pontual Acquisition or Direct Contract (Inexigibilidade / Dispensa / Compra pontual)
-    const isContratacaoDireta = 
-      dfd.Descricao_Objeto?.toLowerCase().includes('inexigibilidade') ||
-      dfd.Descricao_Objeto?.toLowerCase().includes('dispensa') ||
-      dfd.Descricao_Objeto?.toLowerCase().includes('direta');
+    const periodicidade: PeriodicidadePagamento = dfd.Periodicidade_Pagamento || 'Mensal';
 
-    const isOneOff = isContratacaoDireta ||
-                     dfd.Periodicidade_Pagamento === 'Total' ||
-                     (dfd.Valor_Investimento && dfd.Valor_Investimento > 0 && (!dfd.Valor_Custeio || dfd.Valor_Custeio === 0)) ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('aquisição') || 
-                     dfd.Descricao_Objeto?.toLowerCase().includes('compra') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('inscrição') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('treinamento') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('capacitação') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('evento') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('conferência') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('kubecon');
-
-    if (isOneOff) {
+    // 2. Pagamento Total (Único / pontual): pago de uma única vez no ano de conclusão
+    if (periodicidade === 'Total') {
       return conclYear === year ? baseValue : 0;
     }
 
     // 3. Pagamento Anual: o desembolso cobre o ciclo de 1 ano completo a partir da data de início/conclusão,
-    // demandando o montante integral de 1 ano naquele mês sem corte proporcional (pro-rata) de meses até 31 de dezembro.
-    if (dfd.Periodicidade_Pagamento === 'Anual') {
+    // demandando o montante integral de 1 ano naquele exercício sem corte proporcional (pro-rata) de meses até 31 de dezembro.
+    if (periodicidade === 'Anual') {
       return baseValue;
     }
 
-    // 4. Continuous Service/Subscription ('Mensal')
+    // 4. Pagamento Mensal:
     if (conclYear < year) {
-      // In subsequent years, continuous services impact the full year (12 months)
+      // Em exercícios posteriores, o serviço já está em vigor durante o ano todo (12 meses)
       return baseValue;
     } else {
-      // conclYear === year (the year it is concluded/started)
-      // Proportional impact from conclusion date until Dec 31
+      // conclYear === year (exercício em que inicia/conclui):
+      // Cálculo proporcional (pro-rata) a partir da data de conclusão estimada até 31 de dezembro
       const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
       const activeMonths = getFractionalMonths(conclDate, yearEnd);
       return baseValue * (activeMonths / 12);
@@ -946,30 +931,8 @@ export default function OrcamentoAtual({
       ? customValueAnual
       : (p.Valor_Customizado !== undefined && p.Valor_Customizado !== null ? p.Valor_Customizado : (overrideCost !== undefined ? overrideCost : getPlanningCusto(p)));
 
-    // Check if direct contracting or one-off
-    const isContratacaoDireta = 
-      p.Tipo_Processo?.toLowerCase().includes('inexigibilidade') ||
-      p.Tipo_Processo?.toLowerCase().includes('dispensa') ||
-      p.Tipo_Processo?.toLowerCase().includes('direta') ||
-      (p as any).Modalidade_Contratacao?.toLowerCase().includes('inexigibilidade') ||
-      (p as any).Modalidade_Contratacao?.toLowerCase().includes('dispensa') ||
-      (p as any).Modalidade_Contratacao?.toLowerCase().includes('direta');
-
     const linkedDfd = dfds.find(d => d.id === p.DFD_PNCP || d.Num_DFD === p.DFD_PNCP || d.Planejamento_Vinculado === p.SEI_Processo);
-    const periodicidade: PeriodicidadePagamento = p.Periodicidade_Pagamento || linkedDfd?.Periodicidade_Pagamento || 'Mensal';
-
-    const isOneOff = isContratacaoDireta ||
-                     p.GND === '4 - Investimento' || 
-                     p.Natureza_Objeto === 'Bem' ||
-                     periodicidade === 'Total' ||
-                     p.Objeto?.toLowerCase().includes('aquisição') || 
-                     p.Objeto?.toLowerCase().includes('compra') ||
-                     p.Objeto?.toLowerCase().includes('inscrição') ||
-                     p.Objeto?.toLowerCase().includes('treinamento') ||
-                     p.Objeto?.toLowerCase().includes('capacitação') ||
-                     p.Objeto?.toLowerCase().includes('evento') ||
-                     p.Objeto?.toLowerCase().includes('conferência') ||
-                     p.Objeto?.toLowerCase().includes('kubecon');
+    const periodicidade: PeriodicidadePagamento = p.Periodicidade_Pagamento || linkedDfd?.Periodicidade_Pagamento || (p.Natureza_Objeto === 'Bem' || p.GND === '4 - Investimento' ? 'Total' : 'Mensal');
 
     if (!estStartDate || isNaN(estStartDate.getTime())) {
       return {
@@ -980,7 +943,7 @@ export default function OrcamentoAtual({
         isOverridden,
         isTodayDefault,
         isSessionDate,
-        isOneOff,
+        isOneOff: periodicidade === 'Total',
         baseCost
       };
     }
@@ -997,23 +960,23 @@ export default function OrcamentoAtual({
         isOverridden,
         isTodayDefault,
         isSessionDate,
-        isOneOff,
+        isOneOff: periodicidade === 'Total',
         baseCost
       };
     }
 
-    if (isOneOff) {
+    if (periodicidade === 'Total') {
       // Direct acquisitions / one-off purchases must use the full estimated cost in the start year
       const val = startYear === year ? baseCost : 0;
       return {
         value: val,
         monthsRemaining: 12,
-        activeMonthsDesc: isContratacaoDireta ? 'Contratação Direta (Valor Integral)' : 'Aquisição Pontual / Investimento',
+        activeMonthsDesc: 'Pagamento Total (Único no exercício)',
         startDateStr,
         isOverridden,
         isTodayDefault,
         isSessionDate,
-        isOneOff,
+        isOneOff: true,
         baseCost
       };
     } else if (periodicidade === 'Anual') {
@@ -1029,7 +992,7 @@ export default function OrcamentoAtual({
         isOverridden,
         isTodayDefault,
         isSessionDate,
-        isOneOff,
+        isOneOff: false,
         baseCost
       };
     } else {
@@ -1074,7 +1037,7 @@ export default function OrcamentoAtual({
           isOverridden,
           isTodayDefault,
           isSessionDate,
-          isOneOff,
+          isOneOff: false,
           baseCost
         };
       }
@@ -1389,34 +1352,12 @@ export default function OrcamentoAtual({
       const planCalc = getPlanejamentoAnnualizedValue(p, targetYearInt, totalVal);
       const annualizedValue = planCalc.value;
 
-      const isContratacaoDireta = 
-        p.Tipo_Processo?.toLowerCase().includes('inexigibilidade') ||
-        p.Tipo_Processo?.toLowerCase().includes('dispensa') ||
-        p.Tipo_Processo?.toLowerCase().includes('direta') ||
-        (p as any).Modalidade_Contratacao?.toLowerCase().includes('inexigibilidade') ||
-        (p as any).Modalidade_Contratacao?.toLowerCase().includes('dispensa') ||
-        (p as any).Modalidade_Contratacao?.toLowerCase().includes('direta');
-
-      const isOneOff = isContratacaoDireta ||
-                       p.GND === '4 - Investimento' || 
-                       p.Natureza_Objeto === 'Bem' ||
-                       p.Periodicidade_Pagamento === 'Total' ||
-                       p.Objeto?.toLowerCase().includes('aquisição') || 
-                       p.Objeto?.toLowerCase().includes('compra') ||
-                       p.Objeto?.toLowerCase().includes('inscrição') ||
-                       p.Objeto?.toLowerCase().includes('treinamento') ||
-                       p.Objeto?.toLowerCase().includes('capacitação') ||
-                       p.Objeto?.toLowerCase().includes('evento') ||
-                       p.Objeto?.toLowerCase().includes('conferência') ||
-                       p.Objeto?.toLowerCase().includes('kubecon');
+      const linkedDfd = dfds.find(d => d.id === p.DFD_PNCP || d.Num_DFD === p.DFD_PNCP || d.Planejamento_Vinculado === p.SEI_Processo);
+      const periodicidade: PeriodicidadePagamento = p.Periodicidade_Pagamento || linkedDfd?.Periodicidade_Pagamento || (p.Natureza_Objeto === 'Bem' || p.GND === '4 - Investimento' ? 'Total' : 'Mensal');
 
       let obs = '';
       if (p.Orcamento_Exercicios?.includes(selectedYear)) {
         obs = `Importado do Planejamento Original (${p.Ano_PCA_Vinculado || '2026'})`;
-      } else if (isContratacaoDireta) {
-        obs = `Contratação Direta (Valor Integral Estimado)`;
-      } else if (isOneOff) {
-        obs = `Aquisição Pontual / Investimento (Valor Integral)`;
       } else {
         obs = planCalc.activeMonthsDesc;
       }
@@ -1448,7 +1389,7 @@ export default function OrcamentoAtual({
         isTodayDefaultDate: planCalc.isTodayDefault,
         isSessionDate: planCalc.isSessionDate,
         monthsRemaining: planCalc.monthsRemaining,
-        Periodicidade_Pagamento: p.Periodicidade_Pagamento || (isOneOff || invSum > custSum ? 'Total' : 'Mensal'),
+        Periodicidade_Pagamento: periodicidade,
         Valor_Anual_Proporcional: annualizedValue,
         Contabilizar_Orcamento: isContabilizado,
         updatedAt: p.updatedAt,
@@ -1459,9 +1400,9 @@ export default function OrcamentoAtual({
         isPlanejamentoProcess: true,
         isBudgetOnlyItem: p.isBudgetOnlyItem,
         observacoes_planejamento: p.isBudgetOnlyItem ? 'Adicionado por decisão da chefia' : obs,
-        calculo_detalhado: isOneOff 
+        calculo_detalhado: periodicidade === 'Total'
           ? 'Valor integral no exercício de início' 
-          : (p.Periodicidade_Pagamento === 'Anual'
+          : (periodicidade === 'Anual'
               ? 'Pagamento Anual (Valor integral de 1 ano no exercício)'
               : (planCalc.monthsRemaining >= 12 
                   ? 'Exercício integral (12 meses)' 
