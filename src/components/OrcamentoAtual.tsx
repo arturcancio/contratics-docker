@@ -9,7 +9,8 @@ import {
   getVigenciaFinal,
   getProrrogavelAte,
   getStatusContrato,
-  parseMonetaryValue
+  parseMonetaryValue,
+  calculateDfdAnnualizedDetails
 } from '../utils';
 import { CurrencyInput } from './CurrencyInput';
 import { 
@@ -774,76 +775,7 @@ export default function OrcamentoAtual({
 
   // Helper: DFD annualized calculation
   const getDfdAnnualizedValue = (dfd: DFD, year: number): number => {
-    const yearStr = String(year);
-    const isContabilizado = dfd.Contabilizar_Orcamento_Anual?.[yearStr] !== undefined
-      ? dfd.Contabilizar_Orcamento_Anual[yearStr]
-      : (dfd.Contabilizar_Orcamento !== false);
-
-    if (isContabilizado === false) return 0;
-    
-    let conclDate: Date | null = null;
-    const rawDate = dfd.Data_conclusao_estimada;
-    if (rawDate) {
-      const rdAny = rawDate as any;
-      if (typeof rawDate === 'object' && rawDate !== null) {
-        if ('toDate' in rdAny && typeof rdAny.toDate === 'function') {
-          conclDate = rdAny.toDate();
-        } else if (typeof rdAny.seconds === 'number') {
-          conclDate = new Date(rdAny.seconds * 1000);
-        } else if (rdAny instanceof Date) {
-          conclDate = rdAny;
-        }
-      } else if (typeof rawDate === 'string' && rawDate.trim() !== '') {
-        const stripped = rawDate.split('T')[0];
-        if (/^\d{4}-\d{2}-\d{2}$/.test(stripped)) {
-          const [yr, mo, dy] = stripped.split('-').map(Number);
-          conclDate = new Date(Date.UTC(yr, mo - 1, dy));
-        } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(stripped)) {
-          const [dy, mo, yr] = stripped.split('/').map(Number);
-          conclDate = new Date(Date.UTC(yr, mo - 1, dy));
-        } else {
-          conclDate = new Date(rawDate);
-        }
-      }
-    }
-
-    const baseValue = dfd.Valor_Customizado_Anual?.[yearStr] !== undefined && dfd.Valor_Customizado_Anual?.[yearStr] !== null
-      ? dfd.Valor_Customizado_Anual[yearStr]!
-      : (dfd.Valor_Customizado !== undefined && dfd.Valor_Customizado !== null ? dfd.Valor_Customizado : dfd.Valor_Estimado);
-
-    if (!conclDate || isNaN(conclDate.getTime())) return baseValue;
-
-    const conclYear = conclDate.getUTCFullYear();
-    
-    // 1. Se o ano de conclusão/início estimado for posterior ao ano analisado, não há desembolso ainda
-    if (conclYear > year) {
-      return 0;
-    }
-
-    const periodicidade: PeriodicidadePagamento = dfd.Periodicidade_Pagamento || 'Mensal';
-
-    // 2. Pagamento Total (Único / pontual): pago de uma única vez no ano de conclusão
-    if (periodicidade === 'Total') {
-      return conclYear === year ? baseValue : 0;
-    }
-
-    // 3. Pagamento Anual: o desembolso cobre o ciclo de 1 ano completo a partir da data de início/conclusão,
-    // demandando o montante integral de 1 ano naquele exercício sem corte proporcional (pro-rata) de meses até 31 de dezembro.
-    if (periodicidade === 'Anual') {
-      return baseValue;
-    }
-
-    // 4. Pagamento Mensal:
-    if (conclYear < year) {
-      // Em exercícios posteriores, o serviço já está em vigor durante o ano todo (12 meses)
-      return baseValue;
-    } else {
-      // conclYear === year (exercício em que inicia/conclui):
-      // Cálculo proporcional (pro-rata) a partir da data de conclusão estimada até 31 de dezembro
-      const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
-      const activeMonths = getFractionalMonths(conclDate, yearEnd);
-      return baseValue * (activeMonths / 12);
-    }
+    return calculateDfdAnnualizedDetails(dfd, year).value;
   };
 
   // Helper to determine the effective simulation start date for a planning process
@@ -1259,6 +1191,8 @@ export default function OrcamentoAtual({
   // Process and Filter DFDs
   const baseProcessedDFDs = dfds
     .filter(d => {
+      // DFDs com Situação PNCP "Devolvido" não aparecem na lista nem são contabilizados
+      if (d.Situacao_PNCP === 'Devolvido') return false;
       // Filter by selected year or imported years
       if (selectedYear !== 'Todos') {
         const isOriginalYear = d.Ano_PCA === selectedYear;
@@ -1293,13 +1227,19 @@ export default function OrcamentoAtual({
         ? d.Valor_Customizado_Anual[yearStr]
         : (d.Valor_Customizado !== undefined && d.Valor_Customizado !== null ? d.Valor_Customizado : null);
 
+      const annualDetails = calculateDfdAnnualizedDetails(d, targetYearInt);
+
       return {
         ...d,
         Contabilizar_Orcamento: isContabilizado,
         Valor_Customizado: customValue,
         Valor_Custeio: custSum,
         Valor_Investimento: invSum,
-        valor_anualizado: getDfdAnnualizedValue(d, targetYearInt),
+        valor_anualizado: annualDetails.value,
+        valor_base_12m: annualDetails.annualBaseValue,
+        vigencia_meses: annualDetails.vigenciaMeses,
+        motivo_anualizado: annualDetails.shortReason,
+        tooltip_anualizado: annualDetails.tooltipReason,
         isPlanejamentoProcess: false,
         isBudgetOnlyItem: d.isBudgetOnlyItem,
         observacoes_planejamento: d.isBudgetOnlyItem ? 'Adicionado por decisão da chefia' : (d.Ano_PCA !== selectedYear ? `Importado do PCA ${d.Ano_PCA}` : "DFD Ativo (A Planejar)")
@@ -3877,6 +3817,11 @@ export default function OrcamentoAtual({
                                 {formatCurrency(d.Valor_Estimado)}
                               </div>
                             )}
+                            {d.vigencia_meses && d.vigencia_meses !== 12 && (
+                              <div className="text-[9px] text-amber-600 dark:text-amber-400 font-sans font-semibold mt-0.5">
+                                Global {d.vigencia_meses}m (12m: {formatCurrency(d.valor_base_12m)})
+                              </div>
+                            )}
                           </div>
                           
                           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/value:opacity-100 transition-opacity">
@@ -3926,8 +3871,13 @@ export default function OrcamentoAtual({
                         </div>
                       )}
                     </td>
-                    <td className={`px-5 py-3.5 text-xs font-extrabold font-mono text-right bg-teal-500/[0.01] ${d.Contabilizar_Orcamento === false ? 'text-on-surface-variant/40 line-through' : 'text-teal-600 dark:text-teal-400'}`}>
-                      {formatCurrency(d.valor_anualizado)}
+                    <td className="px-5 py-3.5 text-right bg-teal-500/[0.01]" title={d.tooltip_anualizado}>
+                      <div className={`text-xs font-extrabold font-mono ${d.Contabilizar_Orcamento === false ? 'text-on-surface-variant/40 line-through' : 'text-teal-600 dark:text-teal-400'}`}>
+                        {formatCurrency(d.valor_anualizado)}
+                      </div>
+                      <div className="text-[9px] text-on-surface-variant/85 font-sans font-medium mt-0.5 leading-tight">
+                        {d.motivo_anualizado}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5 text-xs font-medium">
                       {d.Contabilizar_Orcamento === false ? (
@@ -5314,6 +5264,7 @@ export default function OrcamentoAtual({
               {importModalTab === 'dfd' ? (
                 (() => {
                   const availableDfdList = dfds.filter(d => {
+                    if (d.Situacao_PNCP === 'Devolvido') return false;
                     const dfdYearNum = parseInt(d.Ano_PCA || '0', 10);
                     const selectedYearNum = parseInt(selectedYear || '0', 10);
                     if (dfdYearNum >= selectedYearNum) return false;

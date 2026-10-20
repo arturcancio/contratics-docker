@@ -183,9 +183,10 @@ export async function exportPCAtoExcel(params: {
 
     const valEstimado = Number(dfd.Valor_Estimado) || 0;
     const isConcluido = dfd.Status_DFD === 'Concluído';
-    const valAnualizado = isConcluido ? 0 : getDfdAnnualizedValue(dfd, targetYearNum);
+    const isDevolvido = dfd.Situacao_PNCP === 'Devolvido';
+    const valAnualizado = (isConcluido || isDevolvido) ? 0 : getDfdAnnualizedValue(dfd, targetYearNum);
 
-    const isDeactivated = dfd.Contabilizar_Orcamento === false;
+    const isDeactivated = dfd.Contabilizar_Orcamento === false || isDevolvido;
     if (!isDeactivated) {
       totalEstimado += valEstimado;
       if (!isConcluido) {
@@ -194,8 +195,10 @@ export async function exportPCAtoExcel(params: {
     }
 
     // Determine observation
-    let obs = 'Mantido';
-    if (isDeactivated) {
+    let obs = dfd.Situacao_PNCP || 'Mantido';
+    if (isDevolvido) {
+      obs = 'Devolvido (Não contabilizado)';
+    } else if (dfd.Contabilizar_Orcamento === false) {
       obs = 'Solicitada devolução para exclusão / Desativado';
     } else if (isConcluido) {
       obs = 'Concluído (Contabilizado na Licitação)';

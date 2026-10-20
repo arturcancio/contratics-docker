@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { DFD, Planejamento, Contrato, StatusDFD, PeriodicidadePagamento, TermoAditivo, TermoApostilamento, Pagamento, ItemContratoSOF } from '../types';
-import { formatCurrency, formatDate, isModifiedRecently, getVigenciaFinal, getFractionalMonths, parseMonetaryValue } from '../utils';
+import { DFD, Planejamento, Contrato, StatusDFD, SituacaoPNCP, PeriodicidadePagamento, TermoAditivo, TermoApostilamento, Pagamento, ItemContratoSOF } from '../types';
+import { formatCurrency, formatDate, isModifiedRecently, getVigenciaFinal, getFractionalMonths, parseMonetaryValue, calculateDfdAnnualizedDetails } from '../utils';
 import { FileText, Plus, Search, Calendar, Landmark, CheckSquare, Layers, Download, X, AlertCircle, Trash2, Edit, ChevronLeft, ChevronRight, Shuffle, ChevronUp, ChevronDown, TrendingUp, Eye, FileSpreadsheet } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { CopyButton, CopyableText } from './CopyButton';
@@ -84,6 +84,8 @@ export default function DFDs({
     Ano_PCA: currentYear,
     Descricao_Objeto: '',
     Valor_Estimado: 0,
+    Vigencia_Contratacao_Meses: 12,
+    Situacao_PNCP: 'Aguardando Análise',
     Status_DFD: 'Não iniciado',
     UASG: '201130 (MPO/SOF)',
     Data_conclusao_estimada: '',
@@ -168,9 +170,14 @@ export default function DFDs({
   const sortedDFDs = [...filteredDFDs].sort((a, b) => {
     if (!sortKey) return 0;
     if (sortKey === 'valor_anualizado') {
-      const valA = a.Status_DFD === 'Concluído' ? -1 : getDfdAnnualizedValueLocal(a);
-      const valB = b.Status_DFD === 'Concluído' ? -1 : getDfdAnnualizedValueLocal(b);
+      const valA = (a.Status_DFD === 'Concluído' || a.Situacao_PNCP === 'Devolvido') ? -1 : getDfdAnnualizedValueLocal(a);
+      const valB = (b.Status_DFD === 'Concluído' || b.Situacao_PNCP === 'Devolvido') ? -1 : getDfdAnnualizedValueLocal(b);
       return sortDirection === 'asc' ? valA - valB : valB - valA;
+    }
+    if (sortKey === 'Situacao_PNCP') {
+      const sA = a.Situacao_PNCP || 'Aguardando Análise';
+      const sB = b.Situacao_PNCP || 'Aguardando Análise';
+      return sortDirection === 'asc' ? sA.localeCompare(sB, 'pt-BR') : sB.localeCompare(sA, 'pt-BR');
     }
     let valA = a[sortKey as keyof DFD];
     let valB = b[sortKey as keyof DFD];
@@ -292,81 +299,13 @@ export default function DFDs({
     }
   };
 
-  function getDfdAnnualizedValueLocal(dfd: DFD, year?: number): number {
-    // Processos já concluídos não trazem valor anualizado no DFD (serão contabilizados na licitação/contrato)
-    if (dfd.Status_DFD === 'Concluído') return 0;
-
+  function getDfdAnnualizedDetailsLocal(dfd: DFD, year?: number) {
     const effectiveYear = year || parseInt(selectedYear === 'Todos' ? (dfd.Ano_PCA || currentYear) : selectedYear, 10) || 2026;
-    const yearStr = String(effectiveYear);
-    const isContabilizado = dfd.Contabilizar_Orcamento_Anual?.[yearStr] !== undefined
-      ? dfd.Contabilizar_Orcamento_Anual[yearStr]
-      : (dfd.Contabilizar_Orcamento !== false);
+    return calculateDfdAnnualizedDetails(dfd, effectiveYear);
+  }
 
-    if (isContabilizado === false) return 0;
-
-    let conclDate: Date | null = null;
-    const rawDate = dfd.Data_conclusao_estimada;
-    if (rawDate) {
-      const rdAny = rawDate as any;
-      if (typeof rawDate === 'object' && rawDate !== null) {
-        if ('toDate' in rdAny && typeof rdAny.toDate === 'function') {
-          conclDate = rdAny.toDate();
-        } else if (typeof rdAny.seconds === 'number') {
-          conclDate = new Date(rdAny.seconds * 1000);
-        } else if (rdAny instanceof Date) {
-          conclDate = rdAny;
-        }
-      } else if (typeof rawDate === 'string' && rawDate.trim() !== '') {
-        const stripped = rawDate.split('T')[0];
-        if (/^\d{4}-\d{2}-\d{2}$/.test(stripped)) {
-          const [yr, mo, dy] = stripped.split('-').map(Number);
-          conclDate = new Date(Date.UTC(yr, mo - 1, dy));
-        } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(stripped)) {
-          const [dy, mo, yr] = stripped.split('/').map(Number);
-          conclDate = new Date(Date.UTC(yr, mo - 1, dy));
-        } else {
-          conclDate = new Date(rawDate);
-        }
-      }
-    }
-
-    const baseValue = dfd.Valor_Customizado_Anual?.[yearStr] !== undefined && dfd.Valor_Customizado_Anual?.[yearStr] !== null
-      ? dfd.Valor_Customizado_Anual[yearStr]!
-      : (dfd.Valor_Customizado !== undefined && dfd.Valor_Customizado !== null ? dfd.Valor_Customizado : dfd.Valor_Estimado);
-
-    if (!conclDate || isNaN(conclDate.getTime())) return baseValue;
-
-    const conclYear = conclDate.getUTCFullYear();
-    
-    // 1. Se o ano de conclusão/início estimado for posterior ao ano analisado, não há desembolso ainda
-    if (conclYear > effectiveYear) {
-      return 0;
-    }
-
-    const periodicidade: PeriodicidadePagamento = dfd.Periodicidade_Pagamento || 'Mensal';
-
-    // 2. Pagamento Total (Único / pontual): pago de uma única vez no ano de conclusão
-    if (periodicidade === 'Total') {
-      return conclYear === effectiveYear ? baseValue : 0;
-    }
-
-    // 3. Pagamento Anual: o desembolso cobre o ciclo de 1 ano completo a partir da data de início/conclusão,
-    // demandando o montante integral de 1 ano naquele exercício sem corte proporcional (pro-rata) de meses até 31 de dezembro.
-    if (periodicidade === 'Anual') {
-      return baseValue;
-    }
-
-    // 4. Pagamento Mensal:
-    if (conclYear < effectiveYear) {
-      // Em exercícios posteriores, o serviço já está em vigor durante o ano todo (12 meses)
-      return baseValue;
-    } else {
-      // conclYear === effectiveYear (exercício em que inicia/conclui):
-      // Cálculo proporcional (pro-rata) a partir da data de conclusão estimada até 31 de dezembro
-      const yearEnd = new Date(Date.UTC(effectiveYear, 11, 31, 23, 59, 59));
-      const activeMonths = getFractionalMonths(conclDate, yearEnd);
-      return baseValue * (activeMonths / 12);
-    }
+  function getDfdAnnualizedValueLocal(dfd: DFD, year?: number): number {
+    return getDfdAnnualizedDetailsLocal(dfd, year).value;
   }
 
   const calculateValorGeralAnualizado = () => {
@@ -377,6 +316,7 @@ export default function DFDs({
       if (selectedYear !== 'Todos' && d.Ano_PCA !== targetYear) {
         return false;
       }
+      if (d.Situacao_PNCP === 'Devolvido') return false;
       const isCorrectStatus = d.Status_DFD === 'Iniciado' || d.Status_DFD === 'Não iniciado';
       if (!isCorrectStatus) return false;
       return d.Contabilizar_Orcamento !== false;
@@ -392,6 +332,7 @@ export default function DFDs({
       if (selectedYear !== 'Todos' && d.Ano_PCA !== targetYear) {
         return false;
       }
+      if (d.Situacao_PNCP === 'Devolvido') return false;
       const isCorrectStatus = d.Status_DFD === 'Iniciado' || d.Status_DFD === 'Não iniciado';
       if (!isCorrectStatus) return false;
       return d.Contabilizar_Orcamento !== false;
@@ -633,8 +574,10 @@ export default function DFDs({
             </thead>
             <tbody>
               ${filteredDFDs.map(dfd => {
-                const isBudgetActive = dfd.Contabilizar_Orcamento !== false;
+                const isBudgetActive = dfd.Contabilizar_Orcamento !== false && dfd.Situacao_PNCP !== 'Devolvido';
                 const isConcluido = dfd.Status_DFD === 'Concluído';
+                const isDevolvido = dfd.Situacao_PNCP === 'Devolvido';
+                const details = getDfdAnnualizedDetailsLocal(dfd, targetYearNum);
                 return `
                   <tr>
                     <td>
@@ -649,17 +592,18 @@ export default function DFDs({
                       ${dfd.Planejamento_Vinculado ? `<span style="font-size: 10px; color: #0284c7; font-weight: 500;">Proc. Vinculado: ${dfd.Planejamento_Vinculado}</span>` : ''}
                     </td>
                     <td class="font-mono text-right">
-                      R$ ${(dfd.Valor_Estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <div>R$ ${(dfd.Valor_Estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      ${(dfd.Vigencia_Contratacao_Meses && dfd.Vigencia_Contratacao_Meses !== 12) ? `<span style="font-size: 9px; color: #64748b;">Vigência: ${dfd.Vigencia_Contratacao_Meses} meses</span>` : ''}
                     </td>
                     <td class="font-mono text-right">
-                      ${isConcluido ? `
+                      ${(isConcluido || isDevolvido) ? `
                         <div style="color: #64748b; font-weight: 700;">—</div>
-                        <span style="font-size: 9px; color: #64748b;">Contabilizado na Licitação</span>
+                        <span style="font-size: 9px; color: #64748b;">${details.shortReason}</span>
                       ` : `
                         <div class="${isBudgetActive ? 'budget-active' : 'budget-ignored'}" style="font-weight: 700;">
-                          R$ ${getDfdAnnualizedValueLocal(dfd, targetYearNum).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          R$ ${details.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
-                        <span style="font-size: 9px; color: #64748b;">${dfd.Periodicidade_Pagamento || 'Mensal'}</span>
+                        <span style="font-size: 9px; color: #64748b;">${details.shortReason}</span>
                       `}
                     </td>
                     <td>
@@ -788,6 +732,8 @@ export default function DFDs({
         Ano_PCA: formData.Ano_PCA!,
         Descricao_Objeto: formData.Descricao_Objeto!,
         Valor_Estimado: formData.Valor_Estimado!,
+        Vigencia_Contratacao_Meses: Number(formData.Vigencia_Contratacao_Meses) > 0 ? Number(formData.Vigencia_Contratacao_Meses) : 12,
+        Situacao_PNCP: (formData.Situacao_PNCP as SituacaoPNCP) || 'Aguardando Análise',
         Status_DFD: formData.Status_DFD as StatusDFD,
         UASG: formData.UASG!,
         Planejamento_Vinculado: formData.Planejamento_Vinculado || undefined,
@@ -809,6 +755,8 @@ export default function DFDs({
         Ano_PCA: formData.Ano_PCA!,
         Descricao_Objeto: formData.Descricao_Objeto!,
         Valor_Estimado: formData.Valor_Estimado!,
+        Vigencia_Contratacao_Meses: Number(formData.Vigencia_Contratacao_Meses) > 0 ? Number(formData.Vigencia_Contratacao_Meses) : 12,
+        Situacao_PNCP: (formData.Situacao_PNCP as SituacaoPNCP) || 'Aguardando Análise',
         Status_DFD: formData.Status_DFD as StatusDFD,
         UASG: formData.UASG!,
         Planejamento_Vinculado: formData.Planejamento_Vinculado || undefined,
@@ -833,6 +781,8 @@ export default function DFDs({
       Ano_PCA: currentYear,
       Descricao_Objeto: '',
       Valor_Estimado: 0,
+      Vigencia_Contratacao_Meses: 12,
+      Situacao_PNCP: 'Aguardando Análise',
       Status_DFD: 'Não iniciado',
       UASG: '201130 (MPO/SOF)',
       Data_conclusao_estimada: '',
@@ -894,12 +844,16 @@ export default function DFDs({
                 Ano_PCA: currentYear,
                 Descricao_Objeto: '',
                 Valor_Estimado: 0,
+                Vigencia_Contratacao_Meses: 12,
+                Situacao_PNCP: 'Aguardando Análise',
                 Status_DFD: 'Não iniciado',
                 UASG: '201130 (MPO/SOF)',
                 Data_conclusao_estimada: '',
                 Periodicidade_Pagamento: 'Mensal',
                 Valor_Anual_Proporcional: 0,
                 Contabilizar_Orcamento: true,
+                Valor_Custeio: 0,
+                Valor_Investimento: 0,
               });
               setAttachedFileName('');
               setAttachedFileData('');
@@ -1098,6 +1052,17 @@ export default function DFDs({
               </th>
               <th 
                 className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
+                onClick={() => handleSort('Situacao_PNCP')}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  <span>Situação PNCP</span>
+                  {sortKey === 'Situacao_PNCP' && (
+                    sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 text-primary" /> : <ChevronDown className="w-3 h-3 text-primary" />
+                  )}
+                </div>
+              </th>
+              <th 
+                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
                 onClick={() => handleSort('Contabilizar_Orcamento')}
               >
                 <div className="flex items-center justify-center gap-1">
@@ -1124,7 +1089,7 @@ export default function DFDs({
           <tbody>
             {paginatedDFDs.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-10 text-xs text-on-surface-variant bg-surface-container-low/50 rounded-xl border border-outline-variant/30 font-medium italic">
+                <td colSpan={10} className="text-center py-10 text-xs text-on-surface-variant bg-surface-container-low/50 rounded-xl border border-outline-variant/30 font-medium italic">
                   Nenhum Documento de Formalização da Demanda (DFD) encontrado para os filtros selecionados.
                 </td>
               </tr>
@@ -1134,6 +1099,9 @@ export default function DFDs({
                 const cellBgClass = idx % 2 === 0
                   ? 'bg-surface-container-low/75 border-outline-variant/20'
                   : 'bg-surface-container/30 border-outline-variant/20';
+                const annualDetails = getDfdAnnualizedDetailsLocal(dfd);
+                const situacaoPncp: SituacaoPNCP = dfd.Situacao_PNCP || 'Aguardando Análise';
+                const isDevolvido = situacaoPncp === 'Devolvido';
 
                 return (
                   <React.Fragment key={dfd.id}>
@@ -1177,31 +1145,32 @@ export default function DFDs({
                         </button>
                       </td>
                       <td className={`px-5 py-4 text-xs font-semibold text-on-surface font-mono ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
-                        <div>{formatCurrency(dfd.Valor_Estimado)}</div>
+                        <div className={isDevolvido ? 'line-through text-on-surface-variant/40' : ''}>{formatCurrency(dfd.Valor_Estimado)}</div>
+                        {(dfd.Vigencia_Contratacao_Meses && dfd.Vigencia_Contratacao_Meses !== 12) && (
+                          <div className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold font-sans mt-0.5" title={`Valor cadastrado no PCA para vigência total de ${dfd.Vigencia_Contratacao_Meses} meses. Base de 1 ano (12m): ${formatCurrency(annualDetails.annualBaseValue)}`}>
+                            Global {dfd.Vigencia_Contratacao_Meses}m (12m: {formatCurrency(annualDetails.annualBaseValue)})
+                          </div>
+                        )}
                         <div className="text-[9px] text-on-surface-variant font-normal mt-0.5 space-x-1.5 flex items-center">
                           <span className="text-blue-500 font-medium">C: {formatCurrency(dfd.Valor_Custeio !== undefined ? dfd.Valor_Custeio : dfd.Valor_Estimado)}</span>
                           <span className="text-purple-500 font-bold">I: {formatCurrency(dfd.Valor_Investimento || 0)}</span>
                         </div>
                       </td>
-                      <td className={`px-5 py-4 text-xs font-mono ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
-                        {dfd.Status_DFD === 'Concluído' ? (
-                          <div title="Processos já concluídos não trazem valor anualizado no DFD pois são contabilizados pelo valor da própria licitação/contrato na aba de Orçamento Atual.">
+                      <td className={`px-5 py-4 text-xs font-mono ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={annualDetails.tooltipReason}>
+                        {dfd.Status_DFD === 'Concluído' || isDevolvido ? (
+                          <div>
                             <div className="text-on-surface-variant/50 font-bold">—</div>
-                            <div className="text-[9px] text-on-surface-variant/70 font-sans">Contabilizado na Licitação</div>
+                            <div className={`text-[9px] font-sans mt-0.5 ${isDevolvido ? 'text-rose-500/80 font-medium' : 'text-on-surface-variant/70'}`}>
+                              {annualDetails.shortReason}
+                            </div>
                           </div>
                         ) : (
                           <div>
                             <div className={`font-extrabold ${dfd.Contabilizar_Orcamento === false ? 'text-on-surface-variant/40 line-through' : 'text-teal-600 dark:text-teal-400'}`}>
-                              {formatCurrency(getDfdAnnualizedValueLocal(dfd))}
+                              {formatCurrency(annualDetails.value)}
                             </div>
-                            <div className="text-[9px] text-on-surface-variant font-normal font-sans mt-0.5 flex items-center gap-1">
-                              <span className="font-medium">{dfd.Periodicidade_Pagamento || 'Mensal'}</span>
-                              {dfd.Data_conclusao_estimada && (
-                                <>
-                                  <span>•</span>
-                                  <span className="font-mono">{formatDate(dfd.Data_conclusao_estimada)}</span>
-                                </>
-                              )}
+                            <div className="text-[9px] text-on-surface-variant/85 font-medium font-sans mt-0.5 leading-tight">
+                              {annualDetails.shortReason}
                             </div>
                           </div>
                         )}
@@ -1218,18 +1187,64 @@ export default function DFDs({
                         </span>
                       </td>
                       <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
-                        <button
-                          onClick={() => onToggleBudget(dfd.id)}
-                          disabled={userRole === 'Visualizador'}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium leading-none ${
-                            dfd.Contabilizar_Orcamento
-                              ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
-                              : 'bg-rose-500/10 border-rose-500/30 text-rose-300 line-through'
-                          } ${userRole !== 'Visualizador' ? 'hover:brightness-125 cursor-pointer' : 'opacity-85'}`}
-                          title={dfd.Contabilizar_Orcamento ? "Incluído no Orçamento Anual. Clique para remover." : "Não contabilizado. Clique para incluir."}
-                        >
-                          {dfd.Contabilizar_Orcamento ? 'Ativo' : 'Não contabilizado'}
-                        </button>
+                        {userRole !== 'Visualizador' && userRole !== 'Auditor' ? (
+                          <select
+                            value={situacaoPncp}
+                            onChange={(e) => {
+                              const nextSit = e.target.value as SituacaoPNCP;
+                              onEditDFD({
+                                ...dfd,
+                                Situacao_PNCP: nextSit,
+                                updatedAt: new Date(currentLocalTime).toISOString(),
+                              });
+                            }}
+                            className={`px-2 py-1 rounded-lg border text-[10px] font-bold outline-none cursor-pointer transition-colors ${
+                              situacaoPncp === 'Vinculado a Contratação'
+                                ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-600 dark:text-emerald-300'
+                                : situacaoPncp === 'Devolvido'
+                                ? 'bg-rose-500/15 border-rose-500/35 text-rose-600 dark:text-rose-300'
+                                : 'bg-amber-500/15 border-amber-500/35 text-amber-600 dark:text-amber-300'
+                            }`}
+                            title="Alterar Situação PNCP deste DFD"
+                          >
+                            <option value="Aguardando Análise" className="bg-surface text-on-surface">Aguardando Análise</option>
+                            <option value="Vinculado a Contratação" className="bg-surface text-on-surface">Vinculado a Contratação</option>
+                            <option value="Devolvido" className="bg-surface text-on-surface">Devolvido</option>
+                          </select>
+                        ) : (
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg border text-[10px] font-bold leading-none ${
+                            situacaoPncp === 'Vinculado a Contratação'
+                              ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-600 dark:text-emerald-300'
+                              : situacaoPncp === 'Devolvido'
+                              ? 'bg-rose-500/15 border-rose-500/35 text-rose-600 dark:text-rose-300'
+                              : 'bg-amber-500/15 border-amber-500/35 text-amber-600 dark:text-amber-300'
+                          }`}>
+                            {situacaoPncp}
+                          </span>
+                        )}
+                      </td>
+                      <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        {isDevolvido ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-400 text-[10px] font-medium leading-none line-through opacity-80"
+                            title="DFDs com Situação PNCP 'Devolvido' não são contabilizados no orçamento."
+                          >
+                            Devolvido
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => onToggleBudget(dfd.id)}
+                            disabled={userRole === 'Visualizador'}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium leading-none ${
+                              dfd.Contabilizar_Orcamento
+                                ? 'bg-teal-500/10 border-teal-500/30 text-teal-300'
+                                : 'bg-rose-500/10 border-rose-500/30 text-rose-300 line-through'
+                            } ${userRole !== 'Visualizador' ? 'hover:brightness-125 cursor-pointer' : 'opacity-85'}`}
+                            title={dfd.Contabilizar_Orcamento ? "Incluído no Orçamento Anual. Clique para remover." : "Não contabilizado. Clique para incluir."}
+                          >
+                            {dfd.Contabilizar_Orcamento ? 'Ativo' : 'Não contabilizado'}
+                          </button>
+                        )}
                       </td>
                       <td className={`px-5 py-4 text-xs text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         {dfd.Planejamento_Vinculado ? (
@@ -1305,6 +1320,8 @@ export default function DFDs({
                                 Ano_PCA: dfd.Ano_PCA,
                                 Descricao_Objeto: dfd.Descricao_Objeto,
                                 Valor_Estimado: dfd.Valor_Estimado,
+                                Vigencia_Contratacao_Meses: dfd.Vigencia_Contratacao_Meses || 12,
+                                Situacao_PNCP: dfd.Situacao_PNCP || 'Aguardando Análise',
                                 Status_DFD: dfd.Status_DFD,
                                 UASG: dfd.UASG,
                                 Planejamento_Vinculado: dfd.Planejamento_Vinculado || '',
@@ -1345,7 +1362,7 @@ export default function DFDs({
                     </tr>
                     {expandedDfdId === dfd.id && (
                       <tr>
-                        <td colSpan={9} className="px-5 py-4 bg-surface-container/20 border-x border-b border-outline-variant/20">
+                        <td colSpan={10} className="px-5 py-4 bg-surface-container/20 border-x border-b border-outline-variant/20">
                           <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
@@ -1577,7 +1594,7 @@ export default function DFDs({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-semibold text-on-surface-variant uppercase">Valor Estimado (R$) <span className="text-rose-400">*</span></label>
+                  <label className="block text-xs font-semibold text-on-surface-variant uppercase">Valor Estimado no PCA (R$) <span className="text-rose-400">*</span></label>
                   <CurrencyInput
                     name="Valor_Estimado"
                     required
@@ -1586,6 +1603,63 @@ export default function DFDs({
                     value={formData.Valor_Estimado}
                     onChange={(val) => setFormData(prev => ({ ...prev, Valor_Estimado: val }))}
                   />
+                </div>
+
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="block text-xs font-semibold text-on-surface-variant uppercase" title="Informe quantos meses de vigência o valor estimado do PCA cobre (ex: 12 meses para 1 ano, 60 meses para 5 anos)">
+                    Vigência da Contratação (Meses)
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      name="Vigencia_Contratacao_Meses"
+                      min={1}
+                      max={120}
+                      value={formData.Vigencia_Contratacao_Meses ?? 12}
+                      onChange={handleFormChange}
+                      className="w-20 bg-surface-container-low border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary font-mono font-bold"
+                    />
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {[12, 24, 36, 48, 60].map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, Vigencia_Contratacao_Meses: m }))}
+                          className={`px-2 py-1 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer ${
+                            (formData.Vigencia_Contratacao_Meses || 12) === m
+                              ? 'bg-primary text-on-primary border-primary'
+                              : 'bg-surface-container-low border-outline-variant text-on-surface-variant hover:border-primary/40'
+                          }`}
+                        >
+                          {m}m
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-[9.5px] text-on-surface-variant/80 leading-tight">
+                    Se no Compras.gov constar o valor global plurianual (ex: 60 meses), informe aqui para que o sistema calcule a cota de 1 ano e anualize o 1º exercício.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2 sm:col-span-1">
+                  <label className="block text-xs font-semibold text-on-surface-variant uppercase">Situação PNCP <span className="text-rose-400">*</span></label>
+                  <select
+                    name="Situacao_PNCP"
+                    value={formData.Situacao_PNCP || 'Aguardando Análise'}
+                    onChange={handleFormChange}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded px-3 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary font-semibold"
+                  >
+                    <option value="Aguardando Análise">Aguardando Análise</option>
+                    <option value="Vinculado a Contratação">Vinculado a Contratação</option>
+                    <option value="Devolvido">Devolvido</option>
+                  </select>
+                  {formData.Situacao_PNCP === 'Devolvido' && (
+                    <p className="text-[9.5px] text-rose-500 font-medium leading-tight">
+                      DFDs marcados como "Devolvido" não são contabilizados nos totais nem aparecem na aba de Orçamento Atual.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5 col-span-2 sm:col-span-1">
@@ -1685,6 +1759,51 @@ export default function DFDs({
                   </select>
                 </div>
               </div>
+
+              {/* Live Preview of Annualized Budget Value */}
+              {(() => {
+                const previewYear = parseInt(formData.Ano_PCA || currentYear, 10) || 2026;
+                const previewDetails = calculateDfdAnnualizedDetails({
+                  id: 'preview',
+                  Num_DFD: formData.Num_DFD || '',
+                  Ano_PCA: formData.Ano_PCA || currentYear,
+                  Descricao_Objeto: formData.Descricao_Objeto || '',
+                  Valor_Estimado: Number(formData.Valor_Estimado) || 0,
+                  Vigencia_Contratacao_Meses: Number(formData.Vigencia_Contratacao_Meses) || 12,
+                  Situacao_PNCP: (formData.Situacao_PNCP as SituacaoPNCP) || 'Aguardando Análise',
+                  Status_DFD: (formData.Status_DFD as StatusDFD) || 'Não iniciado',
+                  UASG: formData.UASG || '',
+                  Data_conclusao_estimada: formData.Data_conclusao_estimada || '',
+                  Periodicidade_Pagamento: (formData.Periodicidade_Pagamento as PeriodicidadePagamento) || 'Mensal',
+                  Valor_Anual_Proporcional: 0,
+                  Contabilizar_Orcamento: formData.Contabilizar_Orcamento !== false,
+                  updatedAt: currentLocalTime,
+                }, previewYear);
+
+                return (
+                  <div className="bg-teal-500/10 border border-teal-500/30 rounded-lg p-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-teal-700 dark:text-teal-300 uppercase tracking-wider text-[10px]">
+                        Prévia do Valor Anualizado p/ Orçamento ({previewYear})
+                      </span>
+                      <span className="font-extrabold font-mono text-sm text-teal-600 dark:text-teal-400">
+                        {formData.Status_DFD === 'Concluído' || formData.Situacao_PNCP === 'Devolvido'
+                          ? '—'
+                          : formatCurrency(previewDetails.value)}
+                      </span>
+                    </div>
+                    {previewDetails.vigenciaMeses !== 12 && (
+                      <div className="flex items-center justify-between text-[10.5px] text-on-surface-variant">
+                        <span>Base equivalente a 1 ano (12 meses de {previewDetails.vigenciaMeses}m):</span>
+                        <strong className="font-mono text-on-surface">{formatCurrency(previewDetails.annualBaseValue)}</strong>
+                      </div>
+                    )}
+                    <div className="text-[10px] text-on-surface-variant/90 font-medium">
+                      Motivo exibido: <strong className="text-on-surface">{previewDetails.shortReason}</strong>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Contabilizar checkbox */}
               <div className="bg-surface-container-high/40 border border-outline-variant/60 rounded p-3 flex items-start gap-3">

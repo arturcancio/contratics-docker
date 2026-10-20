@@ -1260,21 +1260,23 @@ export default function App() {
   // State mutation handlers on Firestore with local state fallbacks
   // DFD handlers
   const handleAddDFD = async (newDfd: DFD) => {
+    const cleanDfd = JSON.parse(JSON.stringify(newDfd));
     setDfds(prev => {
       if (prev.some(d => d.id === newDfd.id)) return prev;
       return [...prev, newDfd];
     });
     try {
-      await setDoc(doc(db, 'dfds', newDfd.id), newDfd);
+      await setDoc(doc(db, 'dfds', cleanDfd.id), cleanDfd);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `dfds/${newDfd.id}`);
     }
   };
 
   const handleEditDFD = async (updatedDfd: DFD) => {
+    const cleanDfd = JSON.parse(JSON.stringify(updatedDfd));
     setDfds(prev => prev.map(d => d.id === updatedDfd.id ? updatedDfd : d));
     try {
-      await setDoc(doc(db, 'dfds', updatedDfd.id), updatedDfd);
+      await setDoc(doc(db, 'dfds', cleanDfd.id), cleanDfd);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `dfds/${updatedDfd.id}`);
     }

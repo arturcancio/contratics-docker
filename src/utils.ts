@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Contrato, StatusContrato, OrdemServico } from './types';
+import { Contrato, StatusContrato, OrdemServico, DFD, PeriodicidadePagamento } from './types';
 
 // Format currency in Pt-BR (R$ 1.250.000,00)
 export function formatCurrency(value: number): string {
@@ -404,6 +404,192 @@ export function sortAndGroupItems<T extends { Grupo_Lote?: string; Numero_Item: 
       groupIndex,
     };
   });
+}
+
+export interface DfdAnnualizedDetails {
+  value: number;
+  annualBaseValue: number;
+  vigenciaMeses: number;
+  shortReason: string;
+  tooltipReason: string;
+}
+
+/**
+ * Calcula o valor anualizado de um DFD para um determinado exercício orçamentário,
+ * considerando:
+ * - Status_DFD === 'Concluído' (não contabilizado no DFD, pois consta na licitação/contrato)
+ * - Situacao_PNCP === 'Devolvido' (não contabilizado)
+ * - Vigencia_Contratacao_Meses (ex: 60 meses no PCA -> divide para encontrar a base de 12 meses)
+ * - Periodicidade_Pagamento ('Mensal', 'Anual', 'Total') e Data_conclusao_estimada
+ */
+export function calculateDfdAnnualizedDetails(dfd: DFD, year: number): DfdAnnualizedDetails {
+  const yearStr = String(year);
+  const vigenciaMeses = Number(dfd.Vigencia_Contratacao_Meses) > 0 ? Number(dfd.Vigencia_Contratacao_Meses) : 12;
+  const baseValue = dfd.Valor_Customizado_Anual?.[yearStr] !== undefined && dfd.Valor_Customizado_Anual?.[yearStr] !== null
+    ? dfd.Valor_Customizado_Anual[yearStr]!
+    : (dfd.Valor_Customizado !== undefined && dfd.Valor_Customizado !== null ? dfd.Valor_Customizado : (Number(dfd.Valor_Estimado) || 0));
+
+  const periodicidade: PeriodicidadePagamento = dfd.Periodicidade_Pagamento || 'Mensal';
+  const annualBaseValue = (periodicidade !== 'Total' && vigenciaMeses !== 12)
+    ? baseValue * (12 / vigenciaMeses)
+    : baseValue;
+
+  if (dfd.Status_DFD === 'Concluído') {
+    return {
+      value: 0,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: 'Contabilizado na Licitação',
+      tooltipReason: 'Processo já concluído: contabilizado pelo valor da própria licitação/contrato na aba de Orçamento Atual.'
+    };
+  }
+
+  if (dfd.Situacao_PNCP === 'Devolvido') {
+    return {
+      value: 0,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: 'Devolvido (Não contabilizado)',
+      tooltipReason: 'DFD com Situação PNCP "Devolvido": não contabilizado nos totais nem no Orçamento Atual.'
+    };
+  }
+
+  const isContabilizado = dfd.Contabilizar_Orcamento_Anual?.[yearStr] !== undefined
+    ? dfd.Contabilizar_Orcamento_Anual[yearStr]
+    : (dfd.Contabilizar_Orcamento !== false);
+
+  if (isContabilizado === false) {
+    return {
+      value: 0,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: 'Desativado do Orçamento',
+      tooltipReason: 'DFD desmarcado para contabilização no orçamento deste exercício.'
+    };
+  }
+
+  let conclDate: Date | null = null;
+  const rawDate = dfd.Data_conclusao_estimada;
+  if (rawDate) {
+    const rdAny = rawDate as any;
+    if (typeof rawDate === 'object' && rawDate !== null) {
+      if ('toDate' in rdAny && typeof rdAny.toDate === 'function') {
+        conclDate = rdAny.toDate();
+      } else if (typeof rdAny.seconds === 'number') {
+        conclDate = new Date(rdAny.seconds * 1000);
+      } else if (rdAny instanceof Date) {
+        conclDate = rdAny;
+      }
+    } else if (typeof rawDate === 'string' && rawDate.trim() !== '') {
+      const stripped = rawDate.split('T')[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(stripped)) {
+        const [yr, mo, dy] = stripped.split('-').map(Number);
+        conclDate = new Date(Date.UTC(yr, mo - 1, dy));
+      } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(stripped)) {
+        const [dy, mo, yr] = stripped.split('/').map(Number);
+        conclDate = new Date(Date.UTC(yr, mo - 1, dy));
+      } else {
+        conclDate = new Date(rawDate);
+      }
+    }
+  }
+
+  const vigTag = vigenciaMeses !== 12
+    ? (vigenciaMeses % 12 === 0 ? `Vig. ${vigenciaMeses}m (1/${vigenciaMeses / 12})` : `Vig. ${vigenciaMeses}m`)
+    : '';
+
+  if (!conclDate || isNaN(conclDate.getTime())) {
+    return {
+      value: annualBaseValue,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: vigTag ? `${vigTag} • 12m (${periodicidade})` : `${periodicidade} • 100% (Sem data)`,
+      tooltipReason: vigTag
+        ? `Valor total da vigência (${vigenciaMeses} meses): ${formatCurrency(baseValue)} → Base equivalente a 1 ano (12 meses): ${formatCurrency(annualBaseValue)}.`
+        : `Valor integral considerado (sem data de conclusão informada): ${formatCurrency(annualBaseValue)}.`
+    };
+  }
+
+  const conclYear = conclDate.getUTCFullYear();
+  const formattedConcl = formatDate(dfd.Data_conclusao_estimada);
+  const ddmm = formattedConcl !== '—' ? formattedConcl.slice(0, 5) : '';
+
+  // 1. Ano de conclusão posterior ao exercício analisado
+  if (conclYear > year) {
+    return {
+      value: 0,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: `Início só em ${formattedConcl}`,
+      tooltipReason: `A data de conclusão/início estimada (${formattedConcl}) é posterior ao exercício de ${year}, portanto não há desembolso em ${year}.`
+    };
+  }
+
+  // 2. Pagamento Total (Único)
+  if (periodicidade === 'Total') {
+    if (conclYear === year) {
+      return {
+        value: baseValue,
+        annualBaseValue: baseValue,
+        vigenciaMeses,
+        shortReason: vigenciaMeses !== 12 ? `Pgto Único (${vigenciaMeses}m) • 100%` : `Pgto Único • 100% (${ddmm})`,
+        tooltipReason: `Pagamento Total (Único): desembolso integral de ${formatCurrency(baseValue)} na conclusão em ${formattedConcl}.`
+      };
+    } else {
+      return {
+        value: 0,
+        annualBaseValue: baseValue,
+        vigenciaMeses,
+        shortReason: `Pgto Único em ${conclYear}`,
+        tooltipReason: `Pagamento único previsto para o exercício de ${conclYear} (${formattedConcl}).`
+      };
+    }
+  }
+
+  // 3. Pagamento Anual
+  if (periodicidade === 'Anual') {
+    return {
+      value: annualBaseValue,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: vigTag ? `${vigTag} • Cota 1 ano (Anual)` : `Pgto Anual • 100% (1 ano)`,
+      tooltipReason: vigTag
+        ? `Valor total PCA (${vigenciaMeses} meses): ${formatCurrency(baseValue)} → Cota de 1 ano (12 meses): ${formatCurrency(annualBaseValue)} (pagamento anual integral sem corte pro-rata).`
+        : `Pagamento Anual: desembolso integral de 1 ano de contrato (${formatCurrency(annualBaseValue)}) no exercício.`
+    };
+  }
+
+  // 4. Pagamento Mensal
+  if (conclYear < year) {
+    return {
+      value: annualBaseValue,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: vigTag ? `${vigTag} • 12/12m no ano` : `Mensal • 12/12 meses`,
+      tooltipReason: vigTag
+        ? `Valor total PCA (${vigenciaMeses} meses): ${formatCurrency(baseValue)} → Base de 1 ano (12 meses em vigor): ${formatCurrency(annualBaseValue)}.`
+        : `Pagamento Mensal em vigor durante os 12 meses do exercício: ${formatCurrency(annualBaseValue)}.`
+    };
+  } else {
+    const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
+    const activeMonths = getFractionalMonths(conclDate, yearEnd);
+    const val = annualBaseValue * (activeMonths / 12);
+    const monthsLabel = Math.abs(activeMonths - Math.round(activeMonths)) < 0.05
+      ? `${Math.round(activeMonths)}m`
+      : `${activeMonths.toFixed(1).replace('.', ',')}m`;
+
+    return {
+      value: val,
+      annualBaseValue,
+      vigenciaMeses,
+      shortReason: vigTag
+        ? `${vigTag} • Prop. ${monthsLabel}/12m (${ddmm})`
+        : `Mensal • Prop. ${monthsLabel}/12m (início ${ddmm})`,
+      tooltipReason: vigTag
+        ? `Valor total PCA (${vigenciaMeses} meses): ${formatCurrency(baseValue)} → Base 1 ano (12m): ${formatCurrency(annualBaseValue)} (${formatCurrency(annualBaseValue / 12)}/mês) → Proporcional a ${monthsLabel} (de ${formattedConcl} a 31/12/${year}): ${formatCurrency(val)}.`
+        : `Pagamento Mensal (Base 12m: ${formatCurrency(annualBaseValue)}) → Proporcional a ${monthsLabel} (de ${formattedConcl} a 31/12/${year}): ${formatCurrency(val)}.`
+    };
+  }
 }
 
 

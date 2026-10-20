@@ -22,6 +22,7 @@ export interface Fornecedor {
 }
 
 export type StatusDFD = 'Concluído' | 'Iniciado' | 'Não iniciado';
+export type SituacaoPNCP = 'Aguardando Análise' | 'Vinculado a Contratação' | 'Devolvido';
 export type PeriodicidadePagamento = 'Mensal' | 'Anual' | 'Total';
 
 export interface DFD {
@@ -30,6 +31,8 @@ export interface DFD {
   Ano_PCA: string;
   Descricao_Objeto: string;
   Valor_Estimado: number;
+  Vigencia_Contratacao_Meses?: number;
+  Situacao_PNCP?: SituacaoPNCP;
   Status_DFD: StatusDFD;
   UASG: string;
   Planejamento_Vinculado?: string; // ID of Planejamento (SEI_Processo as lookup)
