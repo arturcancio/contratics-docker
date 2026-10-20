@@ -167,6 +167,11 @@ export default function DFDs({
 
   const sortedDFDs = [...filteredDFDs].sort((a, b) => {
     if (!sortKey) return 0;
+    if (sortKey === 'valor_anualizado') {
+      const valA = a.Status_DFD === 'Concluído' ? -1 : getDfdAnnualizedValueLocal(a);
+      const valB = b.Status_DFD === 'Concluído' ? -1 : getDfdAnnualizedValueLocal(b);
+      return sortDirection === 'asc' ? valA - valB : valB - valA;
+    }
     let valA = a[sortKey as keyof DFD];
     let valB = b[sortKey as keyof DFD];
 
@@ -287,30 +292,18 @@ export default function DFDs({
     }
   };
 
-  const getDfdAnnualizedValueLocal = (dfd: DFD, year: number): number => {
-    if (dfd.Contabilizar_Orcamento === false) return 0;
-    
-    const isContratacaoDireta = 
-      dfd.Descricao_Objeto?.toLowerCase().includes('inexigibilidade') ||
-      dfd.Descricao_Objeto?.toLowerCase().includes('dispensa') ||
-      dfd.Descricao_Objeto?.toLowerCase().includes('direta');
+  function getDfdAnnualizedValueLocal(dfd: DFD, year?: number): number {
+    // Processos já concluídos não trazem valor anualizado no DFD (serão contabilizados na licitação/contrato)
+    if (dfd.Status_DFD === 'Concluído') return 0;
 
-    const isOneOff = isContratacaoDireta ||
-                     dfd.Periodicidade_Pagamento === 'Total' ||
-                     (dfd.Valor_Investimento && dfd.Valor_Investimento > 0 && (!dfd.Valor_Custeio || dfd.Valor_Custeio === 0)) ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('aquisição') || 
-                     dfd.Descricao_Objeto?.toLowerCase().includes('compra') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('inscrição') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('treinamento') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('capacitação') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('evento') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('conferência') ||
-                     dfd.Descricao_Objeto?.toLowerCase().includes('kubecon');
+    const effectiveYear = year || parseInt(selectedYear === 'Todos' ? (dfd.Ano_PCA || currentYear) : selectedYear, 10) || 2026;
+    const yearStr = String(effectiveYear);
+    const isContabilizado = dfd.Contabilizar_Orcamento_Anual?.[yearStr] !== undefined
+      ? dfd.Contabilizar_Orcamento_Anual[yearStr]
+      : (dfd.Contabilizar_Orcamento !== false);
 
-    if (isOneOff) {
-      return dfd.Valor_Estimado;
-    }
-    
+    if (isContabilizado === false) return 0;
+
     let conclDate: Date | null = null;
     const rawDate = dfd.Data_conclusao_estimada;
     if (rawDate) {
@@ -337,37 +330,44 @@ export default function DFDs({
       }
     }
 
-    if (!conclDate || isNaN(conclDate.getTime())) return dfd.Valor_Estimado;
+    const baseValue = dfd.Valor_Customizado_Anual?.[yearStr] !== undefined && dfd.Valor_Customizado_Anual?.[yearStr] !== null
+      ? dfd.Valor_Customizado_Anual[yearStr]!
+      : (dfd.Valor_Customizado !== undefined && dfd.Valor_Customizado !== null ? dfd.Valor_Customizado : dfd.Valor_Estimado);
+
+    if (!conclDate || isNaN(conclDate.getTime())) return baseValue;
 
     const conclYear = conclDate.getUTCFullYear();
     
-    // 1. Se o ano da conclusão/início for posterior ao ano analisado, não há desembolso ainda
-    if (conclYear > year) {
+    // 1. Se o ano de conclusão/início estimado for posterior ao ano analisado, não há desembolso ainda
+    if (conclYear > effectiveYear) {
       return 0;
     }
 
     const periodicidade: PeriodicidadePagamento = dfd.Periodicidade_Pagamento || 'Mensal';
 
-    // 2. Pagamento Total (Único / pontual): pago integralmente no ano de conclusão
+    // 2. Pagamento Total (Único / pontual): pago de uma única vez no ano de conclusão
     if (periodicidade === 'Total') {
-      return conclYear === year ? dfd.Valor_Estimado : 0;
+      return conclYear === effectiveYear ? baseValue : 0;
     }
 
-    // 3. Pagamento Anual: desembolso integral de 1 ano completo sem corte pro-rata
+    // 3. Pagamento Anual: o desembolso cobre o ciclo de 1 ano completo a partir da data de início/conclusão,
+    // demandando o montante integral de 1 ano naquele exercício sem corte proporcional (pro-rata) de meses até 31 de dezembro.
     if (periodicidade === 'Anual') {
-      return dfd.Valor_Estimado;
+      return baseValue;
     }
 
     // 4. Pagamento Mensal:
-    if (conclYear < year) {
-      return dfd.Valor_Estimado;
+    if (conclYear < effectiveYear) {
+      // Em exercícios posteriores, o serviço já está em vigor durante o ano todo (12 meses)
+      return baseValue;
     } else {
-      // conclYear === year: proporcional dos meses restantes até 31 de dezembro
-      const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
+      // conclYear === effectiveYear (exercício em que inicia/conclui):
+      // Cálculo proporcional (pro-rata) a partir da data de conclusão estimada até 31 de dezembro
+      const yearEnd = new Date(Date.UTC(effectiveYear, 11, 31, 23, 59, 59));
       const activeMonths = getFractionalMonths(conclDate, yearEnd);
-      return dfd.Valor_Estimado * (activeMonths / 12);
+      return baseValue * (activeMonths / 12);
     }
-  };
+  }
 
   const calculateValorGeralAnualizado = () => {
     const targetYear = selectedYear === 'Todos' ? currentYear : selectedYear;
@@ -627,13 +627,14 @@ export default function DFDs({
                 <th style="width: 12%">Nº DFD / Ano</th>
                 <th style="width: 32%">Objeto de TIC</th>
                 <th style="width: 15%" class="text-right">Valor Estimado (R$)</th>
-                <th style="width: 15%" class="text-right">Valor Proporcional (R$)</th>
+                <th style="width: 15%" class="text-right">Valor Anualizado (R$)</th>
                 <th style="width: 11%"><div style="text-align: center;">Status</div></th>
               </tr>
             </thead>
             <tbody>
               ${filteredDFDs.map(dfd => {
                 const isBudgetActive = dfd.Contabilizar_Orcamento !== false;
+                const isConcluido = dfd.Status_DFD === 'Concluído';
                 return `
                   <tr>
                     <td>
@@ -651,10 +652,15 @@ export default function DFDs({
                       R$ ${(dfd.Valor_Estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td class="font-mono text-right">
-                      <div class="${isBudgetActive ? 'budget-active' : 'budget-ignored'}" style="font-weight: 700;">
-                        R$ ${getDfdAnnualizedValueLocal(dfd, targetYearNum).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <span style="font-size: 9px; color: #64748b;">${dfd.Periodicidade_Pagamento || 'Único'}</span>
+                      ${isConcluido ? `
+                        <div style="color: #64748b; font-weight: 700;">—</div>
+                        <span style="font-size: 9px; color: #64748b;">Contabilizado na Licitação</span>
+                      ` : `
+                        <div class="${isBudgetActive ? 'budget-active' : 'budget-ignored'}" style="font-weight: 700;">
+                          R$ ${getDfdAnnualizedValueLocal(dfd, targetYearNum).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <span style="font-size: 9px; color: #64748b;">${dfd.Periodicidade_Pagamento || 'Mensal'}</span>
+                      `}
                     </td>
                     <td>
                       <div style="display: flex; justify-content: center;">
@@ -857,8 +863,9 @@ export default function DFDs({
           </p>
         </div>
         
-        <div className="flex items-center gap-2.5" data-tour="dfd-actions">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-start sm:justify-end shrink-0" data-tour="dfd-actions">
           <button
+            type="button"
             onClick={handleOpenExportExcelModal}
             disabled={isExportingExcel}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl h-[38px] transition-all cursor-pointer shadow-sm shadow-emerald-600/20 disabled:opacity-50"
@@ -869,6 +876,7 @@ export default function DFDs({
           </button>
           
           <button
+            type="button"
             onClick={exportDFDsToPDF}
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-on-primary text-xs font-bold rounded-xl h-[38px] transition-all cursor-pointer shadow-sm shadow-primary/20"
             title="Exportar dados do PCA / DFDs para PDF"
@@ -878,6 +886,7 @@ export default function DFDs({
           </button>
           
           <button
+            type="button"
             onClick={() => {
               setEditingDfd(null);
               setFormData({
@@ -1066,6 +1075,17 @@ export default function DFDs({
                 </div>
               </th>
               <th 
+                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 cursor-pointer hover:text-primary transition-colors select-none"
+                onClick={() => handleSort('valor_anualizado')}
+              >
+                <div className="flex items-center gap-1">
+                  <span>Valor Anualizado</span>
+                  {sortKey === 'valor_anualizado' && (
+                    sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 text-primary" /> : <ChevronDown className="w-3 h-3 text-primary" />
+                  )}
+                </div>
+              </th>
+              <th 
                 className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
                 onClick={() => handleSort('Status_DFD')}
               >
@@ -1104,7 +1124,7 @@ export default function DFDs({
           <tbody>
             {paginatedDFDs.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-10 text-xs text-on-surface-variant bg-surface-container-low/50 rounded-xl border border-outline-variant/30 font-medium italic">
+                <td colSpan={9} className="text-center py-10 text-xs text-on-surface-variant bg-surface-container-low/50 rounded-xl border border-outline-variant/30 font-medium italic">
                   Nenhum Documento de Formalização da Demanda (DFD) encontrado para os filtros selecionados.
                 </td>
               </tr>
@@ -1162,6 +1182,29 @@ export default function DFDs({
                           <span className="text-blue-500 font-medium">C: {formatCurrency(dfd.Valor_Custeio !== undefined ? dfd.Valor_Custeio : dfd.Valor_Estimado)}</span>
                           <span className="text-purple-500 font-bold">I: {formatCurrency(dfd.Valor_Investimento || 0)}</span>
                         </div>
+                      </td>
+                      <td className={`px-5 py-4 text-xs font-mono ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        {dfd.Status_DFD === 'Concluído' ? (
+                          <div title="Processos já concluídos não trazem valor anualizado no DFD pois são contabilizados pelo valor da própria licitação/contrato na aba de Orçamento Atual.">
+                            <div className="text-on-surface-variant/50 font-bold">—</div>
+                            <div className="text-[9px] text-on-surface-variant/70 font-sans">Contabilizado na Licitação</div>
+                          </div>
+                        ) : (
+                          <div>
+                            <div className={`font-extrabold ${dfd.Contabilizar_Orcamento === false ? 'text-on-surface-variant/40 line-through' : 'text-teal-600 dark:text-teal-400'}`}>
+                              {formatCurrency(getDfdAnnualizedValueLocal(dfd))}
+                            </div>
+                            <div className="text-[9px] text-on-surface-variant font-normal font-sans mt-0.5 flex items-center gap-1">
+                              <span className="font-medium">{dfd.Periodicidade_Pagamento || 'Mensal'}</span>
+                              {dfd.Data_conclusao_estimada && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-mono">{formatDate(dfd.Data_conclusao_estimada)}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </td>
                       <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium leading-none ${
@@ -1302,7 +1345,7 @@ export default function DFDs({
                     </tr>
                     {expandedDfdId === dfd.id && (
                       <tr>
-                        <td colSpan={8} className="px-5 py-4 bg-surface-container/20 border-x border-b border-outline-variant/20">
+                        <td colSpan={9} className="px-5 py-4 bg-surface-container/20 border-x border-b border-outline-variant/20">
                           <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">

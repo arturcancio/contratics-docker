@@ -182,18 +182,23 @@ export async function exportPCAtoExcel(params: {
     row.height = 26;
 
     const valEstimado = Number(dfd.Valor_Estimado) || 0;
-    const valAnualizado = getDfdAnnualizedValue(dfd, targetYearNum);
+    const isConcluido = dfd.Status_DFD === 'Concluído';
+    const valAnualizado = isConcluido ? 0 : getDfdAnnualizedValue(dfd, targetYearNum);
 
     const isDeactivated = dfd.Contabilizar_Orcamento === false;
     if (!isDeactivated) {
       totalEstimado += valEstimado;
-      totalAnualizado += valAnualizado;
+      if (!isConcluido) {
+        totalAnualizado += valAnualizado;
+      }
     }
 
     // Determine observation
     let obs = 'Mantido';
     if (isDeactivated) {
       obs = 'Solicitada devolução para exclusão / Desativado';
+    } else if (isConcluido) {
+      obs = 'Concluído (Contabilizado na Licitação)';
     } else if (dfd.isBudgetOnlyItem) {
       obs = 'DFD Incluído';
     } else if (dfd.Ano_PCA && dfd.Ano_PCA !== targetYear) {
@@ -235,10 +240,16 @@ export async function exportPCAtoExcel(params: {
 
     // Col G: Valor Anualizado
     const cellG = row.getCell(7);
-    cellG.value = isDeactivated ? 0 : valAnualizado;
-    cellG.numFmt = '"R$"\\ #,##0.00';
-    cellG.font = { name: 'Calibri', size: 9, bold: true, color: { argb: isDeactivated ? 'FF888888' : 'FF000000' } };
-    cellG.alignment = { horizontal: 'right', vertical: 'middle' };
+    if (isConcluido) {
+      cellG.value = '-';
+      cellG.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF666666' } };
+      cellG.alignment = { horizontal: 'center', vertical: 'middle' };
+    } else {
+      cellG.value = isDeactivated ? 0 : valAnualizado;
+      cellG.numFmt = '"R$"\\ #,##0.00';
+      cellG.font = { name: 'Calibri', size: 9, bold: true, color: { argb: isDeactivated ? 'FF888888' : 'FF000000' } };
+      cellG.alignment = { horizontal: 'right', vertical: 'middle' };
+    }
     cellG.border = borderThin;
 
     // Col H: Nº DFD
