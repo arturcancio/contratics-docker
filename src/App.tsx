@@ -84,7 +84,8 @@ import {
   DEFAULT_SEI_UNIT_LANE_RULES,
   normalizeSeiProtocol,
   RawSeiProcessScrapeResult,
-  UnitLaneMappingRule
+  UnitLaneMappingRule,
+  repairMojibakeAndBrokenChars
 } from './services/seiSyncService';
 import { ReUICard } from './components/ReUI';
 import { CopyButton, CopyableText } from './components/CopyButton';
@@ -2191,6 +2192,155 @@ export default function App() {
       window.removeEventListener('message', handleMessage);
     };
   }, [planejamentos, tarefas, historicoPlanejamentos, contratos, pagamentos, historicosContratuais, seiSnapshots]);
+
+  // Migração / Reparo Automático: Converte processos já lidos no formato antigo (sem Gateways, com despachos avulsos ou com caracteres "")
+  // para o novo padrão de Marcos Oficiais da IN SGD/ME nº 94/2022 + Gateways BPMN 2.0 (✕) + Textos UTF-8 limpos
+  const in94AutoUpgradeRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    if (planejamentos.length === 0 && tarefas.length === 0) return;
+
+    const plansNeedingUpgrade = planejamentos.filter(p => {
+      if (in94AutoUpgradeRef.current.has(p.id)) return false;
+      const pTasks = tarefas.filter(
+        t => t.ProcessoPlanejamento === p.id || t.ProcessoPlanejamento === p.SEI_Processo || t.Processo_SEI === p.SEI_Processo
+      );
+      const hasOldSeiTasks = pTasks.some(
+        t =>
+          t.id.startsWith('tar-sei-') ||
+          t.Tarefa.includes('\uFFFD') ||
+          /^(Despacho|Análise e Tramitação|Ofício)/i.test(t.Tarefa) ||
+          (t.subTarefas || []).some(st => st.titulo.includes('\uFFFD'))
+      );
+      const hasMissingGateways =
+        Boolean(p.seiSyncMetadata) &&
+        pTasks.length > 1 &&
+        !(p.bpmnNodes || []).some(n => n.type.startsWith('gateway'));
+
+      const hasBrokenPlanChars =
+        (p.Objeto || '').includes('\uFFFD') ||
+        (p.seiSyncMetadata?.ultimoAndamento || '').includes('\uFFFD');
+
+      return hasOldSeiTasks || hasMissingGateways || hasBrokenPlanChars;
+    });
+
+    const looseBrokenTasks = tarefas.filter(
+      t =>
+        (t.Tarefa || '').includes('\uFFFD') ||
+        (t.descricao || '').includes('\uFFFD') ||
+        (t.subTarefas || []).some(st => (st.titulo || '').includes('\uFFFD'))
+    );
+
+    if (plansNeedingUpgrade.length === 0 && looseBrokenTasks.length === 0) return;
+
+    let nextPlanejamentos = [...planejamentos];
+    let nextTarefas = [...tarefas];
+    let nextHistPlan = [...historicoPlanejamentos];
+
+    const updatedPlansToSave: Planejamento[] = [];
+    const tasksToSave: TarefaPlanejamento[] = [];
+    const tasksToDelete: string[] = [];
+
+    for (const plan of plansNeedingUpgrade) {
+      in94AutoUpgradeRef.current.add(plan.id);
+      if (plan.seiSyncMetadata) {
+        const meta = plan.seiSyncMetadata;
+        const currentPlanTasks = nextTarefas.filter(
+          t => t.ProcessoPlanejamento === plan.id || t.ProcessoPlanejamento === plan.SEI_Processo || t.Processo_SEI === plan.SEI_Processo
+        );
+        const syntheticScrape: RawSeiProcessScrapeResult = {
+          protocolo: plan.SEI_Processo,
+          unidadesAbertas: meta.unidadesAbertas && meta.unidadesAbertas.length > 0 ? meta.unidadesAbertas : [meta.unidadeAtual || 'GECTI'],
+          andamentos: meta.ultimoAndamento
+            ? [
+                {
+                  dataHora: meta.ultimaDataAndamento || new Date().toLocaleDateString('pt-BR'),
+                  unidade: meta.unidadeAtual || 'GECTI',
+                  descricao: meta.ultimoAndamento
+                }
+              ]
+            : [],
+          documentos: (meta.documentosArvore || []).map(d => ({
+            idSei: d.idSei,
+            tipo: d.tipo,
+            numero: d.numero,
+            data: d.data,
+            unidade: d.unidade,
+            assinado: d.assinado,
+            assinantes: d.assinantes
+          })),
+          processosRelacionados: (meta.processosRelacionados || []).map(r => ({
+            protocolo: r.protocolo,
+            tipo: r.tipo,
+            descricao: r.descricao,
+            ultimoAndamento: r.ultimoAndamento,
+            dataUltimoAndamento: r.dataUltimoAndamento,
+            unidadeAtual: r.unidadeAtual
+          })),
+          scrapedAt: meta.lastSyncAt || new Date().toISOString()
+        };
+
+        const mapped = buildBpmnFlowFromSeiScrape(plan, currentPlanTasks, nextHistPlan, syntheticScrape);
+        nextPlanejamentos = nextPlanejamentos.map(p => (p.id === plan.id ? mapped.updatedPlanejamento : p));
+        updatedPlansToSave.push(mapped.updatedPlanejamento);
+
+        const newIds = new Set(mapped.updatedTarefasForProcess.map(t => t.id));
+        currentPlanTasks.forEach(oldT => {
+          if (!newIds.has(oldT.id)) {
+            tasksToDelete.push(oldT.id);
+          }
+        });
+        nextTarefas = [
+          ...nextTarefas.filter(
+            t => t.ProcessoPlanejamento !== plan.id && t.ProcessoPlanejamento !== plan.SEI_Processo && t.Processo_SEI !== plan.SEI_Processo
+          ),
+          ...mapped.updatedTarefasForProcess
+        ];
+        mapped.updatedTarefasForProcess.forEach(t => tasksToSave.push(t));
+      } else {
+        const cleanedPlan: Planejamento = {
+          ...plan,
+          Objeto: repairMojibakeAndBrokenChars(plan.Objeto)
+        };
+        nextPlanejamentos = nextPlanejamentos.map(p => (p.id === plan.id ? cleanedPlan : p));
+        updatedPlansToSave.push(cleanedPlan);
+      }
+    }
+
+    // Repara quaisquer tarefas avulsas restantes que ainda contenham ""
+    nextTarefas = nextTarefas.map(t => {
+      if (
+        (t.Tarefa || '').includes('\uFFFD') ||
+        (t.descricao || '').includes('\uFFFD') ||
+        (t.subTarefas || []).some(st => (st.titulo || '').includes('\uFFFD'))
+      ) {
+        const fixed: TarefaPlanejamento = {
+          ...t,
+          Tarefa: repairMojibakeAndBrokenChars(t.Tarefa),
+          descricao: t.descricao ? repairMojibakeAndBrokenChars(t.descricao) : undefined,
+          subTarefas: (t.subTarefas || []).map(st => ({
+            ...st,
+            titulo: repairMojibakeAndBrokenChars(st.titulo)
+          }))
+        };
+        if (!tasksToSave.some(ts => ts.id === fixed.id)) {
+          tasksToSave.push(fixed);
+        }
+        return fixed;
+      }
+      return t;
+    });
+
+    setPlanejamentos(nextPlanejamentos);
+    setTarefas(nextTarefas);
+    safeLocalStorageSet('contratics_planejamentos', JSON.stringify(nextPlanejamentos));
+    safeLocalStorageSet('contratics_tarefas', JSON.stringify(nextTarefas));
+
+    const dbPromises: Promise<any>[] = [];
+    updatedPlansToSave.forEach(p => dbPromises.push(setDoc(doc(db, 'planejamentos', p.id), p).catch(() => {})));
+    tasksToDelete.forEach(tid => dbPromises.push(deleteDoc(doc(db, 'tarefas', tid)).catch(() => {})));
+    tasksToSave.forEach(t => dbPromises.push(setDoc(doc(db, 'tarefas', t.id), t).catch(() => {})));
+    Promise.all(dbPromises).catch(() => {});
+  }, [planejamentos, tarefas]);
 
   // Core metrics calculated aggregates for dashboard based on selectedYear
   const targetYearInt = parseInt(selectedYear) || 2026;

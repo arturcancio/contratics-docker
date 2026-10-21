@@ -14,6 +14,7 @@ import {
   BpmnNodeType, 
   StatusTarefa 
 } from '../types';
+import { repairMojibakeAndBrokenChars } from '../services/seiSyncService';
 import { 
   Workflow, 
   Plus, 
@@ -414,24 +415,32 @@ export default function BpmnFlowBoard({
     return PALETTE_ITEMS.filter(i => i.category === paletteTab);
   }, [paletteTab]);
 
-  // --- ROTEAMENTO ORTOGONAL (MANHATTAN) DE SETAS EM ÂNGULO RETO COM DESVIO DE OBSTÁCULOS ---
+  // --- ROTEAMENTO ORTOGONAL BPMN 2.0 (COM SUPORTE A GATEWAYS E CORREDORES VERTICAIS ENTRE COLUNAS) ---
+  // Evita que linhas fiquem "coladas" nas divisórias horizontais das raias
   const getOrthogonalPath = (
     p1: { x: number; y: number; w: number; h: number },
     p2: { x: number; y: number; w: number; h: number },
     conn: BpmnConnection,
-    allPos: Record<string, { x: number; y: number; w: number; h: number }>
+    allPos: Record<string, { x: number; y: number; w: number; h: number }>,
+    connIdx: number = 0
   ) => {
+    const fromNodeObj = bpmnNodes.find(n => n.id === conn.fromId);
+    const isFromGateway = Boolean(fromNodeObj && fromNodeObj.type.startsWith('gateway'));
+
+    // Offset escalonado determinístico para que múltiplas linhas nunca fiquem sobrepostas
+    const staggerOffsets = [0, -14, 14, -26, 26, -8, 8];
+    const channelOffset = staggerOffsets[connIdx % staggerOffsets.length];
+
     // Helper para verificar se um segmento de linha cruza qualquer outro nó
     const intersectsOtherNode = (x1: number, y1: number, x2: number, y2: number) => {
       for (const [id, node] of Object.entries(allPos)) {
         if (id === conn.fromId || id === conn.toId) continue;
-        const margin = 6;
+        const margin = 8;
         const left = node.x - node.w / 2 - margin;
         const right = node.x + node.w / 2 + margin;
         const top = node.y - node.h / 2 - margin;
         const bottom = node.y + node.h / 2 + margin;
 
-        // Segmento vertical
         if (Math.abs(x1 - x2) < 2) {
           const segX = x1;
           const minY = Math.min(y1, y2);
@@ -440,7 +449,6 @@ export default function BpmnFlowBoard({
             return true;
           }
         }
-        // Segmento horizontal
         if (Math.abs(y1 - y2) < 2) {
           const segY = y1;
           const minX = Math.min(x1, x2);
@@ -453,55 +461,63 @@ export default function BpmnFlowBoard({
       return false;
     };
 
-    const isCrossLane = Math.abs(p1.y - p2.y) > 80;
+    const isCrossLane = Math.abs(p1.y - p2.y) > 70;
+    const isForward = p2.x >= p1.x - 10;
 
     if (isCrossLane) {
-      // --- CONEXÃO ENTRE RAIAS DIFERENTES ---
       const isGoingDown = p2.y > p1.y;
 
-      if (isGoingDown) {
-        const p1Bottom = p1.y + p1.h / 2;
-        const p2Top = p2.y - p2.h / 2;
-        const corridorY = (p1Bottom + p2Top) / 2;
-
+      // CASO 1: Seta saindo de um GATEWAY (✕ / ➕) para outra raia -> Sai da ponta inferior/superior do losango,
+      // desce/sobe perpendicularmente à divisória da raia e entra na lateral esquerda do cartão de destino!
+      if (isFromGateway && isForward) {
         const startX = p1.x;
-        const startY = p1Bottom;
-        const endX = p2.x;
-        const endY = p2Top;
+        const startY = isGoingDown ? p1.y + p1.h / 2 + 4 : p1.y - p1.h / 2 - 4;
+        const endX = p2.x - p2.w / 2;
+        const endY = p2.y;
 
-        if (Math.abs(startX - endX) <= 6 && !intersectsOtherNode(startX, startY, endX, endY)) {
-          const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
-          const labelPos = { x: startX + 12, y: corridorY };
+        if (!intersectsOtherNode(startX, startY, startX, endY) && !intersectsOtherNode(startX, endY, endX, endY)) {
+          const pathData = `M ${startX} ${startY} L ${startX} ${endY} L ${endX} ${endY}`;
+          const labelPos = {
+            x: startX,
+            y: isGoingDown ? startY + 22 : startY - 22,
+          };
           return { pathData, labelPos, isBackward: false };
         }
+      }
 
-        const pathData = `M ${startX} ${startY} L ${startX} ${corridorY} L ${endX} ${corridorY} L ${endX} ${endY}`;
-        const labelPos = { x: (startX + endX) / 2, y: corridorY - 10 };
-        return { pathData, labelPos, isBackward: false };
-      } else {
-        const p1Top = p1.y - p1.h / 2;
-        const p2Bottom = p2.y + p2.h / 2;
-        const corridorY = (p1Top + p2Bottom) / 2;
+      // CASO 2: Seta avançando entre colunas em raias diferentes -> Sai da lateral direita da origem,
+      // usa o corredor vertical livre ENTRE as duas colunas (cruzando a raia em 90º sem colar na linha divisória)
+      // e entra na lateral esquerda do destino!
+      if (isForward) {
+        const startX = p1.x + p1.w / 2;
+        const startY = p1.y;
+        const endX = p2.x - p2.w / 2;
+        const endY = p2.y;
 
-        const startX = p1.x;
-        const startY = p1Top;
-        const endX = p2.x;
-        const endY = p2Bottom;
+        const rawMidX = (startX + endX) / 2;
+        const midX = Math.max(startX + 16, Math.min(endX - 16, rawMidX + channelOffset));
 
-        if (Math.abs(startX - endX) <= 6 && !intersectsOtherNode(startX, startY, endX, endY)) {
-          const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
-          const labelPos = { x: startX + 12, y: corridorY };
-          return { pathData, labelPos, isBackward: false };
-        }
-
-        const pathData = `M ${startX} ${startY} L ${startX} ${corridorY} L ${endX} ${corridorY} L ${endX} ${endY}`;
-        const labelPos = { x: (startX + endX) / 2, y: corridorY - 10 };
+        const pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
+        const labelPos = {
+          x: midX,
+          y: (startY + endY) / 2,
+        };
         return { pathData, labelPos, isBackward: false };
       }
+
+      // CASO 3: Retorno entre raias (da direita para a esquerda)
+      const startX = p1.x;
+      const startY = isGoingDown ? p1.y + p1.h / 2 : p1.y - p1.h / 2;
+      const endX = p2.x;
+      const endY = isGoingDown ? p2.y - p2.h / 2 : p2.y + p2.h / 2;
+      const midY = (startY + endY) / 2 + (channelOffset || 14);
+      const pathData = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
+      const labelPos = { x: (startX + endX) / 2, y: midY - 10 };
+      return { pathData, labelPos, isBackward: true };
     }
 
     // --- CONEXÃO NA MESMA RAIA (MESMA ALTURA) ---
-    const isBackward = p2.x < p1.x + p1.w / 2 + 15;
+    const isBackward = p2.x < p1.x + p1.w / 2 + 10;
 
     if (isBackward) {
       const startX = p1.x;
@@ -509,9 +525,9 @@ export default function BpmnFlowBoard({
       const endX = p2.x;
       const endY = p2.y + p2.h / 2;
 
-      const loopY = Math.max(startY, endY) + 40;
+      const loopY = Math.max(startY, endY) + 38 + Math.abs(channelOffset);
       const pathData = `M ${startX} ${startY} L ${startX} ${loopY} L ${endX} ${loopY} L ${endX} ${endY}`;
-      const labelPos = { x: startX + 8, y: startY + 18 };
+      const labelPos = { x: (startX + endX) / 2, y: loopY - 8 };
 
       return { pathData, labelPos, isBackward: true };
     } else {
@@ -520,17 +536,17 @@ export default function BpmnFlowBoard({
       const endX = p2.x - p2.w / 2;
       const endY = p2.y;
 
-      if (!intersectsOtherNode(startX, startY, endX, endY) && Math.abs(startY - endY) <= 5) {
+      if (!intersectsOtherNode(startX, startY, endX, endY) && Math.abs(startY - endY) <= 6) {
         const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
         const labelPos = { x: (startX + endX) / 2, y: startY - 12 };
         return { pathData, labelPos, isBackward: false };
       } else if (!intersectsOtherNode(startX, startY, endX, endY)) {
-        const midX = (startX + endX) / 2;
+        const midX = (startX + endX) / 2 + channelOffset;
         const pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
-        const labelPos = { x: midX + 8, y: (startY + endY) / 2 };
+        const labelPos = { x: midX, y: (startY + endY) / 2 - 10 };
         return { pathData, labelPos, isBackward: false };
       } else {
-        const bypassY = Math.min(p1.y - p1.h / 2, p2.y - p2.h / 2) - 36;
+        const bypassY = Math.min(p1.y - p1.h / 2, p2.y - p2.h / 2) - 34 - Math.abs(channelOffset);
         const pathData = `M ${p1.x} ${p1.y - p1.h / 2} L ${p1.x} ${bypassY} L ${p2.x} ${bypassY} L ${p2.x} ${p2.y - p2.h / 2}`;
         const labelPos = { x: (p1.x + p2.x) / 2, y: bypassY - 8 };
         return { pathData, labelPos, isBackward: false };
@@ -1038,8 +1054,8 @@ export default function BpmnFlowBoard({
         )}
 
         {isGateway && (
-          <span className="absolute -top-3 text-[11px] font-bold text-on-surface text-center leading-tight whitespace-nowrap bg-surface-container-low/95 border border-outline-variant px-1.5 py-0.5 rounded shadow-2xs z-10">
-            {node.label}
+          <span className="absolute -top-4 text-[10.5px] font-bold text-amber-300 text-center leading-tight whitespace-nowrap bg-surface-container-low/95 border border-amber-500/40 px-2 py-0.5 rounded-md shadow-xs z-20">
+            {repairMojibakeAndBrokenChars(node.label)}
           </span>
         )}
 
@@ -1062,7 +1078,7 @@ export default function BpmnFlowBoard({
                 : ''
           } ${
             isGateway
-              ? 'w-13 h-13 rotate-45 border-2 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
+              ? 'w-12 h-12 rotate-45 border-2 border-amber-400 bg-amber-500/15 text-amber-300 flex items-center justify-center shadow-md'
               : isStart
                 ? 'w-11 h-11 rounded-full border-2 border-emerald-500 bg-emerald-500/10 text-on-surface flex items-center justify-center shadow-xs'
                 : isEnd
@@ -1075,7 +1091,7 @@ export default function BpmnFlowBoard({
           }`}
         >
           {isGateway && (
-            <span className="-rotate-45 text-xl font-black font-mono text-on-surface select-none">
+            <span className="-rotate-45 text-lg font-black font-mono text-amber-300 select-none">
               {node.type === 'gateway_exclusive' ? '✕' : node.type === 'gateway_parallel' ? '➕' : '◯'}
             </span>
           )}
@@ -1113,7 +1129,7 @@ export default function BpmnFlowBoard({
 
         {!isGateway && (
           <span className="text-[11px] font-semibold text-on-surface text-center mt-2.5 leading-snug max-w-[115px] break-words">
-            {node.label}
+            {repairMojibakeAndBrokenChars(node.label)}
           </span>
         )}
 
@@ -1216,10 +1232,15 @@ export default function BpmnFlowBoard({
           </div>
 
           {/* Texto Principal Centralizado */}
-          <div className="flex-1 flex items-center justify-center text-center px-1 my-1">
+          <div className="flex-1 flex flex-col items-center justify-center text-center px-1 my-1 gap-0.5">
             <p className={`text-xs font-semibold leading-snug line-clamp-3 ${isCurrentSeiPos ? 'text-emerald-300 font-bold' : 'text-on-surface'}`}>
-              {task.Tarefa}
+              {repairMojibakeAndBrokenChars(task.Tarefa)}
             </p>
+            {task.seiUnidade && (
+              <span className="text-[9.5px] font-mono text-on-surface-variant">
+                ({repairMojibakeAndBrokenChars(task.seiUnidade)})
+              </span>
+            )}
           </div>
 
           {/* Rodapé discreto com Prazo e Status */}
@@ -1610,12 +1631,12 @@ export default function BpmnFlowBoard({
             </marker>
           </defs>
 
-          {connections.map(conn => {
+          {connections.map((conn, connIdx) => {
             const p1 = nodePositions[conn.fromId];
             const p2 = nodePositions[conn.toId];
             if (!p1 || !p2) return null;
 
-            const { pathData, labelPos } = getOrthogonalPath(p1, p2, conn, nodePositions);
+            const { pathData, labelPos } = getOrthogonalPath(p1, p2, conn, nodePositions, connIdx);
             const isAssociation = conn.tipo === 'association';
             const isActiveTarget = Boolean(seiMeta?.activeNodeId && conn.toId === seiMeta.activeNodeId);
 
@@ -1651,9 +1672,9 @@ export default function BpmnFlowBoard({
 
                 {conn.label ? (
                   <foreignObject
-                    x={labelPos.x - 35}
-                    y={labelPos.y - 10}
-                    width="75"
+                    x={labelPos.x - 42}
+                    y={labelPos.y - 11}
+                    width="84"
                     height="24"
                     className="overflow-visible"
                   >
@@ -1661,10 +1682,10 @@ export default function BpmnFlowBoard({
                       <button
                         type="button"
                         onClick={() => handleOpenConnectionModal(conn)}
-                        className="bg-surface-container-low/95 border border-outline-variant text-[10px] font-semibold text-on-surface px-1.5 py-0.5 rounded shadow-2xs hover:scale-105 transition-all cursor-pointer whitespace-nowrap"
-                        title="Clique para editar rótulo da seta"
+                        className="bg-surface-container-low/95 border border-amber-500/40 text-[10px] font-bold text-amber-300 px-1.5 py-0.5 rounded shadow-xs hover:scale-105 transition-all cursor-pointer whitespace-nowrap"
+                        title="Clique para editar rótulo da condição"
                       >
-                        {conn.label}
+                        {repairMojibakeAndBrokenChars(conn.label)}
                       </button>
                     </div>
                   </foreignObject>
@@ -1807,11 +1828,14 @@ export default function BpmnFlowBoard({
                         const nodesAtStep = laneAdditionalNodes.filter(n => n.ordemFluxo === colOrder);
                         const tasksAtStep = laneTasks.filter(t => t.ordemFluxo === colOrder);
                         const hasItemInCol = nodesAtStep.length > 0 || tasksAtStep.length > 0;
+                        // Verifica se esta coluna (em qualquer raia) contém uma Tarefa ou apenas um Gateway/Evento compacto
+                        const isTaskColumnGlobal = filteredTarefas.some(t => t.ordemFluxo === colOrder);
+                        const colWidthClass = isTaskColumnGlobal ? 'w-52' : 'w-28';
 
                         return (
                           <div
                             key={`col-${lane.id}-${colOrder}`}
-                            className="w-48 shrink-0 flex flex-col items-center justify-center min-h-[130px]"
+                            className={`${colWidthClass} shrink-0 flex flex-col items-center justify-center min-h-[130px]`}
                           >
                             {hasItemInCol ? (
                               <div className="flex flex-col items-center gap-4">
@@ -1819,7 +1843,7 @@ export default function BpmnFlowBoard({
                                 {tasksAtStep.map(t => renderTaskCard(t, lane.nome))}
                               </div>
                             ) : (
-                              <div className="w-48 h-16 pointer-events-none" />
+                              <div className={`${colWidthClass} h-16 pointer-events-none`} />
                             )}
                           </div>
                         );

@@ -234,18 +234,19 @@
   }
 
   /**
-   * Decodifica ArrayBuffer do SEI respeitando ISO-8859-1 ou UTF-8 conforme o cabeçalho/meta
+   * Decodifica ArrayBuffer do SEI com detecção estrita UTF-8 vs Windows-1252 (ISO-8859-1).
+   * Evita que proxies .gov.br que enviam header UTF-8 em páginas ISO-8859-1 gerem caracteres "" (U+FFFD).
    */
-  function decodeSeiBuffer(buf, contentTypeHeader) {
-    const ct = String(contentTypeHeader || '').toLowerCase();
-    if (ct.includes('utf-8')) {
-      return new TextDecoder('utf-8').decode(buf);
+  function decodeSeiBuffer(buf) {
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    } catch (e) {
+      try {
+        return new TextDecoder('windows-1252').decode(buf);
+      } catch (e2) {
+        return new TextDecoder('iso-8859-1').decode(buf);
+      }
     }
-    const isoText = new TextDecoder('iso-8859-1').decode(buf);
-    if (/charset=["']?utf-8/i.test(isoText)) {
-      return new TextDecoder('utf-8').decode(buf);
-    }
-    return isoText;
   }
 
   /**

@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { TarefaPlanejamento, Planejamento, StatusTarefa, ProcessTemplate, User, SubTarefa, ItemPlanejamentoSOF } from '../types';
 import { DEFAULT_PROCESS_TEMPLATES } from '../initialData';
+import { repairMojibakeAndBrokenChars } from '../services/seiSyncService';
 import { Play, Check, ChevronRight, ChevronLeft, Plus, Clock, UserCheck, Trash2, Edit2, Settings, X, PlusCircle, Search, AlertCircle, ListTodo, Workflow, ArrowRight } from 'lucide-react';
 
 interface KanbanBoardProps {
@@ -158,7 +159,7 @@ export default function KanbanBoard({
   // Trigger Detailed/Edit Modal opening
   const handleOpenTaskDetail = (task: TarefaPlanejamento) => {
     setSelectedTaskDetail(task);
-    setEditTaskTitle(task.Tarefa);
+    setEditTaskTitle(repairMojibakeAndBrokenChars(task.Tarefa));
     setEditTaskPrazo(task.Prazo_Dias);
     setEditTaskStatus(task.Status_Tarefa);
     setNewSubTaskTitle('');
@@ -690,15 +691,22 @@ export default function KanbanBoard({
                         }`}
                       >
                         <div className="space-y-2">
-                          <p className="text-xs text-on-surface font-semibold leading-relaxed">{task.Tarefa}</p>
+                          <p className="text-xs text-on-surface font-semibold leading-relaxed">
+                            {repairMojibakeAndBrokenChars(task.Tarefa)}
+                          </p>
                           <div className="flex flex-wrap gap-1.5 items-center font-sans">
                             <span className="text-[9px] text-on-surface-variant bg-surface-container px-2 py-0.5 rounded font-mono border border-outline-variant/30">
                               Prazo: {task.Prazo_Dias} d
                             </span>
+                            {task.seiUnidade && (
+                              <span className="text-[8.5px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono font-bold">
+                                {repairMojibakeAndBrokenChars(task.seiUnidade)}
+                              </span>
+                            )}
                             {task.MovidoPor && (
                               <span className="text-[8px] text-primary bg-primary/5 border border-primary/20 px-1.5 py-0.5 rounded flex items-center gap-0.5 font-bold font-sans">
                                 <UserCheck className="w-2.5 h-2.5" />
-                                {task.MovidoPor.split(' ')[0]}
+                                {repairMojibakeAndBrokenChars(task.MovidoPor).split(' ')[0]}
                               </span>
                             )}
                           </div>
@@ -1150,7 +1158,7 @@ export default function KanbanBoard({
                           }`}>
                             {st.concluida && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                           </span>
-                          <span className="truncate pr-2 font-semibold">{st.titulo}</span>
+                          <span className="truncate pr-2 font-semibold">{repairMojibakeAndBrokenChars(st.titulo)}</span>
                         </button>
 
                         {currentUser.role !== 'Visualizador' && currentUser.role !== 'Auditor' && (

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Contratics SEI Studio — Varredura Geral & Fluxo BPMN 2.0",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Extensão oficial do Contratics (SOF/MPO) inspirada no Estúdio de Fluxo do SEI Pro para varredura geral de processos no SEI, espelhamento automático no Fluxo BPMN 2.0, processos associados e rollback.",
   "permissions": [
     "activeTab",
