@@ -56,7 +56,10 @@ import {
   DollarSign,
   CheckCircle,
   FileSignature,
-  HelpCircle
+  HelpCircle,
+  Workflow,
+  RotateCcw,
+  Radio
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
 
@@ -88,6 +91,9 @@ interface PlanejamentosProps {
   onStartTour?: (tourId: string) => void;
   completedTours?: string[];
   initialSelectedPlanId?: string | null;
+  onOpenSeiStudio?: () => void;
+  onRevertLastSeiSync?: () => void;
+  hasRollbackAvailable?: boolean;
 }
 
 export default function Planejamentos({
@@ -117,7 +123,10 @@ export default function Planejamentos({
   onDeleteItemPlanejamentoSOF = () => {},
   onStartTour,
   completedTours = [],
-  initialSelectedPlanId = null
+  initialSelectedPlanId = null,
+  onOpenSeiStudio,
+  onRevertLastSeiSync,
+  hasRollbackAvailable = false
 }: PlanejamentosProps) {
   // Navigation / Detailing States
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(initialSelectedPlanId);
@@ -949,7 +958,27 @@ export default function Planejamentos({
               </p>
             </div>
             
-            <div className="flex items-center gap-2.5" data-tour="plan-actions">
+            <div className="flex flex-wrap items-center gap-2.5" data-tour="plan-actions">
+              {onRevertLastSeiSync && hasRollbackAvailable && (
+                <button
+                  onClick={onRevertLastSeiSync}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-amber-500/40 rounded-lg text-xs bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all cursor-pointer font-bold"
+                  title="Voltar imediatamente aos dados anteriores à última leitura do SEI"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  Voltar Dados SEI
+                </button>
+              )}
+              {onOpenSeiStudio && (
+                <button
+                  onClick={onOpenSeiStudio}
+                  className="flex items-center gap-2 px-3.5 py-2 border border-emerald-500/40 rounded-lg text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-all cursor-pointer font-bold shadow-sm"
+                  title="Abrir Estúdio de Fluxo SEI (Varredura Geral e Espelhamento BPMN)"
+                >
+                  <Workflow className="w-4 h-4 text-emerald-400" />
+                  Estúdio de Fluxo SEI (Varredura)
+                </button>
+              )}
               <button
                 onClick={exportPlanejamentosToPDF}
                 className="flex items-center gap-2 px-3 py-2 border border-outline-variant/60 rounded-lg text-xs bg-surface-container hover:text-primary transition-all cursor-pointer font-semibold"
@@ -1340,6 +1369,22 @@ export default function Planejamentos({
                             </button>
                             <CopyButton text={plan.SEI_Processo} label="Processo SEI" />
                           </div>
+                          {plan.seiSyncMetadata?.unidadeAtual && (
+                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-[9px] font-bold"
+                                title={`Posição atual no SEI: ${plan.seiSyncMetadata.unidadeAtual}${plan.seiSyncMetadata.ultimoAndamento ? ' — ' + plan.seiSyncMetadata.ultimoAndamento : ''}`}
+                              >
+                                <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+                                SEI: {plan.seiSyncMetadata.unidadeAtual}
+                              </span>
+                              {plan.seiSyncMetadata.processosRelacionados && plan.seiSyncMetadata.processosRelacionados.length > 0 && (
+                                <span className="text-[9px] font-mono text-sky-300 bg-sky-500/10 border border-sky-500/25 px-1.5 py-0.5 rounded">
+                                  +{plan.seiSyncMetadata.processosRelacionados.length} assoc.
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className={`px-5 py-4 text-xs font-semibold text-on-surface-variant ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                           {plan.Tipo_Processo}
@@ -1926,6 +1971,9 @@ export default function Planejamentos({
                 onUpdateTarefa={onUpdateTarefa}
                 onDeleteTarefa={onDeleteTarefa}
                 onUpdatePlanejamento={onEditPlanejamento}
+                onOpenSeiStudio={onOpenSeiStudio}
+                onRevertLastSeiSync={onRevertLastSeiSync}
+                hasRollbackAvailable={hasRollbackAvailable}
               />
               <KanbanBoard
                 planejamento={selectedPlan!}

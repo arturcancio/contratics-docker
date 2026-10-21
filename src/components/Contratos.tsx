@@ -79,7 +79,11 @@ import {
   Mail,
   FileCheck,
   Receipt,
-  HelpCircle
+  HelpCircle,
+  Workflow,
+  RotateCcw,
+  Radio,
+  Link2
 } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, BarChart, Bar } from 'recharts';
 
@@ -118,6 +122,9 @@ interface ContratosProps {
   completedTours?: string[];
   initialSelectedContractId?: string | null;
   onCloseContractDetails?: () => void;
+  onOpenSeiStudio?: () => void;
+  onRevertLastSeiSync?: () => void;
+  hasRollbackAvailable?: boolean;
 }
 
 export default function Contratos({
@@ -154,7 +161,10 @@ export default function Contratos({
   onStartTour,
   completedTours = [],
   initialSelectedContractId = null,
-  onCloseContractDetails
+  onCloseContractDetails,
+  onOpenSeiStudio,
+  onRevertLastSeiSync,
+  hasRollbackAvailable = false
 }: ContratosProps) {
   // Navigation / Detailing state
   const [selectedContratoId, setSelectedContratoId] = useState<string | null>(initialSelectedContractId);
@@ -2961,7 +2971,27 @@ export default function Contratos({
               </p>
             </div>
             
-            <div className="flex gap-2.5" data-tour="contract-actions">
+            <div className="flex flex-wrap gap-2.5" data-tour="contract-actions">
+              {onRevertLastSeiSync && hasRollbackAvailable && (
+                <button
+                  onClick={onRevertLastSeiSync}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-amber-500/40 rounded-lg text-xs bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all cursor-pointer font-bold"
+                  title="Voltar imediatamente aos dados anteriores à última leitura do SEI"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  Voltar Dados SEI
+                </button>
+              )}
+              {onOpenSeiStudio && (
+                <button
+                  onClick={onOpenSeiStudio}
+                  className="flex items-center gap-2 px-3.5 py-2 border border-emerald-500/40 rounded-lg text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-all cursor-pointer font-bold shadow-sm"
+                  title="Abrir Varredura SEI e Processos Associados (Pagamentos, Aditivos, Descentralizações)"
+                >
+                  <Workflow className="w-4 h-4 text-emerald-400" />
+                  Sincronizar SEI & Associados
+                </button>
+              )}
               <button
                 onClick={exportContratosToPDF}
                 className="flex items-center gap-2 px-3 py-2 border border-outline-variant/60 rounded-lg text-xs bg-surface-container hover:text-primary transition-all cursor-pointer font-semibold"
@@ -3847,6 +3877,28 @@ export default function Contratos({
                               }
                               return null;
                             })()}
+                            {(cont.seiSyncMetadata?.unidadeAtual || (cont.seiSyncMetadata?.processosRelacionados && cont.seiSyncMetadata.processosRelacionados.length > 0)) && (
+                              <div className="flex items-center gap-1 flex-wrap mt-1">
+                                {cont.seiSyncMetadata?.unidadeAtual && (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.25 rounded text-[8.5px] font-mono font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+                                    title={`Aberto no SEI em: ${cont.seiSyncMetadata.unidadeAtual}`}
+                                  >
+                                    <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+                                    SEI: {cont.seiSyncMetadata.unidadeAtual}
+                                  </span>
+                                )}
+                                {cont.seiSyncMetadata?.processosRelacionados && cont.seiSyncMetadata.processosRelacionados.length > 0 && (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.25 rounded text-[8.5px] font-mono font-bold bg-sky-500/15 border border-sky-500/30 text-sky-300"
+                                    title={`${cont.seiSyncMetadata.processosRelacionados.length} processo(s) relacionado(s) detectado(s) no SEI`}
+                                  >
+                                    <Link2 className="w-2.5 h-2.5 text-sky-400" />
+                                    {cont.seiSyncMetadata.processosRelacionados.length} assoc. SEI
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className={`px-5 py-4 text-xs font-semibold text-primary ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
@@ -4549,6 +4601,106 @@ export default function Contratos({
               </div>
             </div>
           </div>
+
+          {/* Processos Relacionados e Posição no SEI (Capturados pela Extensão Chrome) */}
+          {selectedContract?.seiSyncMetadata && (
+            <div className="bg-emerald-950/20 border border-emerald-500/35 rounded-xl p-4 sm:p-5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                    <Workflow className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-300">
+                        Monitoramento SEI & Processos Associados do Contrato
+                      </h4>
+                      {selectedContract.seiSyncMetadata.unidadeAtual && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500 text-slate-950">
+                          Aberto em: {selectedContract.seiSyncMetadata.unidadeAtual}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5">
+                      Última leitura SEI: {new Date(selectedContract.seiSyncMetadata.lastSyncAt).toLocaleString('pt-BR')}
+                      {selectedContract.seiSyncMetadata.ultimoAndamento ? ` • ${selectedContract.seiSyncMetadata.ultimoAndamento}` : ''}
+                    </p>
+                  </div>
+                </div>
+                {onOpenSeiStudio && (
+                  <button
+                    type="button"
+                    onClick={onOpenSeiStudio}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-emerald-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer self-start sm:self-center"
+                  >
+                    <Workflow className="w-3.5 h-3.5" />
+                    Abrir Estúdio SEI
+                  </button>
+                )}
+              </div>
+
+              {selectedContract.seiSyncMetadata.processosRelacionados && selectedContract.seiSyncMetadata.processosRelacionados.length > 0 && (
+                <div className="pt-2 border-t border-emerald-500/20 space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 block">
+                    Processos Relacionados Detectados no SEI ({selectedContract.seiSyncMetadata.processosRelacionados.length}):
+                  </span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {selectedContract.seiSyncMetadata.processosRelacionados.map((rel, rIdx) => {
+                      const alreadyLinkedPayment = pagamentos.some(
+                        p => (p.Num_Contrato === selectedContract.id || p.Num_Contrato === selectedContract.Num_Contrato) &&
+                        p.processoSeiPagamento === rel.protocolo
+                      );
+                      return (
+                        <div key={rIdx} className="bg-surface-container/80 border border-outline-variant/50 rounded-lg p-2.5 flex flex-col justify-between gap-2 text-xs">
+                          <div>
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="font-mono font-bold text-primary text-[11px]">{rel.protocolo}</span>
+                              <span className="px-1.5 py-0.25 rounded text-[9px] font-bold uppercase bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                                {rel.categoria || 'Associado'}
+                              </span>
+                            </div>
+                            <p className="text-[10.5px] text-on-surface-variant mt-1 line-clamp-2" title={rel.tipo}>
+                              {rel.tipo || 'Processo Relacionado no SEI'}
+                            </p>
+                          </div>
+                          <div className="flex items-center justify-between pt-1.5 border-t border-outline-variant/25">
+                            <CopyButton text={rel.protocolo} label="Protocolo Associado" />
+                            {alreadyLinkedPayment ? (
+                              <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3" /> Vinculado em Pagamentos
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newPag: Pagamento = {
+                                    id: `pag-sei-${Date.now()}-${rIdx}`,
+                                    Num_Contrato: selectedContract.Num_Contrato,
+                                    Data: new Date().toISOString().split('T')[0],
+                                    Valor: 0,
+                                    Status: 'Empenhado',
+                                    Documento_SEI: rel.protocolo,
+                                    Descricao: `${rel.tipo || 'Processo Associado SEI'} (${rel.protocolo})`,
+                                    Ano_Orcamento: Number(selectedYear) || new Date().getFullYear(),
+                                    processoSeiPagamento: rel.protocolo
+                                  };
+                                  onAddPagamento(newPag);
+                                }}
+                                className="px-2 py-1 rounded bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                              >
+                                <Link2 className="w-3 h-3" />
+                                Vincular em Pagamentos
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Charts Row: Segregação GND SOF & Execução SOF */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -23,7 +23,8 @@ import {
   ProcessTemplate,
   SIOPData8861,
   SIOPHistory8861,
-  LoginLog
+  LoginLog,
+  SeiSyncSnapshot
 } from './types';
 import { 
   INITIAL_USERS, 
@@ -76,6 +77,15 @@ import ContraticsLogo from './components/ContraticsLogo';
 import RastreabilidadeModal from './components/RastreabilidadeModal';
 import { CalculadoraICTIModal } from './components/CalculadoraICTIModal';
 import { GuidedTourOverlay, ManualGuiadoHubModal, TOURS_CONFIG } from './components/GuidedTour';
+import SeiSyncStudioModal from './components/SeiSyncStudioModal';
+import {
+  buildBpmnFlowFromSeiScrape,
+  applySeiScrapeToContrato,
+  DEFAULT_SEI_UNIT_LANE_RULES,
+  normalizeSeiProtocol,
+  RawSeiProcessScrapeResult,
+  UnitLaneMappingRule
+} from './services/seiSyncService';
 import { ReUICard } from './components/ReUI';
 import { CopyButton, CopyableText } from './components/CopyButton';
 
@@ -133,7 +143,9 @@ import {
   FileCheck2,
   ListTodo,
   Scale,
-  RefreshCw
+  RefreshCw,
+  Workflow,
+  RotateCcw
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie, FunnelChart, Funnel, LabelList, Legend } from 'recharts';
 
@@ -191,6 +203,25 @@ export default function App() {
   const [firebaseAuthError, setFirebaseAuthError] = useState<string | null>(null);
 
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+
+  // SEI Sync Studio & Rollback States
+  const [isSeiStudioOpen, setIsSeiStudioOpen] = useState(false);
+  const [seiExtensionConnected, setSeiExtensionConnected] = useState(false);
+  const [seiScanProgress, setSeiScanProgress] = useState<{
+    isScanning: boolean;
+    current: number;
+    total: number;
+    currentProtocol?: string;
+    message?: string;
+  }>({ isScanning: false, current: 0, total: 0 });
+  const [seiSnapshots, setSeiSnapshots] = useState<SeiSyncSnapshot[]>(() => {
+    try {
+      const saved = localStorage.getItem('contratics_sei_snapshots');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // ICTI OData API states from Ipeadata for Dashboard
   const [ictiLoading, setIctiLoading] = useState(false);
@@ -1666,6 +1697,416 @@ export default function App() {
       handleFirestoreError(error, OperationType.DELETE, `baseConhecimento/${id}`);
     }
   };
+
+  // ============================================================================
+  // INTEGRAÇÃO EXTENSÃO CHROME SEI PRO -> CONTRATICS (ESTÚDIO DE FLUXO & ROLLBACK)
+  // ============================================================================
+
+  const persistSeiSnapshots = (nextList: SeiSyncSnapshot[]) => {
+    const trimmed = nextList.slice(0, 12);
+    setSeiSnapshots(trimmed);
+    safeLocalStorageSet('contratics_sei_snapshots', JSON.stringify(trimmed));
+  };
+
+  const handleCreateSeiSnapshot = async (
+    description: string,
+    source: 'extension_batch' | 'extension_single' | 'manual_backup' = 'manual_backup',
+    processesUpdated: string[] = []
+  ): Promise<void> => {
+    const snapshot: SeiSyncSnapshot = {
+      id: `seisnap-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser?.name || 'Usuário Contratics',
+      description,
+      source,
+      processesUpdated,
+      previousState: {
+        planejamentos: JSON.parse(JSON.stringify(planejamentos)),
+        tarefas: JSON.parse(JSON.stringify(tarefas)),
+        historicoPlanejamentos: JSON.parse(JSON.stringify(historicoPlanejamentos)),
+        contratos: JSON.parse(JSON.stringify(contratos)),
+        pagamentos: JSON.parse(JSON.stringify(pagamentos)),
+        historicosContratuais: JSON.parse(JSON.stringify(historicosContratuais))
+      }
+    };
+    persistSeiSnapshots([snapshot, ...seiSnapshots]);
+  };
+
+  const handleDeleteSeiSnapshot = async (id: string): Promise<void> => {
+    persistSeiSnapshots(seiSnapshots.filter(s => s.id !== id));
+  };
+
+  const handleRestoreSeiSnapshot = async (snapshot: SeiSyncSnapshot): Promise<void> => {
+    const st = snapshot.previousState;
+    if (!st) return;
+
+    setPlanejamentos(st.planejamentos);
+    setTarefas(st.tarefas);
+    setHistoricoPlanejamentos(st.historicoPlanejamentos);
+    setContratos(st.contratos);
+    setPagamentos(st.pagamentos);
+    if (st.historicosContratuais) {
+      setHistoricosContratuais(st.historicosContratuais);
+    }
+
+    safeLocalStorageSet('contratics_planejamentos', JSON.stringify(st.planejamentos));
+    safeLocalStorageSet('contratics_tarefas', JSON.stringify(st.tarefas));
+    safeLocalStorageSet('contratics_historico_planejamentos', JSON.stringify(st.historicoPlanejamentos));
+    safeLocalStorageSet('contratics_contratos', JSON.stringify(st.contratos));
+    safeLocalStorageSet('contratics_pagamentos', JSON.stringify(st.pagamentos));
+    if (st.historicosContratuais) {
+      safeLocalStorageSet('contratics_historicos_contratuais', JSON.stringify(st.historicosContratuais));
+    }
+
+    try {
+      const promises: Promise<any>[] = [];
+
+      // Delete tasks or history created after snapshot that aren't in snapshot
+      const snapTaskIds = new Set(st.tarefas.map(t => t.id));
+      tarefas.forEach(t => {
+        if (!snapTaskIds.has(t.id)) {
+          promises.push(deleteDoc(doc(db, 'tarefas', t.id)).catch(() => {}));
+        }
+      });
+
+      const snapHistIds = new Set(st.historicoPlanejamentos.map(h => h.id));
+      historicoPlanejamentos.forEach(h => {
+        if (!snapHistIds.has(h.id)) {
+          promises.push(deleteDoc(doc(db, 'historicoPlanejamentos', h.id)).catch(() => {}));
+        }
+      });
+
+      st.planejamentos.forEach(p => {
+        promises.push(setDoc(doc(db, 'planejamentos', p.id), p).catch(() => {}));
+      });
+      st.tarefas.forEach(t => {
+        promises.push(setDoc(doc(db, 'tarefas', t.id), t).catch(() => {}));
+      });
+      st.historicoPlanejamentos.forEach(h => {
+        promises.push(setDoc(doc(db, 'historicoPlanejamentos', h.id), h).catch(() => {}));
+      });
+      st.contratos.forEach(c => {
+        promises.push(setDoc(doc(db, 'contratos', c.id), c).catch(() => {}));
+      });
+      st.pagamentos.forEach(p => {
+        promises.push(setDoc(doc(db, 'pagamentos', p.id), p).catch(() => {}));
+      });
+      (st.historicosContratuais || []).forEach(hc => {
+        promises.push(setDoc(doc(db, 'historicosContratuais', hc.id), hc).catch(() => {}));
+      });
+
+      await Promise.all(promises);
+      alert(`Dados restaurados com sucesso para o ponto: "${snapshot.description}" (${new Date(snapshot.createdAt).toLocaleString('pt-BR')}).`);
+    } catch (err) {
+      console.error('Erro ao persistir restauração de snapshot no banco:', err);
+      alert('Estado local restaurado. Algumas coleções remotas podem levar alguns segundos para sincronizar.');
+    }
+  };
+
+  const handleRevertLastSeiSync = () => {
+    if (seiSnapshots.length === 0) {
+      alert('Não há ponto de restauração anterior disponível.');
+      return;
+    }
+    const latest = seiSnapshots[0];
+    if (window.confirm(`Deseja voltar imediatamente os dados do sistema para antes da última leitura do SEI?\n\nPonto: "${latest.description}" (${new Date(latest.createdAt).toLocaleString('pt-BR')})`)) {
+      handleRestoreSeiSnapshot(latest);
+    }
+  };
+
+  const handleApplyBatchScrapeResults = async (
+    results: RawSeiProcessScrapeResult[],
+    sourceLabel: 'extension_batch' | 'extension_single' | 'manual_backup' = 'extension_batch',
+    customRules?: UnitLaneMappingRule[]
+  ) => {
+    if (!results || results.length === 0) return;
+
+    const rulesToUse = customRules || (() => {
+      try {
+        const saved = localStorage.getItem('contratics_sei_lane_rules');
+        return saved ? JSON.parse(saved) : DEFAULT_SEI_UNIT_LANE_RULES;
+      } catch {
+        return DEFAULT_SEI_UNIT_LANE_RULES;
+      }
+    })();
+
+    const matchedProtocols: string[] = [];
+    results.forEach(r => {
+      if (r.protocolo) matchedProtocols.push(r.protocolo);
+    });
+
+    // 1. CRIAR PONTO DE RESTAURAÇÃO AUTOMÁTICO ANTES DE ESCREVER QUALQUER DADO
+    await handleCreateSeiSnapshot(
+      `Backup Automático pré-varredura SEI (${results.length} processo(s) lido(s))`,
+      sourceLabel,
+      matchedProtocols
+    );
+
+    let nextPlanejamentos = [...planejamentos];
+    let nextTarefas = [...tarefas];
+    let nextHistPlan = [...historicoPlanejamentos];
+    let nextContratos = [...contratos];
+    let nextHistCont = [...historicosContratuais];
+
+    const updatedPlansToSave: Planejamento[] = [];
+    const tasksToSave: TarefaPlanejamento[] = [];
+    const tasksToDelete: string[] = [];
+    const histPlanToSave: HistoricoPlanejamento[] = [];
+    const updatedContractsToSave: Contrato[] = [];
+    const histContToSave: HistoricoContratual[] = [];
+
+    for (const scraped of results) {
+      const targetDigits = normalizeSeiProtocol(scraped.protocolo);
+      if (!targetDigits) continue;
+
+      // Verifica se corresponde a algum Processo de Planejamento cadastrado no Contratics
+      const matchingPlans = nextPlanejamentos.filter(
+        p => !p.isBudgetOnlyItem && normalizeSeiProtocol(p.SEI_Processo) === targetDigits
+      );
+
+      for (const plan of matchingPlans) {
+        const currentPlanTasks = nextTarefas.filter(
+          t => t.ProcessoPlanejamento === plan.id || t.ProcessoPlanejamento === plan.SEI_Processo || t.Processo_SEI === plan.SEI_Processo
+        );
+        const mapped = buildBpmnFlowFromSeiScrape(plan, currentPlanTasks, nextHistPlan, scraped, rulesToUse);
+
+        nextPlanejamentos = nextPlanejamentos.map(p => p.id === plan.id ? mapped.updatedPlanejamento : p);
+        updatedPlansToSave.push(mapped.updatedPlanejamento);
+
+        // Replace tasks for this planning process
+        const newIds = new Set(mapped.updatedTarefasForProcess.map(t => t.id));
+        currentPlanTasks.forEach(oldT => {
+          if (!newIds.has(oldT.id)) {
+            tasksToDelete.push(oldT.id);
+          }
+        });
+        nextTarefas = [
+          ...nextTarefas.filter(t => t.ProcessoPlanejamento !== plan.id && t.ProcessoPlanejamento !== plan.SEI_Processo && t.Processo_SEI !== plan.SEI_Processo),
+          ...mapped.updatedTarefasForProcess
+        ];
+        mapped.updatedTarefasForProcess.forEach(t => tasksToSave.push(t));
+
+        // Add non-duplicate history items
+        mapped.newHistoricoEntries.forEach(nh => {
+          const exists = nextHistPlan.some(
+            eh => eh.Processo_SEI === nh.Processo_SEI && eh.Descricao === nh.Descricao
+          );
+          if (!exists) {
+            nextHistPlan.push(nh);
+            histPlanToSave.push(nh);
+          }
+        });
+      }
+
+      // Verifica se corresponde a algum Contrato vigente cadastrado no Contratics
+      const matchingContratos = nextContratos.filter(
+        c => normalizeSeiProtocol(c.SEI_Processo) === targetDigits
+      );
+
+      for (const cont of matchingContratos) {
+        const mappedCont = applySeiScrapeToContrato(cont, nextHistCont, pagamentos, scraped);
+        nextContratos = nextContratos.map(c => c.id === cont.id ? mappedCont.updatedContrato : c);
+        updatedContractsToSave.push(mappedCont.updatedContrato);
+
+        mappedCont.newHistoricoContratual.forEach(nhc => {
+          const exists = nextHistCont.some(
+            ehc => ehc.ContratoRelacionado === nhc.ContratoRelacionado && ehc.Descricao === nhc.Descricao
+          );
+          if (!exists) {
+            nextHistCont.push(nhc);
+            histContToSave.push(nhc);
+          }
+        });
+      }
+    }
+
+    setPlanejamentos(nextPlanejamentos);
+    setTarefas(nextTarefas);
+    setHistoricoPlanejamentos(nextHistPlan);
+    setContratos(nextContratos);
+    setHistoricosContratuais(nextHistCont);
+    setSeiScanProgress({
+      isScanning: false,
+      current: results.length,
+      total: results.length,
+      message: `Varredura concluída: ${updatedPlansToSave.length} planejamento(s) e ${updatedContractsToSave.length} contrato(s) espelhados com sucesso!`
+    });
+
+    try {
+      const dbPromises: Promise<any>[] = [];
+      updatedPlansToSave.forEach(p => dbPromises.push(setDoc(doc(db, 'planejamentos', p.id), p).catch(() => {})));
+      tasksToDelete.forEach(tid => dbPromises.push(deleteDoc(doc(db, 'tarefas', tid)).catch(() => {})));
+      tasksToSave.forEach(t => dbPromises.push(setDoc(doc(db, 'tarefas', t.id), t).catch(() => {})));
+      histPlanToSave.forEach(h => dbPromises.push(setDoc(doc(db, 'historicoPlanejamentos', h.id), h).catch(() => {})));
+      updatedContractsToSave.forEach(c => dbPromises.push(setDoc(doc(db, 'contratos', c.id), c).catch(() => {})));
+      histContToSave.forEach(hc => dbPromises.push(setDoc(doc(db, 'historicosContratuais', hc.id), hc).catch(() => {})));
+      await Promise.all(dbPromises);
+    } catch (err) {
+      console.error('Erro ao gravar lote SEI no banco:', err);
+    }
+  };
+
+  const handleLinkRelatedSeiProcessToContract = async (
+    contratoId: string,
+    relatedProtocol: string,
+    classification: 'pagamento' | 'aditivo' | 'apostilamento' | 'descentralizacao' | 'empenho' | 'os' | 'outro',
+    tipoDesc?: string
+  ): Promise<void> => {
+    const targetCont = contratos.find(c => c.id === contratoId);
+    if (!targetCont) return;
+
+    const alreadyExists = pagamentos.some(
+      p => (p.Num_Contrato === targetCont.id || p.Num_Contrato === targetCont.Num_Contrato) &&
+      p.processoSeiPagamento === relatedProtocol
+    );
+    if (alreadyExists) {
+      alert(`O processo ${relatedProtocol} já está vinculado aos lançamentos do Contrato ${targetCont.Num_Contrato}.`);
+      return;
+    }
+
+    const newPag: Pagamento = {
+      id: `pag-sei-${Date.now()}`,
+      Num_Contrato: targetCont.Num_Contrato,
+      Data: new Date().toISOString().split('T')[0],
+      Valor: 0,
+      Status: 'Empenhado',
+      Documento_SEI: relatedProtocol,
+      Descricao: `[SEI Associado - ${classification.toUpperCase()}] ${tipoDesc || 'Processo Associado'} (${relatedProtocol})`,
+      Ano_Orcamento: selectedYear !== 'Todos' ? Number(selectedYear) : new Date().getFullYear(),
+      processoSeiPagamento: relatedProtocol
+    };
+    await handleAddPagamento(newPag);
+    alert(`Processo associado ${relatedProtocol} vinculado com sucesso ao Contrato ${targetCont.Num_Contrato}!`);
+  };
+
+  const handleTriggerExtensionScan = (selectedProtocols?: string[]) => {
+    const allMonitored: Array<{ protocolo: string; category: 'planejamento' | 'contrato'; id: string; label: string }> = [];
+    const seen = new Set<string>();
+
+    planejamentos.filter(p => !p.isBudgetOnlyItem && p.SEI_Processo).forEach(p => {
+      const clean = normalizeSeiProtocol(p.SEI_Processo);
+      if (clean && !seen.has(`plan-${clean}`)) {
+        seen.add(`plan-${clean}`);
+        allMonitored.push({
+          protocolo: p.SEI_Processo,
+          category: 'planejamento',
+          id: p.id,
+          label: `${p.Tipo_Processo} — ${p.Objeto}`
+        });
+      }
+    });
+
+    contratos.filter(c => c.SEI_Processo).forEach(c => {
+      const clean = normalizeSeiProtocol(c.SEI_Processo);
+      if (clean && !seen.has(`cont-${clean}`)) {
+        seen.add(`cont-${clean}`);
+        allMonitored.push({
+          protocolo: c.SEI_Processo,
+          category: 'contrato',
+          id: c.id,
+          label: `Contrato ${c.Num_Contrato} — ${c.Objeto}`
+        });
+      }
+    });
+
+    const filteredToScan = selectedProtocols && selectedProtocols.length > 0
+      ? allMonitored.filter(item => selectedProtocols.some(sp => normalizeSeiProtocol(sp) === normalizeSeiProtocol(item.protocolo)))
+      : allMonitored;
+
+    setSeiScanProgress({
+      isScanning: true,
+      current: 0,
+      total: filteredToScan.length,
+      message: 'Iniciando varredura geral na sessão autenticada do SEI...'
+    });
+
+    window.postMessage(
+      {
+        source: 'CONTRATICS_WEB_APP',
+        type: 'CONTRATICS_SEI_START_BATCH_SCAN',
+        payload: {
+          processes: filteredToScan
+        }
+      },
+      '*'
+    );
+  };
+
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.data || event.data.source !== 'CONTRATICS_SEI_EXTENSION') return;
+
+      const { type, payload } = event.data;
+
+      if (type === 'CONTRATICS_SEI_EXT_PONG' || type === 'CONTRATICS_SEI_EXT_READY') {
+        setSeiExtensionConnected(true);
+      } else if (type === 'CONTRATICS_SEI_REQUEST_PROCESS_LIST') {
+        const list: Array<{ protocolo: string; category: 'planejamento' | 'contrato'; id: string; label: string }> = [];
+        const seen = new Set<string>();
+
+        planejamentos.filter(p => !p.isBudgetOnlyItem && p.SEI_Processo).forEach(p => {
+          const clean = normalizeSeiProtocol(p.SEI_Processo);
+          if (clean && !seen.has(`plan-${clean}`)) {
+            seen.add(`plan-${clean}`);
+            list.push({
+              protocolo: p.SEI_Processo,
+              category: 'planejamento',
+              id: p.id,
+              label: `${p.Tipo_Processo} — ${p.Objeto}`
+            });
+          }
+        });
+
+        contratos.filter(c => c.SEI_Processo).forEach(c => {
+          const clean = normalizeSeiProtocol(c.SEI_Processo);
+          if (clean && !seen.has(`cont-${clean}`)) {
+            seen.add(`cont-${clean}`);
+            list.push({
+              protocolo: c.SEI_Processo,
+              category: 'contrato',
+              id: c.id,
+              label: `Contrato ${c.Num_Contrato} — ${c.Objeto}`
+            });
+          }
+        });
+
+        window.postMessage(
+          {
+            source: 'CONTRATICS_WEB_APP',
+            type: 'CONTRATICS_SEI_PROCESS_LIST_RESPONSE',
+            payload: { processes: list }
+          },
+          '*'
+        );
+      } else if (type === 'CONTRATICS_SEI_SCAN_PROGRESS') {
+        setSeiExtensionConnected(true);
+        setSeiScanProgress({
+          isScanning: true,
+          current: payload?.current || 0,
+          total: payload?.total || 1,
+          currentProtocol: payload?.currentProtocol,
+          message: payload?.message
+        });
+      } else if (type === 'CONTRATICS_SEI_SCAN_COMPLETE') {
+        setSeiExtensionConnected(true);
+        if (payload?.results && Array.isArray(payload.results)) {
+          handleApplyBatchScrapeResults(payload.results, 'extension_batch');
+        } else {
+          setSeiScanProgress({ isScanning: false, current: 0, total: 0 });
+        }
+      } else if (type === 'CONTRATICS_SEI_TRIGGER_ROLLBACK') {
+        handleRevertLastSeiSync();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    // Envia ping inicial para detectar se a extensão está ativa
+    window.postMessage({ source: 'CONTRATICS_WEB_APP', type: 'CONTRATICS_SEI_EXT_PING' }, '*');
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, [planejamentos, tarefas, historicoPlanejamentos, contratos, pagamentos, historicosContratuais, seiSnapshots]);
 
   // Core metrics calculated aggregates for dashboard based on selectedYear
   const targetYearInt = parseInt(selectedYear) || 2026;
@@ -3343,7 +3784,32 @@ export default function App() {
             </h2>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {/* Botão Rápido de Rollback SEI (se houver snapshot) */}
+            {seiSnapshots.length > 0 && (
+              <button
+                onClick={handleRevertLastSeiSync}
+                className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                title={`Reverter última leitura do SEI (${seiSnapshots[0].description})`}
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="hidden lg:inline">Voltar Dados SEI</span>
+              </button>
+            )}
+
+            {/* Botão Estúdio de Fluxo SEI (Extensão Chrome & Varredura Geral) */}
+            <button
+              onClick={() => setIsSeiStudioOpen(true)}
+              className="px-2.5 py-1.5 md:px-3 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-xs"
+              title="Estúdio de Fluxo SEI — Varredura Geral, Espelhamento BPMN 2.0 e Rollback"
+            >
+              <Workflow className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="hidden sm:inline">Estúdio SEI</span>
+              {seiExtensionConnected && (
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" title="Extensão Chrome SEI Conectada" />
+              )}
+            </button>
+
             {/* Tutorial Guiado & Tutorials Hub Button */}
             <button
               onClick={() => setIsManualHubOpen(true)}
@@ -4590,6 +5056,9 @@ export default function App() {
                 onStartTour={(tourId) => setActiveTourId(tourId)}
                 completedTours={completedTours}
                 initialSelectedPlanId={tourPlanId}
+                onOpenSeiStudio={() => setIsSeiStudioOpen(true)}
+                onRevertLastSeiSync={handleRevertLastSeiSync}
+                hasRollbackAvailable={seiSnapshots.length > 0}
               />
             </div>
           )}
@@ -4706,6 +5175,9 @@ export default function App() {
                 completedTours={completedTours}
                 initialSelectedContractId={tourContractId}
                 onCloseContractDetails={() => setTourContractId(null)}
+                onOpenSeiStudio={() => setIsSeiStudioOpen(true)}
+                onRevertLastSeiSync={handleRevertLastSeiSync}
+                hasRollbackAvailable={seiSnapshots.length > 0}
               />
             </div>
           )}
@@ -6702,6 +7174,34 @@ export default function App() {
         onStartTour={handleSelectTourFromHub}
         onSelectTour={handleSelectTourFromHub}
         onResetTours={handleResetTours}
+      />
+
+      {/* Estúdio de Fluxo SEI & Varredura Geral + Rollback Modal */}
+      <SeiSyncStudioModal
+        isOpen={isSeiStudioOpen}
+        onClose={() => setIsSeiStudioOpen(false)}
+        planejamentos={planejamentos}
+        tarefas={tarefas}
+        historicoPlanejamentos={historicoPlanejamentos}
+        contratos={contratos}
+        pagamentos={pagamentos}
+        historicosContratuais={historicosContratuais}
+        snapshots={seiSnapshots}
+        currentUser={currentUser}
+        extensionConnected={seiExtensionConnected}
+        scanProgress={{
+          active: seiScanProgress.isScanning,
+          current: seiScanProgress.current,
+          total: seiScanProgress.total,
+          currentProtocol: seiScanProgress.currentProtocol,
+          message: seiScanProgress.message
+        }}
+        onTriggerExtensionScan={handleTriggerExtensionScan}
+        onApplyBatchScrapeResults={handleApplyBatchScrapeResults}
+        onCreateManualSnapshot={(desc) => handleCreateSeiSnapshot(desc, 'manual_backup', [])}
+        onRestoreSnapshot={handleRestoreSeiSnapshot}
+        onDeleteSnapshot={handleDeleteSeiSnapshot}
+        onLinkRelatedProcessToContract={handleLinkRelatedSeiProcessToContract}
       />
 
       {/* Modal de Alteração Voluntária de Senha pelo Próprio Usuário */}

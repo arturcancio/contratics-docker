@@ -42,7 +42,11 @@ import {
   MoveVertical, 
   RefreshCw,
   User,
-  CornerDownLeft
+  CornerDownLeft,
+  MapPin,
+  RotateCcw,
+  Radio,
+  ShieldCheck
 } from 'lucide-react';
 
 export const DEFAULT_BPMN_LANES: BpmnLane[] = [
@@ -209,6 +213,9 @@ interface BpmnFlowBoardProps {
   onUpdateTarefa: (updatedTarefa: TarefaPlanejamento) => void;
   onDeleteTarefa: (id: string) => void;
   onUpdatePlanejamento?: (updated: Planejamento) => void;
+  onOpenSeiStudio?: () => void;
+  onRevertLastSeiSync?: () => void;
+  hasRollbackAvailable?: boolean;
 }
 
 export default function BpmnFlowBoard({
@@ -219,6 +226,9 @@ export default function BpmnFlowBoard({
   onUpdateTarefa,
   onDeleteTarefa,
   onUpdatePlanejamento,
+  onOpenSeiStudio,
+  onRevertLastSeiSync,
+  hasRollbackAvailable,
 }: BpmnFlowBoardProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [svgDimensions, setSvgDimensions] = useState({ width: 1300, height: 700 });
@@ -287,11 +297,24 @@ export default function BpmnFlowBoard({
   // Coordenadas calculadas
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
 
+  // Verifica se o fluxo possui ordenação horizontal por coluna (`ordemFluxo`), ex: sincronizado pelo Estúdio de Fluxo SEI
+  const maxOrdemFluxo = useMemo(() => {
+    let maxOrd = 0;
+    for (const n of bpmnNodes) {
+      if (n.ordemFluxo && n.ordemFluxo > maxOrd) maxOrd = n.ordemFluxo;
+    }
+    for (const t of planTarefas) {
+      if (t.ordemFluxo && t.ordemFluxo > maxOrd) maxOrd = t.ordemFluxo;
+    }
+    return maxOrd;
+  }, [bpmnNodes, planTarefas]);
+
   // Recalcular posições relativas dos nós para traçar as setas ortogonais
   const updateNodePositions = () => {
     if (!canvasRef.current) return;
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    setSvgDimensions({ width: canvasRect.width, height: canvasRect.height });
+    const scrollLeft = canvasRef.current.scrollLeft || 0;
+    const scrollTop = canvasRef.current.scrollTop || 0;
 
     const newPositions: Record<string, { x: number; y: number; w: number; h: number }> = {};
 
@@ -301,8 +324,8 @@ export default function BpmnFlowBoard({
       if (el) {
         const rect = el.getBoundingClientRect();
         newPositions[t.id] = {
-          x: rect.left - canvasRect.left + rect.width / 2,
-          y: rect.top - canvasRect.top + rect.height / 2,
+          x: rect.left - canvasRect.left + scrollLeft + rect.width / 2,
+          y: rect.top - canvasRect.top + scrollTop + rect.height / 2,
           w: rect.width,
           h: rect.height,
         };
@@ -315,14 +338,18 @@ export default function BpmnFlowBoard({
       if (el) {
         const rect = el.getBoundingClientRect();
         newPositions[n.id] = {
-          x: rect.left - canvasRect.left + rect.width / 2,
-          y: rect.top - canvasRect.top + rect.height / 2,
+          x: rect.left - canvasRect.left + scrollLeft + rect.width / 2,
+          y: rect.top - canvasRect.top + scrollTop + rect.height / 2,
           w: rect.width,
           h: rect.height,
         };
       }
     });
 
+    setSvgDimensions({
+      width: Math.max(canvasRef.current.scrollWidth, canvasRect.width, 1100),
+      height: Math.max(canvasRef.current.scrollHeight, canvasRect.height, 400),
+    });
     setNodePositions(newPositions);
   };
 
@@ -331,11 +358,13 @@ export default function BpmnFlowBoard({
     const handleResize = () => updateNodePositions();
     window.addEventListener('resize', handleResize);
     const timeout = setTimeout(updateNodePositions, 250);
+    const timeout2 = setTimeout(updateNodePositions, 600);
     return () => {
       window.removeEventListener('resize', handleResize);
       clearTimeout(timeout);
+      clearTimeout(timeout2);
     };
-  }, [planTarefas, bpmnNodes, lanes]);
+  }, [planTarefas, bpmnNodes, lanes, maxOrdemFluxo]);
 
   // SLA e métricas
   const getTaskSla = (task: TarefaPlanejamento) => {
@@ -431,8 +460,6 @@ export default function BpmnFlowBoard({
       const isGoingDown = p2.y > p1.y;
 
       if (isGoingDown) {
-        // De cima para baixo (ex: Raia 1 -> Raia 2)
-        // Corredor livre entre as duas fileiras de nós (faixa de transição entre raias)
         const p1Bottom = p1.y + p1.h / 2;
         const p2Top = p2.y - p2.h / 2;
         const corridorY = (p1Bottom + p2Top) / 2;
@@ -442,21 +469,16 @@ export default function BpmnFlowBoard({
         const endX = p2.x;
         const endY = p2Top;
 
-        // Se o destino está alinhado na mesma coluna X, desce em linha reta
         if (Math.abs(startX - endX) <= 6 && !intersectsOtherNode(startX, startY, endX, endY)) {
           const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
           const labelPos = { x: startX + 12, y: corridorY };
           return { pathData, labelPos, isBackward: false };
         }
 
-        // Sai da base de A, desce até o corredor entre raias,
-        // corre na horizontal pelo corredor livre (por fora de qualquer atividade)
-        // e desce verticalmente no topo de B
         const pathData = `M ${startX} ${startY} L ${startX} ${corridorY} L ${endX} ${corridorY} L ${endX} ${endY}`;
         const labelPos = { x: (startX + endX) / 2, y: corridorY - 10 };
         return { pathData, labelPos, isBackward: false };
       } else {
-        // De baixo para cima (ex: Raia 2 -> Raia 1)
         const p1Top = p1.y - p1.h / 2;
         const p2Bottom = p2.y + p2.h / 2;
         const corridorY = (p1Top + p2Bottom) / 2;
@@ -482,8 +504,6 @@ export default function BpmnFlowBoard({
     const isBackward = p2.x < p1.x + p1.w / 2 + 15;
 
     if (isBackward) {
-      // Retorno / Loop para trás (como na imagem de referência)
-      // Sai da base de A, passa pelo canal inferior da raia e sobe na base de B
       const startX = p1.x;
       const startY = p1.y + p1.h / 2;
       const endX = p2.x;
@@ -495,25 +515,21 @@ export default function BpmnFlowBoard({
 
       return { pathData, labelPos, isBackward: true };
     } else {
-      // Fluxo em frente para a direita
       const startX = p1.x + p1.w / 2;
       const startY = p1.y;
       const endX = p2.x - p2.w / 2;
       const endY = p2.y;
 
       if (!intersectsOtherNode(startX, startY, endX, endY) && Math.abs(startY - endY) <= 5) {
-        // Linha reta horizontal direta (sem obstáculos)
         const pathData = `M ${startX} ${startY} L ${endX} ${endY}`;
         const labelPos = { x: (startX + endX) / 2, y: startY - 12 };
         return { pathData, labelPos, isBackward: false };
       } else if (!intersectsOtherNode(startX, startY, endX, endY)) {
-        // Degrau ortogonal normal
         const midX = (startX + endX) / 2;
         const pathData = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
         const labelPos = { x: midX + 8, y: (startY + endY) / 2 };
         return { pathData, labelPos, isBackward: false };
       } else {
-        // Há um nó intermediário no caminho horizontal! Desvia "por fora" pelo canal superior
         const bypassY = Math.min(p1.y - p1.h / 2, p2.y - p2.h / 2) - 36;
         const pathData = `M ${p1.x} ${p1.y - p1.h / 2} L ${p1.x} ${bypassY} L ${p2.x} ${bypassY} L ${p2.x} ${p2.y - p2.h / 2}`;
         const labelPos = { x: (p1.x + p2.x) / 2, y: bypassY - 8 };
@@ -558,6 +574,7 @@ export default function BpmnFlowBoard({
 
     // 1. Soltou da Paleta
     if (paletteType) {
+      const nextOrdem = maxOrdemFluxo > 0 ? maxOrdemFluxo + 1 : undefined;
       if (
         paletteType === 'task_user' || 
         paletteType === 'task_service' || 
@@ -579,6 +596,7 @@ export default function BpmnFlowBoard({
           Prazo_Dias: 5,
           Status_Tarefa: 'Pendente',
           areaResponsavel: targetLane.nome,
+          ordemFluxo: nextOrdem,
           bpmnType: 'task',
           descricao: '',
           MovidoPor: currentUser.name,
@@ -605,6 +623,7 @@ export default function BpmnFlowBoard({
           type: paletteType,
           label: defaultLabels[paletteType] || 'Elemento BPMN',
           laneId: targetLane.id,
+          ordemFluxo: nextOrdem,
           prazoDias: paletteType === 'timer' ? 5 : undefined,
         };
 
@@ -757,6 +776,7 @@ export default function BpmnFlowBoard({
       type: 'start',
       label: 'Demanda Oficializada',
       laneId: firstLaneId,
+      ordemFluxo: 1,
     };
 
     const xor1Node: BpmnNode = {
@@ -764,6 +784,7 @@ export default function BpmnFlowBoard({
       type: 'gateway_exclusive',
       label: 'Requisitos Prévios?',
       laneId: firstLaneId,
+      ordemFluxo: 2,
     };
 
     const xor2Node: BpmnNode = {
@@ -771,6 +792,7 @@ export default function BpmnFlowBoard({
       type: 'gateway_exclusive',
       label: 'Parecer Aprovado?',
       laneId: firstLaneId,
+      ordemFluxo: 4,
     };
 
     const endNode: BpmnNode = {
@@ -778,6 +800,7 @@ export default function BpmnFlowBoard({
       type: 'end',
       label: 'Contratação Homologada',
       laneId: firstLaneId,
+      ordemFluxo: 6,
     };
 
     // Tarefas
@@ -789,6 +812,7 @@ export default function BpmnFlowBoard({
       Prazo_Dias: 10,
       Status_Tarefa: 'Em Elaboração',
       areaResponsavel: firstLaneName,
+      ordemFluxo: 3,
       bpmnType: 'task',
       MovidoPor: currentUser.name,
       MovidoEm: new Date().toISOString(),
@@ -803,6 +827,7 @@ export default function BpmnFlowBoard({
       Prazo_Dias: 8,
       Status_Tarefa: 'Pendente',
       areaResponsavel: firstLaneName,
+      ordemFluxo: 5,
       bpmnType: 'task',
       MovidoPor: currentUser.name,
       MovidoEm: new Date().toISOString(),
@@ -876,6 +901,7 @@ export default function BpmnFlowBoard({
         Prazo_Dias: Number(taskPrazo) || 1,
         Status_Tarefa: taskStatus,
         areaResponsavel: taskArea,
+        ordemFluxo: maxOrdemFluxo > 0 ? maxOrdemFluxo + 1 : undefined,
         descricao: taskDescricao.trim(),
         MovidoPor: currentUser.name,
         MovidoEm: new Date().toISOString(),
@@ -988,6 +1014,265 @@ export default function BpmnFlowBoard({
     setTimeout(updateNodePositions, 100);
   };
 
+  const seiMeta = planejamento.seiSyncMetadata;
+
+  // Renderizador auxiliar de um Nó BPMN Adicional (Start, Gateway, End, Artefato)
+  const renderAdditionalNodeCard = (node: BpmnNode) => {
+    const isConnectingSource = connectSourceId === node.id;
+    const isGateway = node.type.startsWith('gateway');
+    const isStart = node.type === 'start' || node.type === 'start_message';
+    const isEnd = node.type === 'end' || node.type === 'end_terminate';
+    const isDataObject = node.type === 'data_object';
+    const isCurrentSeiPos = Boolean(node.isCurrentSeiPosition || seiMeta?.activeNodeId === node.id);
+
+    return (
+      <div 
+        key={node.id} 
+        className="flex flex-col items-center justify-center shrink-0 relative py-4 group/node"
+      >
+        {isCurrentSeiPos && (
+          <div className="absolute -top-5 z-30 bg-emerald-500 text-black text-[9px] font-extrabold font-mono px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 animate-bounce whitespace-nowrap">
+            <MapPin className="w-2.5 h-2.5" />
+            <span>NO SEI AGORA</span>
+          </div>
+        )}
+
+        {isGateway && (
+          <span className="absolute -top-3 text-[11px] font-bold text-on-surface text-center leading-tight whitespace-nowrap bg-surface-container-low/95 border border-outline-variant px-1.5 py-0.5 rounded shadow-2xs z-10">
+            {node.label}
+          </span>
+        )}
+
+        <div
+          id={`bpmn-node-${node.id}`}
+          draggable={activeTool === 'select'}
+          onDragStart={(e) => handleNodeDragStart(e, node.id)}
+          onClick={() => {
+            if (activeTool !== 'select' || connectSourceId) {
+              handleConnectElement(node.id);
+            }
+          }}
+          className={`transition-all select-none relative ${
+            activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
+          } ${
+            isConnectingSource
+              ? 'ring-4 ring-amber-400 shadow-lg'
+              : isCurrentSeiPos
+                ? 'ring-4 ring-emerald-500 border-emerald-500 shadow-lg shadow-emerald-500/25'
+                : ''
+          } ${
+            isGateway
+              ? 'w-13 h-13 rotate-45 border-2 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
+              : isStart
+                ? 'w-11 h-11 rounded-full border-2 border-emerald-500 bg-emerald-500/10 text-on-surface flex items-center justify-center shadow-xs'
+                : isEnd
+                  ? 'w-11 h-11 rounded-full border-4 border-rose-500 bg-rose-500/10 text-on-surface flex items-center justify-center shadow-xs'
+                  : node.type === 'timer'
+                    ? 'w-11 h-11 rounded-full border-2 border-double border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
+                    : isDataObject
+                      ? 'w-24 h-28 border-2 border-outline-variant bg-surface-container-low text-on-surface rounded-sm flex flex-col justify-center items-center shadow-xs p-2'
+                      : 'w-32 border-l-4 border-outline-variant bg-surface-container-low text-on-surface p-2 text-xs italic shadow-xs'
+          }`}
+        >
+          {isGateway && (
+            <span className="-rotate-45 text-xl font-black font-mono text-on-surface select-none">
+              {node.type === 'gateway_exclusive' ? '✕' : node.type === 'gateway_parallel' ? '➕' : '◯'}
+            </span>
+          )}
+          {isStart && node.type === 'start_message' && (
+            <Mail className="w-4 h-4 text-emerald-400" />
+          )}
+          {isStart && node.type === 'start' && (
+            <Play className="w-4 h-4 text-emerald-400 fill-emerald-400/30" />
+          )}
+          {node.type === 'timer' && (
+            <Clock className="w-4 h-4 text-on-surface" />
+          )}
+          {node.type === 'end_terminate' && (
+            <span className="w-4 h-4 rounded-full bg-rose-500 inline-block" />
+          )}
+          {isDataObject && (
+            <FileText className="w-6 h-6 text-on-surface mb-1" />
+          )}
+
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleConnectElement(node.id); }}
+            className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-30 cursor-pointer shadow-md ${
+              isGateway ? '-rotate-45' : ''
+            } ${
+              isConnectingSource 
+                ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-amber-300 animate-pulse'
+                : 'bg-surface-container-high text-on-surface border border-outline-variant opacity-0 group-hover/node:opacity-100 hover:scale-115 hover:bg-primary hover:text-on-primary'
+            }`}
+            title="Traçar Seta a partir deste nó"
+          >
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {!isGateway && (
+          <span className="text-[11px] font-semibold text-on-surface text-center mt-2.5 leading-snug max-w-[115px] break-words">
+            {node.label}
+          </span>
+        )}
+
+        <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity bg-surface-container-low/95 border border-outline-variant rounded-md p-0.5 shadow-xs z-30">
+          <button
+            type="button"
+            onClick={() => handleOpenNodeModal(node)}
+            className="p-1 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface rounded"
+            title="Editar elemento"
+          >
+            <Edit3 className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDeleteNode(node.id)}
+            className="p-1 hover:bg-rose-500/15 text-rose-500 rounded"
+            title="Excluir elemento"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Renderizador auxiliar de uma Tarefa BPMN (com destaque de Posição Atual no SEI)
+  const renderTaskCard = (task: TarefaPlanejamento, laneNomeForEdit: string) => {
+    const sla = getTaskSla(task);
+    const isConnectingSource = connectSourceId === task.id;
+    const isCurrentSeiPos = Boolean(task.isCurrentSeiPosition || seiMeta?.activeNodeId === task.id);
+
+    return (
+      <div
+        key={task.id}
+        className="flex flex-col items-center justify-center shrink-0 relative group/card py-4"
+      >
+        {/* Badge Pulsante indicando ONDE O PROCESSO SE ENCONTRA NO SEI */}
+        {isCurrentSeiPos && (
+          <div className="absolute -top-3.5 z-30 bg-emerald-500 text-slate-950 text-[9.5px] font-extrabold font-mono px-2.5 py-0.5 rounded-full shadow-lg flex items-center gap-1 ring-2 ring-emerald-300 animate-pulse whitespace-nowrap">
+            <MapPin className="w-3 h-3 stroke-[2.5]" />
+            <span>ONDE ESTÁ NO SEI ({task.seiUnidade || seiMeta?.unidadeAtual || 'ATUAL'})</span>
+          </div>
+        )}
+
+        <div
+          id={`bpmn-node-${task.id}`}
+          draggable={activeTool === 'select'}
+          onDragStart={(e) => handleTaskDragStart(e, task.id)}
+          onClick={() => {
+            if (activeTool !== 'select' || connectSourceId) {
+              handleConnectElement(task.id);
+            }
+          }}
+          className={`w-48 min-h-[104px] rounded-2xl border-2 flex flex-col justify-between p-2.5 shadow-xs relative transition-all select-none ${
+            activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
+          } ${
+            isConnectingSource
+              ? 'border-amber-400 bg-surface-container-low ring-4 ring-amber-400 shadow-lg'
+              : isCurrentSeiPos
+                ? 'border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/30 shadow-xl shadow-emerald-500/20'
+                : sla.isAtrasada
+                  ? 'border-rose-500 bg-surface-container-low ring-2 ring-rose-500/50'
+                  : task.Status_Tarefa === 'Concluído'
+                    ? 'border-sky-500/50 bg-surface-container-low hover:border-primary'
+                    : 'border-outline-variant bg-surface-container-low hover:border-primary hover:shadow-md'
+          }`}
+        >
+          {/* Top Header da Tarefa: mini ícone de tipo BPMN + Doc SEI + alerta SLA */}
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1 min-w-0">
+              <span className={isCurrentSeiPos ? 'text-emerald-400' : 'text-on-surface-variant'} title="Atividade BPMN">
+                {task.Status_Tarefa === 'Concluído' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <User className="w-3.5 h-3.5" />
+                )}
+              </span>
+              {task.seiDocNumber && (
+                <span className="text-[9px] font-mono bg-surface-container-high border border-outline-variant px-1.5 py-0.2 rounded text-on-surface-variant truncate" title={`Documento SEI: ${task.seiDocNumber}`}>
+                  SEI {task.seiDocNumber}
+                </span>
+              )}
+            </div>
+
+            {sla.isAtrasada ? (
+              <span className="bg-rose-500 text-white text-[9px] font-bold font-mono px-1.5 py-0.5 rounded-full animate-pulse shadow-2xs shrink-0">
+                +{sla.diasExcedidos}d
+              </span>
+            ) : task.seiAssinado !== undefined ? (
+              <span
+                className={`text-[8.5px] font-bold px-1.5 py-0.2 rounded-full shrink-0 ${
+                  task.seiAssinado
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                }`}
+              >
+                {task.seiAssinado ? 'Assinado' : 'Minuta'}
+              </span>
+            ) : null}
+          </div>
+
+          {/* Texto Principal Centralizado */}
+          <div className="flex-1 flex items-center justify-center text-center px-1 my-1">
+            <p className={`text-xs font-semibold leading-snug line-clamp-3 ${isCurrentSeiPos ? 'text-emerald-300 font-bold' : 'text-on-surface'}`}>
+              {task.Tarefa}
+            </p>
+          </div>
+
+          {/* Rodapé discreto com Prazo e Status */}
+          <div className="flex items-center justify-between text-[9.5px] text-on-surface-variant font-mono pt-1 border-t border-outline-variant/60">
+            <span className="flex items-center gap-0.5">
+              <Clock className="w-2.5 h-2.5" />
+              <strong>{sla.prazo}d</strong>
+            </span>
+            <span className={`truncate max-w-[100px] font-sans font-semibold ${
+              isCurrentSeiPos ? 'text-emerald-400' : task.Status_Tarefa === 'Concluído' ? 'text-sky-400' : ''
+            }`}>
+              {task.Status_Tarefa}
+            </span>
+          </div>
+
+          {/* Puxador rápido de Seta na borda direita */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleConnectElement(task.id); }}
+            className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-30 cursor-pointer shadow-md ${
+              isConnectingSource 
+                ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-amber-300 animate-pulse'
+                : 'bg-surface-container-high text-on-surface border border-outline-variant opacity-0 group-hover/card:opacity-100 hover:scale-115 hover:bg-primary hover:text-on-primary'
+            }`}
+            title="Traçar Seta a partir desta Tarefa"
+          >
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Ações de Edição e Exclusão no hover */}
+        <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-surface-container-low/95 border border-outline-variant rounded-md p-0.5 shadow-xs z-30">
+          <button
+            type="button"
+            onClick={() => handleOpenTaskModal(task, laneNomeForEdit)}
+            className="p-1 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface rounded"
+            title="Editar tarefa"
+          >
+            <Edit3 className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDeleteTarefa(task.id)}
+            className="p-1 hover:bg-rose-500/15 text-rose-500 rounded"
+            title="Excluir tarefa"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 md:p-6 shadow-sm space-y-4" data-tour="bpmn-flow-board">
       {/* Top Header */}
@@ -1002,8 +1287,14 @@ export default function BpmnFlowBoard({
                 Fluxo BPMN 2.0 Oficial
               </h3>
               <span className="text-[9.5px] font-mono font-bold bg-surface-container-high text-on-surface border border-outline-variant px-2 py-0.5 rounded">
-                Setas Retas 90° + Formatação Canônica
+                Setas Retas 90° + Estúdio de Fluxo SEI
               </span>
+              {seiMeta && (
+                <span className="text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+                  <Radio className="w-3 h-3 animate-pulse" />
+                  Espelhado do SEI ({seiMeta.unidadeAtual})
+                </span>
+              )}
               {connectSourceId && (
                 <span className="text-[10px] font-mono font-extrabold bg-amber-500 text-black px-2.5 py-0.5 rounded animate-pulse flex items-center gap-1 shadow-sm">
                   <Link2 className="w-3 h-3" />
@@ -1012,7 +1303,7 @@ export default function BpmnFlowBoard({
               )}
             </div>
             <p className="text-xs text-on-surface-variant mt-0.5">
-              Notação oficial com raias verticais, tarefas retangulares, gateways e setas ortogonais em ângulos retos de 90°.
+              Notação oficial com raias por coordenação/unidade SEI, tarefas ordenadas cronologicamente e destaque em tempo real de onde o processo se encontra.
             </p>
           </div>
         </div>
@@ -1027,6 +1318,30 @@ export default function BpmnFlowBoard({
             >
               <Unlink className="w-3.5 h-3.5" />
               <span>Cancelar Conexão</span>
+            </button>
+          )}
+
+          {onOpenSeiStudio && (
+            <button
+              type="button"
+              onClick={onOpenSeiStudio}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-500/15 border border-emerald-500/40 hover:bg-emerald-500/25 text-emerald-400 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-xs"
+              title="Abrir Estúdio de Fluxo SEI (Sincronizar processos ou restaurar versão anterior)"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Estúdio de Fluxo SEI</span>
+            </button>
+          )}
+
+          {hasRollbackAvailable && onRevertLastSeiSync && (
+            <button
+              type="button"
+              onClick={onRevertLastSeiSync}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 text-amber-400 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-xs"
+              title="Reverter para os dados anteriores à última leitura do SEI"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Voltar Dados Anteriores</span>
             </button>
           )}
 
@@ -1061,6 +1376,46 @@ export default function BpmnFlowBoard({
           )}
         </div>
       </div>
+
+      {/* Banner de Posição Atual no SEI (Quando Sincronizado pelo Estúdio de Fluxo SEI) */}
+      {seiMeta && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
+                  Posição Atual no SEI: {seiMeta.unidadeAtual}
+                </span>
+                {seiMeta.unidadesAbertas && seiMeta.unidadesAbertas.length > 1 && (
+                  <span className="text-[10px] font-mono bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded border border-outline-variant">
+                    Também aberto em: {seiMeta.unidadesAbertas.slice(1).join(', ')}
+                  </span>
+                )}
+                {seiMeta.diasNaUnidadeAtual !== undefined && (
+                  <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">
+                    Há {seiMeta.diasNaUnidadeAtual} dia(s) nesta etapa
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-on-surface mt-0.5">
+                <strong>Último andamento SEI:</strong> {seiMeta.ultimoAndamento || 'Processo mapeado'}{' '}
+                {seiMeta.ultimaDataAndamento && (
+                  <span className="text-on-surface-variant font-mono">({seiMeta.ultimaDataAndamento})</span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 text-[11px] text-on-surface-variant font-mono">
+            <span>
+              Sincronizado em: {new Date(seiMeta.lastSyncAt).toLocaleString('pt-BR')}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Toolbar de Ferramentas do Modelador */}
       <div className="bg-surface-container border border-outline-variant rounded-xl p-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2 shadow-xs">
@@ -1216,18 +1571,22 @@ export default function BpmnFlowBoard({
         </div>
       </div>
 
-      {/* BPMN Interactive Pool Canvas (Estrutura da Imagem de Referência) */}
+      {/* BPMN Interactive Pool Canvas */}
       <div 
         ref={canvasRef}
+        onScroll={updateNodePositions}
         className="bg-surface-container-lowest border-2 border-outline-variant rounded-xl overflow-x-auto custom-scrollbar shadow-md relative"
       >
         {/* Camada SVG de Conectores (Setas Retas em 90 Graus) */}
         <svg 
           className="absolute inset-0 pointer-events-none z-20"
-          style={{ width: '100%', height: '100%', minWidth: '1100px' }}
+          style={{
+            width: `${svgDimensions.width}px`,
+            height: `${svgDimensions.height}px`,
+            minWidth: '1100px',
+          }}
         >
           <defs>
-            {/* Marcador de seta triangular clássica BPMN para linhas horizontais/em frente */}
             <marker
               id="bpmn-arrow-head-orthogonal"
               markerWidth="8"
@@ -1239,16 +1598,15 @@ export default function BpmnFlowBoard({
               <polygon points="0 0.5, 7 3.5, 0 6.5" fill="currentColor" />
             </marker>
 
-            {/* Marcador para linhas que entram por baixo (apontando para cima) */}
             <marker
-              id="bpmn-arrow-head-up"
+              id="bpmn-arrow-head-sei-active"
               markerWidth="8"
               markerHeight="8"
               refX="7"
               refY="3.5"
               orient="auto"
             >
-              <polygon points="0 0.5, 7 3.5, 0 6.5" fill="currentColor" />
+              <polygon points="0 0.5, 7 3.5, 0 6.5" fill="#10b981" />
             </marker>
           </defs>
 
@@ -1257,12 +1615,12 @@ export default function BpmnFlowBoard({
             const p2 = nodePositions[conn.toId];
             if (!p1 || !p2) return null;
 
-            const { pathData, labelPos, isBackward } = getOrthogonalPath(p1, p2, conn, nodePositions);
+            const { pathData, labelPos } = getOrthogonalPath(p1, p2, conn, nodePositions);
             const isAssociation = conn.tipo === 'association';
+            const isActiveTarget = Boolean(seiMeta?.activeNodeId && conn.toId === seiMeta.activeNodeId);
 
             return (
-              <g key={conn.id} className="pointer-events-auto group text-on-surface">
-                {/* Linha invisível larga para clique facilitado */}
+              <g key={conn.id} className={`pointer-events-auto group ${isActiveTarget ? 'text-emerald-400' : 'text-on-surface'}`}>
                 <path
                   d={pathData}
                   fill="none"
@@ -1272,26 +1630,30 @@ export default function BpmnFlowBoard({
                   onClick={() => handleOpenConnectionModal(conn)}
                 />
 
-                {/* Linha visível da seta (Reta ortogonal com cantos de 90 graus) */}
                 <path
                   d={pathData}
                   fill="none"
-                  stroke="currentColor"
-                  strokeWidth={isAssociation ? "1.5" : "2"}
+                  stroke={isActiveTarget ? '#10b981' : 'currentColor'}
+                  strokeWidth={isActiveTarget ? '2.5' : isAssociation ? '1.5' : '2'}
                   strokeLinejoin="miter"
                   strokeLinecap="square"
-                  strokeDasharray={isAssociation ? "5,4" : undefined}
-                  markerEnd={isAssociation ? undefined : 'url(#bpmn-arrow-head-orthogonal)'}
+                  strokeDasharray={isAssociation ? '5,4' : undefined}
+                  markerEnd={
+                    isAssociation
+                      ? undefined
+                      : isActiveTarget
+                        ? 'url(#bpmn-arrow-head-sei-active)'
+                        : 'url(#bpmn-arrow-head-orthogonal)'
+                  }
                   className="group-hover:stroke-primary transition-colors cursor-pointer"
                   onClick={() => handleOpenConnectionModal(conn)}
                 />
 
-                {/* Rótulo da Condição (ex: "Yes", "No", "Sim", "Não") como na imagem */}
                 {conn.label ? (
                   <foreignObject
-                    x={labelPos.x - 25}
+                    x={labelPos.x - 35}
                     y={labelPos.y - 10}
-                    width="60"
+                    width="75"
                     height="24"
                     className="overflow-visible"
                   >
@@ -1299,7 +1661,7 @@ export default function BpmnFlowBoard({
                       <button
                         type="button"
                         onClick={() => handleOpenConnectionModal(conn)}
-                        className="bg-surface-container-low/95 border border-outline-variant text-[10.5px] font-semibold text-on-surface px-1.5 py-0.5 rounded shadow-2xs hover:scale-105 transition-all cursor-pointer whitespace-nowrap"
+                        className="bg-surface-container-low/95 border border-outline-variant text-[10px] font-semibold text-on-surface px-1.5 py-0.5 rounded shadow-2xs hover:scale-105 transition-all cursor-pointer whitespace-nowrap"
                         title="Clique para editar rótulo da seta"
                       >
                         {conn.label}
@@ -1307,7 +1669,6 @@ export default function BpmnFlowBoard({
                     </div>
                   </foreignObject>
                 ) : (
-                  /* Botão sutil visível no hover para permitir nomear a seta */
                   <foreignObject
                     x={labelPos.x - 14}
                     y={labelPos.y - 10}
@@ -1342,6 +1703,15 @@ export default function BpmnFlowBoard({
 
             const laneAdditionalNodes = bpmnNodes.filter(n => n.laneId === lane.id);
             const isDropTarget = dragOverLaneId === lane.id;
+            const isCurrentSeiLane = Boolean(
+              seiMeta?.activeLaneId === lane.id ||
+              (seiMeta?.activeLaneNome && seiMeta.activeLaneNome.toLowerCase() === lane.nome.toLowerCase()) ||
+              laneTasks.some(t => t.isCurrentSeiPosition)
+            );
+
+            // Combina todos os itens desta raia e verifica se usamos colunas cronológicas (`ordemFluxo`)
+            const unOrderedNodes = laneAdditionalNodes.filter(n => !n.ordemFluxo);
+            const unOrderedTasks = laneTasks.filter(t => !t.ordemFluxo);
 
             return (
               <div 
@@ -1349,18 +1719,21 @@ export default function BpmnFlowBoard({
                 onDragOver={(e) => handleLaneDragOver(e, lane.id)}
                 onDragLeave={handleLaneDragLeave}
                 onDrop={(e) => handleLaneDrop(e, lane)}
-                className={`flex flex-row min-h-[290px] transition-all group ${
+                className={`flex flex-row min-h-[260px] transition-all group ${
                   isDropTarget 
                     ? 'bg-primary/5 ring-2 ring-inset ring-primary/40' 
-                    : 'bg-surface-container-lowest'
+                    : isCurrentSeiLane
+                      ? 'bg-emerald-500/[0.03]'
+                      : 'bg-surface-container-lowest'
                 }`}
               >
-                {/* Cabeçalho Vertical da Raia (Estilo "Customer" da Imagem de Referência) */}
+                {/* Cabeçalho Vertical da Raia */}
                 <div 
-                  className="w-12 sm:w-14 border-r-2 border-outline-variant bg-surface-container-low flex flex-col justify-between items-center py-4 select-none relative shrink-0"
+                  className={`w-12 sm:w-14 border-r-2 border-outline-variant flex flex-col justify-between items-center py-4 select-none relative shrink-0 ${
+                    isCurrentSeiLane ? 'bg-emerald-500/15' : 'bg-surface-container-low'
+                  }`}
                   style={{ borderLeft: `5px solid ${lane.cor || '#0ea5e9'}` }}
                 >
-                  {/* Botões rápidos discretos no topo da faixa vertical */}
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-1 z-30">
                     {laneIdx > 0 && (
                       <button
@@ -1382,10 +1755,17 @@ export default function BpmnFlowBoard({
                     </button>
                   </div>
 
-                  {/* Nome da Área formatado verticalmente seguindo a linha (como "Customer") */}
-                  <div className="flex-1 flex items-center justify-center my-2">
+                  <div className="flex-1 flex flex-col items-center justify-center my-2 gap-2">
+                    {isCurrentSeiLane && (
+                      <span
+                        className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"
+                        title="O processo está aberto nesta unidade/raia no SEI"
+                      />
+                    )}
                     <span 
-                      className="text-xs sm:text-sm font-bold tracking-widest text-on-surface uppercase whitespace-nowrap cursor-pointer hover:text-primary transition-colors"
+                      className={`text-xs sm:text-sm font-bold tracking-widest uppercase whitespace-nowrap cursor-pointer hover:text-primary transition-colors ${
+                        isCurrentSeiLane ? 'text-emerald-400' : 'text-on-surface'
+                      }`}
                       style={{
                         writingMode: 'vertical-rl',
                         transform: 'rotate(180deg)',
@@ -1397,7 +1777,6 @@ export default function BpmnFlowBoard({
                     </span>
                   </div>
 
-                  {/* Ações inferiores da raia */}
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-1 z-30">
                     {lanes.length > 1 && (
                       <button
@@ -1412,9 +1791,9 @@ export default function BpmnFlowBoard({
                   </div>
                 </div>
 
-                {/* Conteúdo da Raia / Elementos Alinhados Harmoniosamente */}
-                <div className="flex-1 px-8 py-6 flex items-center gap-14 sm:gap-18 overflow-x-auto custom-scrollbar relative">
-                  {laneTasks.length === 0 && laneAdditionalNodes.length === 0 ? (
+                {/* Conteúdo da Raia: Se houver `maxOrdemFluxo > 0`, alinha por colunas cronológicas para espelhar o fluxo real entre raias! */}
+                <div className="flex-1 px-8 py-6 flex items-center gap-12 sm:gap-14 overflow-visible relative">
+                  {laneTasks.length === 0 && laneAdditionalNodes.length === 0 && maxOrdemFluxo === 0 ? (
                     <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-outline-variant rounded-xl p-6 text-center">
                       <span className="text-xs text-on-surface-variant font-medium">
                         {isDropTarget 
@@ -1422,222 +1801,37 @@ export default function BpmnFlowBoard({
                           : 'Arraste componentes da paleta para esta raia ou clique em "+ Nova Tarefa"'}
                       </span>
                     </div>
-                  ) : (
+                  ) : maxOrdemFluxo > 0 ? (
                     <>
-                      {/* Renderização dos Nós adicionais e Tarefas com notação canônica */}
-
-                      {/* 1. Nós BPMN Adicionais (Start, Gateways, End, Anotações) */}
-                      {laneAdditionalNodes.map(node => {
-                        const isConnectingSource = connectSourceId === node.id;
-                        const isGateway = node.type.startsWith('gateway');
-                        const isStart = node.type === 'start' || node.type === 'start_message';
-                        const isEnd = node.type === 'end' || node.type === 'end_terminate';
-                        const isDataObject = node.type === 'data_object';
-                        const isAnnotation = node.type === 'annotation';
-
-                        return (
-                          <div 
-                            key={node.id} 
-                            className="flex flex-col items-center justify-center shrink-0 relative py-4 group/node"
-                          >
-                            {/* Rótulo ACIMA no caso de Gateways (como "Scan successful?" na imagem) */}
-                            {isGateway && (
-                              <span className="absolute -top-3 text-[11px] font-bold text-on-surface text-center leading-tight whitespace-nowrap bg-surface-container-low/95 border border-outline-variant px-1.5 py-0.5 rounded shadow-2xs z-10">
-                                {node.label}
-                              </span>
-                            )}
-
-                            {/* O Elemento Gráfico Central */}
-                            <div
-                              id={`bpmn-node-${node.id}`}
-                              draggable={activeTool === 'select'}
-                              onDragStart={(e) => handleNodeDragStart(e, node.id)}
-                              onClick={() => {
-                                if (activeTool !== 'select' || connectSourceId) {
-                                  handleConnectElement(node.id);
-                                }
-                              }}
-                              className={`transition-all select-none relative ${
-                                activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
-                              } ${
-                                isConnectingSource ? 'ring-4 ring-amber-400 shadow-lg' : ''
-                              } ${
-                                isGateway
-                                  ? 'w-13 h-13 rotate-45 border-2 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
-                                  : isStart
-                                    ? 'w-11 h-11 rounded-full border-2 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
-                                    : isEnd
-                                      ? 'w-11 h-11 rounded-full border-4 border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
-                                      : node.type === 'timer'
-                                        ? 'w-11 h-11 rounded-full border-2 border-double border-outline-variant bg-surface-container-low text-on-surface flex items-center justify-center shadow-xs'
-                                        : isDataObject
-                                          ? 'w-24 h-28 border-2 border-outline-variant bg-surface-container-low text-on-surface rounded-sm flex flex-col justify-center items-center shadow-xs p-2'
-                                          : 'w-32 border-l-4 border-outline-variant bg-surface-container-low text-on-surface p-2 text-xs italic shadow-xs'
-                              }`}
-                            >
-                              {/* Símbolo Interno do Nó */}
-                              {isGateway && (
-                                <span className="-rotate-45 text-xl font-black font-mono text-on-surface select-none">
-                                  {node.type === 'gateway_exclusive' ? '✕' : node.type === 'gateway_parallel' ? '➕' : '◯'}
-                                </span>
-                              )}
-                              {isStart && node.type === 'start_message' && (
-                                <Mail className="w-4 h-4 text-on-surface" />
-                              )}
-                              {node.type === 'timer' && (
-                                <Clock className="w-4 h-4 text-on-surface" />
-                              )}
-                              {node.type === 'end_terminate' && (
-                                <span className="w-4 h-4 rounded-full bg-on-surface inline-block" />
-                              )}
-                              {isDataObject && (
-                                <FileText className="w-6 h-6 text-on-surface mb-1" />
-                              )}
-
-                              {/* Puxador rápido de Seta na borda direita */}
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleConnectElement(node.id); }}
-                                className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-30 cursor-pointer shadow-md ${
-                                  isGateway ? '-rotate-45' : ''
-                                } ${
-                                  isConnectingSource 
-                                    ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-amber-300 animate-pulse'
-                                    : 'bg-surface-container-high text-on-surface border border-outline-variant opacity-0 group-hover/node:opacity-100 hover:scale-115 hover:bg-primary hover:text-on-primary'
-                                }`}
-                                title="Traçar Seta a partir deste nó"
-                              >
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            {/* Rótulo ABAIXO no caso de Start, End e Artefatos (como "Notices QR code" e "Is informed") */}
-                            {!isGateway && (
-                              <span className="text-[11px] font-semibold text-on-surface text-center mt-2.5 leading-snug max-w-[110px] break-words">
-                                {node.label}
-                              </span>
-                            )}
-
-                            {/* Ações de Edição e Exclusão no hover */}
-                            <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity bg-surface-container-low/95 border border-outline-variant rounded-md p-0.5 shadow-xs z-30">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenNodeModal(node)}
-                                className="p-1 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface rounded"
-                                title="Editar elemento"
-                              >
-                                <Edit3 className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteNode(node.id)}
-                                className="p-1 hover:bg-rose-500/15 text-rose-500 rounded"
-                                title="Excluir elemento"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* 2. Tarefas / Atividades BPMN (Formato Retangular da Imagem de Referência) */}
-                      {laneTasks.map(task => {
-                        const sla = getTaskSla(task);
-                        const isConnectingSource = connectSourceId === task.id;
+                      {Array.from({ length: maxOrdemFluxo }, (_, idx) => idx + 1).map(colOrder => {
+                        const nodesAtStep = laneAdditionalNodes.filter(n => n.ordemFluxo === colOrder);
+                        const tasksAtStep = laneTasks.filter(t => t.ordemFluxo === colOrder);
+                        const hasItemInCol = nodesAtStep.length > 0 || tasksAtStep.length > 0;
 
                         return (
                           <div
-                            key={task.id}
-                            className="flex flex-col items-center justify-center shrink-0 relative group/card py-4"
+                            key={`col-${lane.id}-${colOrder}`}
+                            className="w-48 shrink-0 flex flex-col items-center justify-center min-h-[130px]"
                           >
-                            <div
-                              id={`bpmn-node-${task.id}`}
-                              draggable={activeTool === 'select'}
-                              onDragStart={(e) => handleTaskDragStart(e, task.id)}
-                              onClick={() => {
-                                if (activeTool !== 'select' || connectSourceId) {
-                                  handleConnectElement(task.id);
-                                }
-                              }}
-                              className={`w-44 h-24 rounded-2xl border-2 border-outline-variant bg-surface-container-low flex flex-col justify-between p-2.5 shadow-xs relative transition-all select-none hover:border-primary ${
-                                activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
-                              } ${
-                                isConnectingSource
-                                  ? 'ring-4 ring-amber-400 shadow-lg'
-                                  : sla.isAtrasada
-                                    ? 'border-rose-500 ring-2 ring-rose-500/50'
-                                    : 'hover:shadow-md'
-                              }`}
-                            >
-                              {/* Top Header da Tarefa: mini ícone de tipo BPMN + alerta SLA */}
-                              <div className="flex items-center justify-between">
-                                <span className="text-on-surface-variant" title="BPMN Activity">
-                                  <User className="w-3.5 h-3.5" />
-                                </span>
-
-                                {sla.isAtrasada && (
-                                  <span className="bg-rose-500 text-white text-[9px] font-bold font-mono px-1.5 py-0.5 rounded-full animate-pulse shadow-2xs">
-                                    +{sla.diasExcedidos}d
-                                  </span>
-                                )}
+                            {hasItemInCol ? (
+                              <div className="flex flex-col items-center gap-4">
+                                {nodesAtStep.map(n => renderAdditionalNodeCard(n))}
+                                {tasksAtStep.map(t => renderTaskCard(t, lane.nome))}
                               </div>
-
-                              {/* Texto Principal Centralizado (como "Scan QR code" e "Open product information") */}
-                              <div className="flex-1 flex items-center justify-center text-center px-1">
-                                <p className="text-xs font-semibold text-on-surface leading-snug line-clamp-3">
-                                  {task.Tarefa}
-                                </p>
-                              </div>
-
-                              {/* Rodapé discreto com Prazo e Status */}
-                              <div className="flex items-center justify-between text-[9.5px] text-on-surface-variant font-mono pt-1 border-t border-outline-variant/60">
-                                <span className="flex items-center gap-0.5">
-                                  <Clock className="w-2.5 h-2.5" />
-                                  <strong>{sla.prazo}d</strong>
-                                </span>
-                                <span className="truncate max-w-[85px] font-sans font-medium">
-                                  {task.Status_Tarefa}
-                                </span>
-                              </div>
-
-                              {/* Puxador rápido de Seta na borda direita */}
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); handleConnectElement(task.id); }}
-                                className={`absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-30 cursor-pointer shadow-md ${
-                                  isConnectingSource 
-                                    ? 'bg-amber-400 text-black border-amber-300 ring-2 ring-amber-300 animate-pulse'
-                                    : 'bg-surface-container-high text-on-surface border border-outline-variant opacity-0 group-hover/card:opacity-100 hover:scale-115 hover:bg-primary hover:text-on-primary'
-                                }`}
-                                title="Traçar Seta a partir desta Tarefa"
-                              >
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-
-                            {/* Ações de Edição e Exclusão no hover */}
-                            <div className="absolute -bottom-6 flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity bg-surface-container-low/95 border border-outline-variant rounded-md p-0.5 shadow-xs z-30">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenTaskModal(task, lane.nome)}
-                                className="p-1 hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface rounded"
-                                title="Editar tarefa"
-                              >
-                                <Edit3 className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => onDeleteTarefa(task.id)}
-                                className="p-1 hover:bg-rose-500/15 text-rose-500 rounded"
-                                title="Excluir tarefa"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </div>
+                            ) : (
+                              <div className="w-48 h-16 pointer-events-none" />
+                            )}
                           </div>
                         );
                       })}
+                      {/* Elementos adicionais sem ordemFluxo */}
+                      {unOrderedNodes.map(n => renderAdditionalNodeCard(n))}
+                      {unOrderedTasks.map(t => renderTaskCard(t, lane.nome))}
+                    </>
+                  ) : (
+                    <>
+                      {laneAdditionalNodes.map(node => renderAdditionalNodeCard(node))}
+                      {laneTasks.map(task => renderTaskCard(task, lane.nome))}
                     </>
                   )}
                 </div>
@@ -1872,7 +2066,7 @@ export default function BpmnFlowBoard({
             <form onSubmit={handleSaveNode} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">
-                  Rótulo / Pergunta (Ex: "Scan successful?") <span className="text-rose-400">*</span>
+                  Rótulo / Pergunta <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -1947,11 +2141,11 @@ export default function BpmnFlowBoard({
             <form onSubmit={handleSaveConnection} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">
-                  Rótulo da Condição (Ex: "Yes", "No", "Sim", "Não", "Aprovado")
+                  Rótulo da Condição (Ex: "Sim", "Não", "Aprovado")
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex: Yes"
+                  placeholder="Ex: Sim"
                   value={connLabel}
                   onChange={(e) => setConnLabel(e.target.value)}
                   className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-3.5 py-2 text-xs text-on-surface focus:outline-none focus:border-primary"

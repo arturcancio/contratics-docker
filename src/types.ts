@@ -93,6 +93,67 @@ export interface Planejamento {
   bpmnLanes?: BpmnLane[];
   bpmnNodes?: BpmnNode[];
   bpmnConnections?: BpmnConnection[];
+  seiSyncMetadata?: SeiProcessSyncMetadata;
+}
+
+export interface SeiRelatedProcessInfo {
+  protocolo: string;
+  tipo: string;
+  categoria: 'pagamento' | 'aditivo' | 'apostilamento' | 'descentralizacao' | 'empenho' | 'os' | 'outro';
+  descricao?: string;
+  ultimoAndamento?: string;
+  dataUltimoAndamento?: string;
+  unidadeAtual?: string;
+  documentosDetectados?: Array<{
+    idSei: string;
+    tipo: string;
+    numero?: string;
+    data?: string;
+    unidade?: string;
+    assinado: boolean;
+  }>;
+}
+
+export interface SeiDocumentInfo {
+  idSei: string;
+  tipo: string;
+  numero?: string;
+  data?: string;
+  unidade?: string;
+  assinado: boolean;
+  assinantes?: string[];
+}
+
+export interface SeiProcessSyncMetadata {
+  lastSyncAt: string;
+  unidadesAbertas: string[];
+  unidadeAtual: string;
+  ultimoAndamento?: string;
+  ultimaDataAndamento?: string;
+  activeNodeId?: string;
+  activeLaneId?: string;
+  activeLaneNome?: string;
+  diasNaUnidadeAtual?: number;
+  processosRelacionados?: SeiRelatedProcessInfo[];
+  documentosArvore?: SeiDocumentInfo[];
+  etapasMapeadasCount?: number;
+}
+
+export interface SeiSyncSnapshot {
+  id: string;
+  createdAt: string;
+  createdBy: string;
+  description: string;
+  source: 'extension_batch' | 'extension_single' | 'manual_backup';
+  processesUpdated: string[];
+  previousState: {
+    planejamentos: Planejamento[];
+    tarefas: TarefaPlanejamento[];
+    historicoPlanejamentos: HistoricoPlanejamento[];
+    contratos: Contrato[];
+    pagamentos: Pagamento[];
+    historicosContratuais?: HistoricoContratual[];
+  };
 }
 
 export interface BpmnLane {
@@ -129,6 +190,10 @@ export interface BpmnNode {
   prazoDias?: number;
   descricao?: string;
   tarefaId?: string;
+  ordemFluxo?: number;
+  seiDocNumber?: string;
+  seiUnidade?: string;
+  isCurrentSeiPosition?: boolean;
 }
 
 export interface BpmnConnection {
@@ -138,6 +203,7 @@ export interface BpmnConnection {
   label?: string;
   tipo?: 'sequence' | 'conditional' | 'default' | 'association';
   cor?: string;
+  isSeiExecuted?: boolean;
 }
 
 export interface HistoricoPlanejamento {
@@ -173,6 +239,11 @@ export interface TarefaPlanejamento {
   bpmnType?: 'task' | 'gateway' | 'start' | 'end';
   descricao?: string;
   dataConclusao?: string;
+  seiDocNumber?: string;
+  seiUnidade?: string;
+  isCurrentSeiPosition?: boolean;
+  seiAssinado?: boolean;
+  seiAssinantes?: string[];
 }
 
 export type StatusContrato = 'Vigente' | 'A Vencer' | 'Encerrado';
@@ -294,6 +365,9 @@ export interface Contrato {
 
   // Ordens de Serviço
   ordensServico?: OrdemServico[];
+
+  // Sincronização SEI & Processos Relacionados
+  seiSyncMetadata?: SeiProcessSyncMetadata;
 }
 
 export interface ItemContratoSOF {

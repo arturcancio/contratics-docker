@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Contratics SEI Studio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 340px;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+    .badge {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: 14px;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    p.sub {
+      font-size: 11px;
+      color: #94a3b8;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .status-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 11px;
+      margin-bottom: 12px;
+      color: #cbd5e1;
+    }
+    .btn {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.92; }
+    .btn-primary {
+      background: #10b981;
+      color: #022c22;
+    }
+    .btn-secondary {
+      background: #1e293b;
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+    .btn-rollback {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+    .footer {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #1e293b;
+      font-size: 10px;
+      color: #64748b;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <h1>Contratics SEI Studio</h1>
+        <span class="badge">BPMN 2.0</span>
+      </div>
+      <div style="font-size:10px; color:#64748b; margin-top:2px;">SOF / MPO • Estúdio de Fluxo SEI</div>
+    </div>
+  </div>
+
+  <p class="sub">
+    Lê os processos monitorados no Contratics diretamente na sua sessão do SEI e espelha o fluxo real nas raias do BPMN 2.0.
+  </p>
+
+  <div id="statusBox" class="status-box">
+    Pronto para sincronizar. Mantenha uma aba do Contratics e uma aba do SEI abertas.
+  </div>
+
+  <button id="btnBatchScan" class="btn btn-primary">
+    ⚡ Iniciar Varredura Geral (Contratics)
+  </button>
+
+  <button id="btnSyncCurrent" class="btn btn-secondary">
+    📍 Sincronizar Processo Aberto no SEI
+  </button>
+
+  <button id="btnRollback" class="btn btn-rollback">
+    ⏪ Voltar aos Dados Anteriores (Rollback)
+  </button>
+
+  <div class="footer">
+    Ponto de Restauração Automático ativo antes de cada escrita
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
