@@ -1,24 +1,37 @@
 /**
- * Contratics SEI Studio - Motor de Leitura SEI (Inspirado no Estúdio de Fluxo do SEI Pro)
- * Opera dentro da sessão autenticada do usuário no SEI, extraindo:
- * 1. Árvore de Documentos (Nos[] / infraArvoreNo) e Assinaturas;
- * 2. Unidades onde o processo está aberto atualmente (Posição Atual para destaque BPMN);
- * 3. Processos Relacionados / Associados (Pagamentos, Aditivos, Descentralizações, OS);
- * 4. Histórico completo de tramitação (#tblHistorico em procedimento_consultar_historico).
+ * Contratics SEI Studio — Suite Completa Inspirada no SEI Pro
+ *
+ * Ferramentas incluídas:
+ * 1. Estúdio de Fluxo SEI Pro: Extrai toda a trajetória cronológica (#tblHistorico),
+ *    unidades abertas (divInformacao), árvore de documentos (infraArvoreNo) e assinaturas
+ *    para espelhar no Fluxo BPMN 2.0 Oficial do Contratics.
+ * 2. Monitoramento Ativo no Controle de Processos & Acompanhamento Especial do SEI:
+ *    Destaca automaticamente nas tabelas do SEI todos os processos que estão cadastrados
+ *    no Contratics (Planejamentos e Contratos), permitindo atualizar 1 processo ou todos
+ *    os visíveis com 1 clique diretamente de dentro do SEI.
+ * 3. Varredura Profunda (2º Nível) de Processos Associados / Relacionados:
+ *    Inspeciona automaticamente os processos relacionados (Pagamentos, Notas de Empenho,
+ *    Descentralizações, Termos Aditivos, Apostilamentos e Ordens de Serviço) para alimentar
+ *    o Contratics com o andamento e documentos de cada processo associado.
+ * 4. Extrator de Artefatos e Portarias:
+ *    Identifica automaticamente DFD, ETP, TR, Portaria da EPC, Portaria de Fiscalização,
+ *    Parecer CONJUR, Edital, TRP, TRD e Notas de Empenho na árvore do SEI.
+ * 5. Painel Retrátil "Contratics • SEI Pro" dentro do SEI + Botão de Rollback com 1 Clique.
  */
 
 (function () {
   if (window.__CONTRATICS_SEI_READER_LOADED__) return;
   window.__CONTRATICS_SEI_READER_LOADED__ = true;
 
-  /**
-   * Decodifica HTML entities básicas e limpa espaços
-   */
   function cleanText(raw) {
     if (!raw) return '';
     const txt = document.createElement('textarea');
     txt.innerHTML = String(raw).replace(/<[^>]*>/g, ' ');
     return txt.value.replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeDigits(val) {
+    return String(val || '').replace(/\D/g, '');
   }
 
   /**
@@ -67,7 +80,6 @@
     let match;
     while ((match = nodeRegex.exec(htmlText)) !== null) {
       const argsRaw = match[1];
-      // Extrai argumentos entre aspas
       const strArgs = [];
       const argPattern = /"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|null|true|false|\d+/g;
       let am;
@@ -100,25 +112,46 @@
           }
         }
       } else if (nodeType === 'DOCUMENTO' || nodeHref.includes('acao=documento_visualizar')) {
-        // Exemplo de label: "Termo de Referência 12345678" ou "Nota Técnica 45 (12345678)"
         const seiNumMatch = nodeLabel.match(/(\d{7,10})\s*\)?$/) || nodeLabel.match(/\((\d{7,10})\)/);
-        const numeroSei = seiNumMatch ? seiNumMatch[1] : nodeLabel;
-        const tipoNome = seiNumMatch
+        const idSei = seiNumMatch ? seiNumMatch[1] : nodeLabel;
+        const rawRest = seiNumMatch
           ? nodeLabel.replace(seiNumMatch[0], '').replace(/[()]/g, '').trim()
           : nodeLabel;
 
-        // Tenta identificar unidade geradora no title ou label
+        // Separa eventual número do documento (ex: "Portaria 42/2026" -> tipo: "Portaria", numero: "42/2026")
+        const docNumMatch = rawRest.match(/^(.*?)\s+(?:n[º°]\s*)?(\d+(?:\/\d{2,4})?)$/i);
+        const tipoNome = docNumMatch ? docNumMatch[1].trim() : rawRest;
+        const numeroDoc = docNumMatch ? docNumMatch[2].trim() : undefined;
+
         const unitMatch = nodeTitle.match(/\b([A-Z]{2,10}(?:[-/][A-Z]{2,10})*)\b/);
         const dateMatch = nodeTitle.match(/(\d{2}\/\d{2}\/\d{4})/);
 
+        // Extrai assinantes caso presentes no title ou em atributos da árvore
+        const signers = [];
+        const sigMatch = nodeTitle.match(/Assinado por[:\s]+([^()]+)/i);
+        if (sigMatch && sigMatch[1]) {
+          sigMatch[1]
+            .split(/[,;]/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .forEach((s) => signers.push(s));
+        }
+
+        const isSigned =
+          signers.length > 0 ||
+          (!nodeTitle.toLowerCase().includes('minuta') &&
+            !nodeTitle.toLowerCase().includes('sem assinatura') &&
+            !argsRaw.toLowerCase().includes('documento_nao_assinado'));
+
         result.documentos.push({
-          idSei: numeroSei,
-          numeroSei,
+          idSei,
+          numeroSei: idSei,
           tipo: tipoNome || 'Documento SEI',
+          numero: numeroDoc,
           data: dateMatch ? dateMatch[1] : '',
           unidade: unitMatch ? unitMatch[1] : '',
-          assinado: !nodeTitle.toLowerCase().includes('minuta') && !nodeTitle.toLowerCase().includes('sem assinatura'),
-          assinantes: []
+          assinado: isSigned,
+          assinantes: signers
         });
       }
     }
@@ -156,7 +189,6 @@
     const andamentos = [];
     const unidadesAbertasDetectadas = [];
 
-    // Verifica banner de unidades abertas no topo da visualização
     const infoDiv = doc.querySelector('#divInformacao, .infraInformacao');
     if (infoDiv) {
       const links = infoDiv.querySelectorAll('a');
@@ -191,74 +223,87 @@
   }
 
   /**
-   * Lê um processo específico no SEI usando fetch autenticado na mesma origem do SEI
+   * Busca o HTML da árvore de um protocolo no SEI via fetch autenticado
    */
-  async function scrapeSingleProtocolInSei(protocolo) {
+  async function fetchArvoreHtmlForProtocol(protocolo) {
     const baseSeiUrl = window.location.origin + '/sei/';
-    const cleanDigits = String(protocolo).replace(/\D/g, '');
+    const searchForm = new URLSearchParams();
+    searchForm.append('txtPesquisaRapida', protocolo);
+
+    const searchResp = await fetch(
+      baseSeiUrl + 'controlador.php?acao=protocolo_pesquisar&acao_origem=procedimento_controlar',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: searchForm.toString()
+      }
+    );
+
+    const finalUrl = searchResp.url;
+    const buf = await searchResp.arrayBuffer();
+    const pageHtml = new TextDecoder('iso-8859-1').decode(buf);
 
     let mainWorkHtml = '';
-    let finalUrl = '';
+    const arvoreSrcMatch =
+      pageHtml.match(/ifrArvore[^>]+src=["']([^"']+)["']/i) ||
+      pageHtml.match(/controlador\.php\?acao=procedimento_visualizar[^"'\s]+/i);
 
-    // Caso o processo já esteja aberto na janela atual, aproveita o DOM/URL atual
-    if (document.title.includes(protocolo) || document.body.innerHTML.includes(protocolo)) {
-      const ifrArvore = document.getElementById('ifrArvore');
-      if (ifrArvore && ifrArvore.src) {
-        const resp = await fetch(ifrArvore.src, { credentials: 'include' });
-        const buf = await resp.arrayBuffer();
-        mainWorkHtml = new TextDecoder('iso-8859-1').decode(buf);
+    if (arvoreSrcMatch) {
+      const rawSrc = (arvoreSrcMatch[1] || arvoreSrcMatch[0]).replace(/&amp;/g, '&');
+      const fullArvoreUrl = new URL(rawSrc, baseSeiUrl).href;
+      const arvResp = await fetch(fullArvoreUrl, { credentials: 'include' });
+      const arvBuf = await arvResp.arrayBuffer();
+      mainWorkHtml = new TextDecoder('iso-8859-1').decode(arvBuf);
+    } else {
+      const procLinkMatch = pageHtml.match(/controlador\.php\?acao=procedimento_trabalhar[^"'\s]+/i);
+      if (procLinkMatch) {
+        const workUrl = new URL(procLinkMatch[0].replace(/&amp;/g, '&'), baseSeiUrl).href;
+        const workResp = await fetch(workUrl, { credentials: 'include' });
+        const workBuf = await workResp.arrayBuffer();
+        const workHtml = new TextDecoder('iso-8859-1').decode(workBuf);
+        const subArvMatch =
+          workHtml.match(/ifrArvore[^>]+src=["']([^"']+)["']/i) ||
+          workHtml.match(/controlador\.php\?acao=procedimento_visualizar[^"'\s]+/i);
+        if (subArvMatch) {
+          const fullArvoreUrl = new URL((subArvMatch[1] || subArvMatch[0]).replace(/&amp;/g, '&'), baseSeiUrl).href;
+          const arvResp = await fetch(fullArvoreUrl, { credentials: 'include' });
+          const arvBuf = await arvResp.arrayBuffer();
+          mainWorkHtml = new TextDecoder('iso-8859-1').decode(arvBuf);
+        }
       }
     }
 
-    // Se não for o processo aberto na aba principal, pesquisa via controlador.php do SEI
-    if (!mainWorkHtml) {
-      // Tenta busca rápida do protocolo no SEI
-      const searchForm = new URLSearchParams();
-      searchForm.append('txtPesquisaRapida', protocolo);
+    return { mainWorkHtml, finalUrl };
+  }
 
-      const searchResp = await fetch(baseSeiUrl + 'controlador.php?acao=protocolo_pesquisar&acao_origem=procedimento_controlar', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: searchForm.toString()
-      });
+  /**
+   * Lê um processo específico no SEI (e opcionalmente faz inspeção de 2º nível nos processos relacionados)
+   */
+  async function scrapeSingleProtocolInSei(protocolo, deepScanRelated = true) {
+    const baseSeiUrl = window.location.origin + '/sei/';
+    let mainWorkHtml = '';
+    let finalUrl = '';
 
-      finalUrl = searchResp.url;
-      const buf = await searchResp.arrayBuffer();
-      const pageHtml = new TextDecoder('iso-8859-1').decode(buf);
-
-      // Procura o src do iframe ifrArvore (controlador.php?acao=procedimento_visualizar...)
-      const arvoreSrcMatch =
-        pageHtml.match(/ifrArvore[^>]+src=["']([^"']+)["']/i) ||
-        pageHtml.match(/controlador\.php\?acao=procedimento_visualizar[^"'\s]+/i);
-
-      if (arvoreSrcMatch) {
-        const rawSrc = (arvoreSrcMatch[1] || arvoreSrcMatch[0]).replace(/&amp;/g, '&');
-        const fullArvoreUrl = new URL(rawSrc, baseSeiUrl).href;
-        const arvResp = await fetch(fullArvoreUrl, { credentials: 'include' });
-        const arvBuf = await arvResp.arrayBuffer();
-        mainWorkHtml = new TextDecoder('iso-8859-1').decode(arvBuf);
-      } else {
-        // Caso tenha caído numa lista de resultados de pesquisa, pega o primeiro link do protocolo
-        const procLinkMatch = pageHtml.match(/controlador\.php\?acao=procedimento_trabalhar[^"'\s]+/i);
-        if (procLinkMatch) {
-          const workUrl = new URL(procLinkMatch[0].replace(/&amp;/g, '&'), baseSeiUrl).href;
-          const workResp = await fetch(workUrl, { credentials: 'include' });
-          const workBuf = await workResp.arrayBuffer();
-          const workHtml = new TextDecoder('iso-8859-1').decode(workBuf);
-          const subArvMatch =
-            workHtml.match(/ifrArvore[^>]+src=["']([^"']+)["']/i) ||
-            workHtml.match(/controlador\.php\?acao=procedimento_visualizar[^"'\s]+/i);
-          if (subArvMatch) {
-            const fullArvoreUrl = new URL((subArvMatch[1] || subArvMatch[0]).replace(/&amp;/g, '&'), baseSeiUrl).href;
-            const arvResp = await fetch(fullArvoreUrl, { credentials: 'include' });
-            const arvBuf = await arvResp.arrayBuffer();
-            mainWorkHtml = new TextDecoder('iso-8859-1').decode(arvBuf);
+    // Se já estiver aberto na tela atual do SEI, lê direto do iframe ifrArvore
+    if (document.title.includes(protocolo) || (document.body && document.body.innerHTML.includes(protocolo))) {
+      const ifrArvore = document.getElementById('ifrArvore');
+      if (ifrArvore && ifrArvore.src) {
+        try {
+          const resp = await fetch(ifrArvore.src, { credentials: 'include' });
+          const buf = await resp.arrayBuffer();
+          const candidateHtml = new TextDecoder('iso-8859-1').decode(buf);
+          if (candidateHtml.includes(protocolo)) {
+            mainWorkHtml = candidateHtml;
           }
-        }
+        } catch (e) {}
       }
+    }
+
+    if (!mainWorkHtml) {
+      const fetched = await fetchArvoreHtmlForProtocol(protocolo);
+      mainWorkHtml = fetched.mainWorkHtml;
+      finalUrl = fetched.finalUrl;
     }
 
     if (!mainWorkHtml) {
@@ -286,7 +331,30 @@
       }
     }
 
-    // Se unidadeAtual ainda estiver vazia, deduz a partir do andamento mais recente
+    // Varredura Profunda de 2º Nível para Processos Relacionados (Pagamentos, Descentralizações, Aditivos, etc.)
+    if (deepScanRelated && parsedTree.processosRelacionados.length > 0) {
+      const maxRelatedToInspect = Math.min(parsedTree.processosRelacionados.length, 6);
+      for (let r = 0; r < maxRelatedToInspect; r++) {
+        const rel = parsedTree.processosRelacionados[r];
+        try {
+          const relFetched = await fetchArvoreHtmlForProtocol(rel.protocolo);
+          if (relFetched.mainWorkHtml) {
+            const relTree = parseSeiArvoreScript(relFetched.mainWorkHtml);
+            rel.unidadeAtual = relTree.unidadeAtual || relTree.unidadesAbertas[0] || undefined;
+            rel.descricao = relTree.especificacao || rel.tipo;
+            rel.documentosDetectados = (relTree.documentos || []).slice(-10);
+            if (relTree.documentos && relTree.documentos.length > 0) {
+              const lastDoc = relTree.documentos[relTree.documentos.length - 1];
+              rel.ultimoAndamento = `Último doc: ${lastDoc.tipo}${lastDoc.numero ? ' ' + lastDoc.numero : ''} (SEI ${lastDoc.idSei})`;
+              rel.dataUltimoAndamento = lastDoc.data || undefined;
+            }
+          }
+        } catch (e) {
+          // Segue normalmente se algum processo relacionado tiver acesso restrito
+        }
+      }
+    }
+
     let unidadeAtual = parsedTree.unidadesAbertas[0] || '';
     if (!unidadeAtual && andamentos.length > 0) {
       unidadeAtual = andamentos[0].unidade;
@@ -295,6 +363,7 @@
 
     return {
       protocolo: parsedTree.protocolo || protocolo,
+      tipoProcessoSei: parsedTree.especificacao || '',
       especificacao: parsedTree.especificacao || '',
       unidadeAtual: unidadeAtual || 'GECTI',
       unidadesAbertas: parsedTree.unidadesAbertas.length > 0 ? parsedTree.unidadesAbertas : [unidadeAtual || 'GECTI'],
@@ -311,14 +380,13 @@
     if (!msg || !msg.action) return;
 
     if (msg.action === 'SCRAPE_SINGLE_PROTOCOL') {
-      scrapeSingleProtocolInSei(msg.protocolo)
+      scrapeSingleProtocolInSei(msg.protocolo, msg.deepScanRelated !== false)
         .then((data) => sendResponse({ ok: true, data }))
         .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
-      return true; // Indica resposta assíncrona
+      return true;
     }
 
     if (msg.action === 'SCRAPE_CURRENT_OPEN_PROCESS') {
-      // Detecta o protocolo aberto na tela do SEI
       const bodyText = document.body ? document.body.innerText : '';
       const protoMatch =
         document.title.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/) ||
@@ -329,71 +397,307 @@
         return false;
       }
 
-      scrapeSingleProtocolInSei(protoMatch[0])
+      scrapeSingleProtocolInSei(protoMatch[0], true)
         .then((data) => sendResponse({ ok: true, data }))
         .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
       return true;
     }
   });
 
-  // Injeta botão discreto "Contratics SEI Studio" na barra superior do SEI (apenas no frame principal)
+  // ============================================================================
+  // FERRAMENTA SEI PRO: DESTAQUE AUTOMÁTICO DE PROCESSOS MONITORADOS NAS TABELAS DO SEI
+  // (Controle de Processos, Acompanhamento Especial e Blocos Internos)
+  // ============================================================================
+  function highlightMonitoredProcessesInSeiTables(monitoredList) {
+    if (!Array.isArray(monitoredList) || monitoredList.length === 0) return;
+
+    const mapByDigits = new Map();
+    monitoredList.forEach((item) => {
+      const d = normalizeDigits(item.protocolo);
+      if (d) mapByDigits.set(d, item);
+    });
+
+    const links = document.querySelectorAll('a[href*="acao=procedimento_trabalhar"]');
+    const matchedOnScreen = [];
+
+    links.forEach((a) => {
+      if (a.dataset.contraticsTagged === 'true') return;
+      const textDigits = normalizeDigits(a.textContent || '');
+      const titleDigits = normalizeDigits(a.getAttribute('title') || '');
+      const matched = mapByDigits.get(textDigits) || mapByDigits.get(titleDigits);
+      if (!matched) return;
+
+      a.dataset.contraticsTagged = 'true';
+      matchedOnScreen.push(matched);
+
+      const badge = document.createElement('span');
+      const isContract = matched.category === 'contrato';
+      badge.innerHTML = isContract ? '⚡ CONTRATICS • CONTRATO' : '⚡ CONTRATICS • PLANEJAMENTO';
+      badge.title = `${matched.label} — Clique para sincronizar este processo com o Contratics agora`;
+      badge.style.cssText = [
+        'display: inline-flex',
+        'align-items: center',
+        'gap: 4px',
+        'margin-left: 6px',
+        'padding: 1px 6px',
+        'border-radius: 4px',
+        'font-size: 9.5px',
+        'font-weight: 700',
+        'font-family: system-ui, sans-serif',
+        'cursor: pointer',
+        isContract
+          ? 'background: #0284c7; color: #ffffff; border: 1px solid #38bdf8;'
+          : 'background: #059669; color: #ffffff; border: 1px solid #34d399;'
+      ].join(';');
+
+      badge.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const orig = badge.innerHTML;
+        badge.innerHTML = '⏳ Lendo SEI...';
+        try {
+          const data = await scrapeSingleProtocolInSei(matched.protocolo, true);
+          chrome.runtime.sendMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data }, () => {
+            badge.innerHTML = '✅ Sincronizado!';
+            setTimeout(() => {
+              badge.innerHTML = orig;
+            }, 2500);
+          });
+        } catch (err) {
+          badge.innerHTML = '❌ Erro';
+          setTimeout(() => {
+            badge.innerHTML = orig;
+          }, 2500);
+        }
+      });
+
+      a.parentElement && a.parentElement.appendChild(badge);
+    });
+
+    // Se encontrou processos monitorados na tabela do SEI, injeta barra rápida no topo da tabela
+    if (matchedOnScreen.length > 0 && !document.getElementById('contratics-sei-table-banner')) {
+      const tbl =
+        document.querySelector('#tblProcessosRecebidos, #tblProcessosGerados, #tblProcessosDetalhado, #tblAcompanhamento') ||
+        document.querySelector('table.infraTable');
+      if (tbl && tbl.parentElement) {
+        const banner = document.createElement('div');
+        banner.id = 'contratics-sei-table-banner';
+        banner.style.cssText = [
+          'background: linear-gradient(90deg, #064e3b, #0f172a)',
+          'color: #f8fafc',
+          'padding: 8px 14px',
+          'border-radius: 8px',
+          'border: 1px solid #10b981',
+          'margin: 8px 0',
+          'display: flex',
+          'align-items: center',
+          'justify-content: space-between',
+          'font-family: system-ui, sans-serif',
+          'font-size: 12px'
+        ].join(';');
+
+        banner.innerHTML = `
+          <div>
+            <strong style="color:#34d399;">⚡ Contratics SEI Pro (Processos Monitorados):</strong>
+            Detectamos <strong>${matchedOnScreen.length}</strong> processo(s) cadastrado(s) no Contratics nesta tela do SEI.
+          </div>
+          <button id="btnContraticsSyncVisible" style="background:#10b981; color:#022c22; border:none; border-radius:6px; padding:5px 12px; font-weight:700; font-size:11px; cursor:pointer;">
+            🔄 Sincronizar Estes ${matchedOnScreen.length} Processo(s) no Contratics
+          </button>
+        `;
+
+        tbl.parentElement.insertBefore(banner, tbl);
+        const btnSyncVis = banner.querySelector('#btnContraticsSyncVisible');
+        if (btnSyncVis) {
+          btnSyncVis.addEventListener('click', () => {
+            btnSyncVis.textContent = '⏳ Varredura iniciada... acompanhe no Contratics';
+            chrome.runtime.sendMessage({
+              action: 'START_BATCH_SCAN',
+              processes: matchedOnScreen,
+              deepScanRelated: true
+            });
+          });
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  // PAINEL RETRÁTIL "CONTRATICS • SEI PRO" DENTRO DO SEI
+  // ============================================================================
   if (window === window.top && document.body) {
-    const existingBtn = document.getElementById('contratics-sei-floating-btn');
-    if (!existingBtn) {
+    chrome.runtime.sendMessage({ action: 'GET_MONITORED_PROCESSES' }, (resp) => {
+      const monitored = (resp && resp.processes) || [];
+      highlightMonitoredProcessesInSeiTables(monitored);
+    });
+
+    if (!document.getElementById('contratics-sei-floating-btn')) {
       const btn = document.createElement('button');
       btn.id = 'contratics-sei-floating-btn';
-      btn.innerHTML = '⚡ Contratics SEI Studio';
-      btn.title = 'Sincronizar este processo ou iniciar Varredura Geral para o Contratics';
+      btn.innerHTML = '⚡ Contratics • SEI Pro';
+      btn.title = 'Abrir Painel Contratics SEI Pro (Estúdio de Fluxo, Processos Monitorados, Associados e Rollback)';
       btn.style.cssText = [
         'position: fixed',
         'bottom: 16px',
         'right: 16px',
         'z-index: 99999',
-        'background: linear-gradient(135deg, #059669, #0d9488)',
+        'background: linear-gradient(135deg, #059669, #0284c7)',
         'color: #ffffff',
-        'border: 1px solid rgba(255,255,255,0.25)',
+        'border: 1px solid rgba(255,255,255,0.3)',
         'border-radius: 10px',
-        'padding: 8px 14px',
+        'padding: 9px 15px',
         'font-family: system-ui, -apple-system, sans-serif',
         'font-size: 12px',
         'font-weight: 700',
         'cursor: pointer',
-        'box-shadow: 0 8px 20px rgba(0,0,0,0.35)',
-        'transition: transform 0.15s ease'
+        'box-shadow: 0 8px 24px rgba(0,0,0,0.4)'
       ].join(';');
 
-      btn.addEventListener('click', async () => {
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '⏳ Lendo processo no SEI...';
+      const drawer = document.createElement('div');
+      drawer.id = 'contratics-sei-pro-drawer';
+      drawer.style.cssText = [
+        'position: fixed',
+        'bottom: 60px',
+        'right: 16px',
+        'width: 380px',
+        'max-height: 520px',
+        'background: #0f172a',
+        'color: #f8fafc',
+        'border: 1px solid #334155',
+        'border-radius: 12px',
+        'box-shadow: 0 20px 40px rgba(0,0,0,0.6)',
+        'z-index: 99999',
+        'display: none',
+        'flex-direction: column',
+        'overflow: hidden',
+        'font-family: system-ui, -apple-system, sans-serif',
+        'font-size: 12px'
+      ].join(';');
+
+      drawer.innerHTML = `
+        <div style="padding:12px 14px; background:#1e293b; border-bottom:1px solid #334155; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong style="font-size:13px; color:#34d399;">⚡ Contratics • SEI Pro Suite</strong>
+            <div style="font-size:10px; color:#94a3b8;">Estúdio de Fluxo BPMN 2.0 • Processos Monitorados</div>
+          </div>
+          <button id="contraticsDrawerClose" style="background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:16px;">✕</button>
+        </div>
+        <div style="padding:12px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px;">
+          <div id="contraticsDrawerStatus" style="padding:8px 10px; background:#1e293b; border:1px solid #334155; border-radius:8px; font-size:11px; color:#cbd5e1;">
+            Selecione uma ferramenta abaixo para alimentar o Contratics:
+          </div>
+
+          <button id="contraticsDrawerSyncCurrent" style="padding:10px; background:#10b981; color:#022c22; border:none; border-radius:8px; font-weight:700; cursor:pointer; text-align:left;">
+            🔀 1. Estúdio de Fluxo: Mapear Processo Aberto &rarr; BPMN 2.0
+            <div style="font-size:10px; font-weight:500; opacity:0.85; margin-top:2px;">Lê raias, documentos, portarias, assinaturas e processos associados</div>
+          </button>
+
+          <button id="contraticsDrawerBatchAll" style="padding:10px; background:#0284c7; color:#ffffff; border:none; border-radius:8px; font-weight:700; cursor:pointer; text-align:left;">
+            📋 2. Varredura Geral dos Processos Monitorados
+            <div style="font-size:10px; font-weight:500; opacity:0.9; margin-top:2px;">Atualiza todos os Planejamentos e Contratos cadastrados no Contratics</div>
+          </button>
+
+          <button id="contraticsDrawerRollback" style="padding:9px; background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); border-radius:8px; font-weight:700; cursor:pointer; text-align:left;">
+            ⏪ 3. Voltar aos Dados Anteriores (Rollback 1 Clique)
+            <div style="font-size:10px; font-weight:500; opacity:0.9; margin-top:2px;">Restaura o snapshot automático salvo antes da última leitura</div>
+          </button>
+
+          <div style="border-top:1px solid #1e293b; padding-top:8px;">
+            <div style="font-size:10px; font-weight:700; text-transform:uppercase; color:#94a3b8; margin-bottom:6px;">
+              Processos Monitorados do Contratics (<span id="contraticsMonitoredCount">0</span>):
+            </div>
+            <div id="contraticsMonitoredListContainer" style="max-height:170px; overflow-y:auto; display:flex; flex-direction:column; gap:5px;"></div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(drawer);
+      document.body.appendChild(btn);
+
+      const statusEl = drawer.querySelector('#contraticsDrawerStatus');
+      const listContainer = drawer.querySelector('#contraticsMonitoredListContainer');
+      const countEl = drawer.querySelector('#contraticsMonitoredCount');
+
+      function renderMonitoredInDrawer() {
+        chrome.runtime.sendMessage({ action: 'GET_MONITORED_PROCESSES' }, (resp) => {
+          const list = (resp && resp.processes) || [];
+          countEl.textContent = String(list.length);
+          listContainer.innerHTML = '';
+          if (list.length === 0) {
+            listContainer.innerHTML = '<div style="font-size:11px; color:#64748b; font-style:italic;">Abra a aba do Contratics para sincronizar a lista de processos monitorados.</div>';
+            return;
+          }
+          list.forEach((item) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'padding:6px 8px; background:#1e293b; border:1px solid #334155; border-radius:6px; display:flex; justify-content:space-between; align-items:center; gap:6px;';
+            row.innerHTML = `
+              <div style="min-width:0; flex:1;">
+                <div style="font-family:monospace; font-weight:700; color:#38bdf8; font-size:11px;">${item.protocolo}</div>
+                <div style="font-size:10px; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.label || ''}</div>
+              </div>
+              <button data-proto="${item.protocolo}" style="background:#059669; color:#fff; border:none; border-radius:4px; padding:3px 7px; font-size:10px; font-weight:700; cursor:pointer; flex-shrink:0;">
+                Sincronizar
+              </button>
+            `;
+            const syncBtn = row.querySelector('button');
+            syncBtn.addEventListener('click', async () => {
+              syncBtn.textContent = '⏳...';
+              try {
+                const scraped = await scrapeSingleProtocolInSei(item.protocolo, true);
+                chrome.runtime.sendMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data: scraped }, () => {
+                  syncBtn.textContent = '✅ OK';
+                  statusEl.textContent = `Processo ${item.protocolo} atualizado no Contratics!`;
+                  setTimeout(() => { syncBtn.textContent = 'Sincronizar'; }, 2000);
+                });
+              } catch (e) {
+                syncBtn.textContent = 'Erro';
+                statusEl.textContent = `Erro ao ler ${item.protocolo}: ${e.message || e}`;
+              }
+            });
+            listContainer.appendChild(row);
+          });
+        });
+      }
+
+      btn.addEventListener('click', () => {
+        const isHidden = drawer.style.display === 'none';
+        drawer.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) renderMonitoredInDrawer();
+      });
+
+      drawer.querySelector('#contraticsDrawerClose').addEventListener('click', () => {
+        drawer.style.display = 'none';
+      });
+
+      drawer.querySelector('#contraticsDrawerSyncCurrent').addEventListener('click', async () => {
+        statusEl.textContent = '⏳ Mapeando fluxo, raias, documentos e processos associados...';
         try {
           const protoMatch =
             document.title.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/) ||
             document.body.innerText.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/);
           if (!protoMatch) {
-            alert('Abra um processo no SEI ou inicie a Varredura Geral diretamente pela aba do Contratics.');
-            btn.innerHTML = originalText;
+            statusEl.textContent = '⚠️ Abra um processo no SEI primeiro ou use a Varredura Geral.';
             return;
           }
-          const scraped = await scrapeSingleProtocolInSei(protoMatch[0]);
-          chrome.runtime.sendMessage(
-            {
-              action: 'PUSH_SINGLE_SCRAPED_PROCESS',
-              data: scraped
-            },
-            () => {
-              btn.innerHTML = '✅ Enviado ao Contratics!';
-              setTimeout(() => {
-                btn.innerHTML = originalText;
-              }, 2500);
-            }
-          );
+          const scraped = await scrapeSingleProtocolInSei(protoMatch[0], true);
+          chrome.runtime.sendMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data: scraped }, () => {
+            statusEl.textContent = `✅ Fluxo de ${scraped.protocolo} (${scraped.documentos.length} docs, ${scraped.processosRelacionados.length} associados) espelhado no BPMN do Contratics!`;
+          });
         } catch (err) {
-          alert('Erro ao ler processo no SEI: ' + (err.message || err));
-          btn.innerHTML = originalText;
+          statusEl.textContent = '❌ Erro: ' + (err.message || err);
         }
       });
 
-      document.body.appendChild(btn);
+      drawer.querySelector('#contraticsDrawerBatchAll').addEventListener('click', () => {
+        statusEl.textContent = '⏳ Varredura Geral iniciada! Acompanhe o progresso no Contratics.';
+        chrome.runtime.sendMessage({ action: 'START_BATCH_SCAN', processes: [], deepScanRelated: true });
+      });
+
+      drawer.querySelector('#contraticsDrawerRollback').addEventListener('click', () => {
+        chrome.runtime.sendMessage({ action: 'TRIGGER_ROLLBACK_FROM_POPUP' }, () => {
+          statusEl.textContent = '⏪ Comando de restauração enviado para o Contratics.';
+        });
+      });
     }
   }
 })();

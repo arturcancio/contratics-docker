@@ -1,9 +1,20 @@
 /**
- * Contratics SEI Studio - Service Worker (background.js)
- * Orquestra a Varredura Geral (Batch Scan) entre a aba do Contratics e a aba autenticada do SEI.
+ * Contratics SEI Studio (Inspirado no SEI Pro) - Service Worker (background.js)
+ * Gerencia:
+ * 1. Sincronização da Lista de Processos Monitorados (Planejamentos e Contratos do Contratics) via chrome.storage.local;
+ * 2. Orquestração da Varredura Geral (Batch Scan) na sessão autenticada do SEI;
+ * 3. Varredura de Processos Relacionados (Pagamentos, Descentralizações, Aditivos, OS);
+ * 4. Acionamento rápido de Ponto de Restauração (Rollback) no Contratics.
  */
 
 let cachedProcesses = [];
+
+// Carrega processos monitorados salvos no storage ao iniciar
+chrome.storage.local.get(['contratics_monitored_processes'], (res) => {
+  if (res && Array.isArray(res.contratics_monitored_processes)) {
+    cachedProcesses = res.contratics_monitored_processes;
+  }
+});
 
 /**
  * Localiza abas abertas do Contratics
@@ -57,9 +68,9 @@ async function broadcastToContratics(type, payload) {
 }
 
 /**
- * Executa a Varredura Geral (Batch Scan) de uma lista de processos no SEI
+ * Executa a Varredura Geral (Batch Scan) de uma lista de processos monitorados no SEI
  */
-async function executeBatchScan(processes) {
+async function executeBatchScan(processes, deepScanRelated = true) {
   const seiTab = await findOpenSeiTab();
   if (!seiTab || !seiTab.id) {
     await broadcastToContratics('CONTRATICS_SEI_SCAN_PROGRESS', {
@@ -82,13 +93,14 @@ async function executeBatchScan(processes) {
       current: i + 1,
       total,
       currentProtocol: proc.protocolo,
-      message: `Lendo árvore, histórico e processos associados no SEI (${i + 1}/${total})...`
+      message: `[SEI Pro Scanner] Lendo fluxo, documentos, assinaturas e processos associados de ${proc.protocolo} (${i + 1}/${total})...`
     });
 
     try {
       const response = await chrome.tabs.sendMessage(seiTab.id, {
         action: 'SCRAPE_SINGLE_PROTOCOL',
-        protocolo: proc.protocolo
+        protocolo: proc.protocolo,
+        deepScanRelated
       });
 
       if (response && response.ok && response.data) {
@@ -102,6 +114,12 @@ async function executeBatchScan(processes) {
     await new Promise((r) => setTimeout(r, 350));
   }
 
+  // Salva timestamp da última varredura no storage da extensão
+  chrome.storage.local.set({
+    contratics_last_scan_at: new Date().toISOString(),
+    contratics_last_scan_count: results.length
+  });
+
   await broadcastToContratics('CONTRATICS_SEI_SCAN_COMPLETE', {
     results
   });
@@ -112,14 +130,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.action === 'STORE_PROCESS_LIST') {
     cachedProcesses = msg.processes || [];
+    chrome.storage.local.set({ contratics_monitored_processes: cachedProcesses });
     sendResponse({ ok: true, count: cachedProcesses.length });
     return false;
   }
 
+  if (msg.action === 'GET_MONITORED_PROCESSES') {
+    if (cachedProcesses.length > 0) {
+      sendResponse({ ok: true, processes: cachedProcesses });
+      return false;
+    }
+    chrome.storage.local.get(['contratics_monitored_processes'], (res) => {
+      cachedProcesses = (res && res.contratics_monitored_processes) || [];
+      sendResponse({ ok: true, processes: cachedProcesses });
+    });
+    return true;
+  }
+
   if (msg.action === 'START_BATCH_SCAN') {
     const listToScan = msg.processes && msg.processes.length > 0 ? msg.processes : cachedProcesses;
-    executeBatchScan(listToScan);
-    sendResponse({ ok: true, started: true });
+    executeBatchScan(listToScan, msg.deepScanRelated !== false);
+    sendResponse({ ok: true, started: true, total: listToScan.length });
     return false;
   }
 
@@ -127,6 +158,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.data) {
       broadcastToContratics('CONTRATICS_SEI_SCAN_COMPLETE', {
         results: [msg.data]
+      });
+    }
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (msg.action === 'PUSH_MULTIPLE_SCRAPED_PROCESSES') {
+    if (Array.isArray(msg.results) && msg.results.length > 0) {
+      broadcastToContratics('CONTRATICS_SEI_SCAN_COMPLETE', {
+        results: msg.results
       });
     }
     sendResponse({ ok: true });

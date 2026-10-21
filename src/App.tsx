@@ -2033,6 +2033,64 @@ export default function App() {
   };
 
   React.useEffect(() => {
+    const buildMonitoredProcessList = () => {
+      const list: Array<{
+        protocolo: string;
+        category: 'planejamento' | 'contrato';
+        id: string;
+        label: string;
+        status?: string;
+        unidadeAtual?: string;
+        lastSyncAt?: string;
+      }> = [];
+      const seen = new Set<string>();
+
+      planejamentos.filter(p => !p.isBudgetOnlyItem && p.SEI_Processo).forEach(p => {
+        const clean = normalizeSeiProtocol(p.SEI_Processo);
+        if (clean && !seen.has(`plan-${clean}`)) {
+          seen.add(`plan-${clean}`);
+          list.push({
+            protocolo: p.SEI_Processo,
+            category: 'planejamento',
+            id: p.id,
+            label: `${p.Tipo_Processo} — ${p.Objeto}`,
+            status: p.Status_Planejamento,
+            unidadeAtual: p.seiSyncMetadata?.unidadeAtual,
+            lastSyncAt: p.seiSyncMetadata?.lastSyncAt
+          });
+        }
+      });
+
+      contratos.filter(c => c.SEI_Processo).forEach(c => {
+        const clean = normalizeSeiProtocol(c.SEI_Processo);
+        if (clean && !seen.has(`cont-${clean}`)) {
+          seen.add(`cont-${clean}`);
+          list.push({
+            protocolo: c.SEI_Processo,
+            category: 'contrato',
+            id: c.id,
+            label: `Contrato ${c.Num_Contrato} — ${c.Objeto}`,
+            status: c.Status_Contrato || 'Vigente',
+            unidadeAtual: c.seiSyncMetadata?.unidadeAtual,
+            lastSyncAt: c.seiSyncMetadata?.lastSyncAt
+          });
+        }
+      });
+
+      return list;
+    };
+
+    const pushMonitoredListToExtension = () => {
+      window.postMessage(
+        {
+          source: 'CONTRATICS_WEB_APP',
+          type: 'CONTRATICS_SEI_PROCESS_LIST_RESPONSE',
+          payload: { processes: buildMonitoredProcessList() }
+        },
+        '*'
+      );
+    };
+
     const handleMessage = (event: MessageEvent) => {
       if (!event.data || event.data.source !== 'CONTRATICS_SEI_EXTENSION') return;
 
@@ -2040,44 +2098,9 @@ export default function App() {
 
       if (type === 'CONTRATICS_SEI_EXT_PONG' || type === 'CONTRATICS_SEI_EXT_READY') {
         setSeiExtensionConnected(true);
+        pushMonitoredListToExtension();
       } else if (type === 'CONTRATICS_SEI_REQUEST_PROCESS_LIST') {
-        const list: Array<{ protocolo: string; category: 'planejamento' | 'contrato'; id: string; label: string }> = [];
-        const seen = new Set<string>();
-
-        planejamentos.filter(p => !p.isBudgetOnlyItem && p.SEI_Processo).forEach(p => {
-          const clean = normalizeSeiProtocol(p.SEI_Processo);
-          if (clean && !seen.has(`plan-${clean}`)) {
-            seen.add(`plan-${clean}`);
-            list.push({
-              protocolo: p.SEI_Processo,
-              category: 'planejamento',
-              id: p.id,
-              label: `${p.Tipo_Processo} — ${p.Objeto}`
-            });
-          }
-        });
-
-        contratos.filter(c => c.SEI_Processo).forEach(c => {
-          const clean = normalizeSeiProtocol(c.SEI_Processo);
-          if (clean && !seen.has(`cont-${clean}`)) {
-            seen.add(`cont-${clean}`);
-            list.push({
-              protocolo: c.SEI_Processo,
-              category: 'contrato',
-              id: c.id,
-              label: `Contrato ${c.Num_Contrato} — ${c.Objeto}`
-            });
-          }
-        });
-
-        window.postMessage(
-          {
-            source: 'CONTRATICS_WEB_APP',
-            type: 'CONTRATICS_SEI_PROCESS_LIST_RESPONSE',
-            payload: { processes: list }
-          },
-          '*'
-        );
+        pushMonitoredListToExtension();
       } else if (type === 'CONTRATICS_SEI_SCAN_PROGRESS') {
         setSeiExtensionConnected(true);
         setSeiScanProgress({

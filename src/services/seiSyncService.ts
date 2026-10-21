@@ -582,8 +582,17 @@ export function buildBpmnFlowFromSeiScrape(
     }
   }
 
+  // Extrai automaticamente Portaria da EPC caso detectada na árvore do SEI e ainda não preenchida no Planejamento
+  const portariaDoc = (scrape.documentos || []).find(d => /PORTARIA/i.test(d.tipo));
+  const autoPortariaSei = planejamento.Portaria_Equipe_PC_SEI || (portariaDoc ? portariaDoc.idSei : '');
+  const autoPortariaNum =
+    planejamento.Portaria_Equipe_PC_Numero ||
+    (portariaDoc && portariaDoc.numero ? `Portaria nº ${portariaDoc.numero}` : planejamento.Portaria_Equipe_PC_Numero);
+
   const updatedPlanejamento: Planejamento = {
     ...planejamento,
+    Portaria_Equipe_PC_SEI: autoPortariaSei,
+    Portaria_Equipe_PC_Numero: autoPortariaNum,
     bpmnLanes: finalLanes,
     bpmnNodes: generatedNodes,
     bpmnConnections: generatedConnections,
@@ -663,9 +672,18 @@ export function applySeiScrapeToContrato(
     }
   }
 
+  // Extrai automaticamente Portaria de Fiscalização na árvore do SEI caso ainda não preenchida no Contrato
+  const portariaFiscDoc = (scrape.documentos || []).find(d => /PORTARIA/i.test(d.tipo));
+  const autoPortariaFiscSei = contrato.Portaria_Fiscalizacao_SEI || (portariaFiscDoc ? portariaFiscDoc.idSei : '');
+  const autoPortariaFiscNum =
+    contrato.Portaria_Fiscalizacao_Numero ||
+    (portariaFiscDoc && portariaFiscDoc.numero ? `Portaria nº ${portariaFiscDoc.numero}` : contrato.Portaria_Fiscalizacao_Numero);
+
   return {
     updatedContrato: {
       ...contrato,
+      Portaria_Fiscalizacao_SEI: autoPortariaFiscSei,
+      Portaria_Fiscalizacao_Numero: autoPortariaFiscNum,
       seiSyncMetadata,
       Data_Ultima_Atualizacao: new Date().toISOString().slice(0, 10),
       updatedAt: new Date().toISOString(),
