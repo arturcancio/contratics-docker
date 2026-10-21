@@ -1817,13 +1817,29 @@ export default function App() {
   const handleApplyBatchScrapeResults = async (
     results: RawSeiProcessScrapeResult[],
     sourceLabel: 'extension_batch' | 'extension_single' | 'manual_backup' = 'extension_batch',
-    customRules?: UnitLaneMappingRule[]
+    customRules?: UnitLaneMappingRule[],
+    options?: {
+      skipSnapshot?: boolean;
+      keepScanningActive?: boolean;
+      current?: number;
+      total?: number;
+      errorsCount?: number;
+    }
   ) => {
-    if (!results || results.length === 0) return;
+    if (!results || results.length === 0) {
+      setSeiScanProgress({
+        isScanning: false,
+        current: options?.total || 0,
+        total: options?.total || 0,
+        message:
+          'A varredura terminou, mas nenhum processo pôde ser lido na aba do SEI. Certifique-se de estar logado na tela principal do SEI (Controle de Processos) e de recarregar a extensão em chrome://extensions.'
+      });
+      return;
+    }
 
     const rulesToUse = customRules || (() => {
       try {
-        const saved = localStorage.getItem('contratics_sei_lane_rules');
+        const saved = localStorage.getItem('contratics_sei_studio_lane_rules') || localStorage.getItem('contratics_sei_lane_rules');
         return saved ? JSON.parse(saved) : DEFAULT_SEI_UNIT_LANE_RULES;
       } catch {
         return DEFAULT_SEI_UNIT_LANE_RULES;
@@ -1836,11 +1852,13 @@ export default function App() {
     });
 
     // 1. CRIAR PONTO DE RESTAURAÇÃO AUTOMÁTICO ANTES DE ESCREVER QUALQUER DADO
-    await handleCreateSeiSnapshot(
-      `Backup Automático pré-varredura SEI (${results.length} processo(s) lido(s))`,
-      sourceLabel,
-      matchedProtocols
-    );
+    if (!options?.skipSnapshot) {
+      await handleCreateSeiSnapshot(
+        `Backup Automático pré-varredura SEI (${results.length} processo(s) lido(s))`,
+        sourceLabel,
+        matchedProtocols
+      );
+    }
 
     let nextPlanejamentos = [...planejamentos];
     let nextTarefas = [...tarefas];
@@ -1925,12 +1943,29 @@ export default function App() {
     setHistoricoPlanejamentos(nextHistPlan);
     setContratos(nextContratos);
     setHistoricosContratuais(nextHistCont);
-    setSeiScanProgress({
-      isScanning: false,
-      current: results.length,
-      total: results.length,
-      message: `Varredura concluída: ${updatedPlansToSave.length} planejamento(s) e ${updatedContractsToSave.length} contrato(s) espelhados com sucesso!`
-    });
+
+    safeLocalStorageSet('contratics_planejamentos', JSON.stringify(nextPlanejamentos));
+    safeLocalStorageSet('contratics_tarefas', JSON.stringify(nextTarefas));
+    safeLocalStorageSet('contratics_historico_planejamentos', JSON.stringify(nextHistPlan));
+    safeLocalStorageSet('contratics_contratos', JSON.stringify(nextContratos));
+    safeLocalStorageSet('contratics_historicos_contratuais', JSON.stringify(nextHistCont));
+
+    if (options?.keepScanningActive) {
+      setSeiScanProgress({
+        isScanning: true,
+        current: options.current || 1,
+        total: options.total || 1,
+        currentProtocol: results[results.length - 1]?.protocolo,
+        message: `✅ Processo ${results[results.length - 1]?.protocolo} lido e gravado no Contratics em tempo real! (${options.current || 1}/${options.total || 1})`
+      });
+    } else {
+      setSeiScanProgress({
+        isScanning: false,
+        current: options?.total || results.length,
+        total: options?.total || results.length,
+        message: `✅ Varredura concluída e gravada no Contratics: ${updatedPlansToSave.length} planejamento(s) e ${updatedContractsToSave.length} contrato(s) atualizados com sucesso!`
+      });
+    }
 
     try {
       const dbPromises: Promise<any>[] = [];
@@ -2110,12 +2145,38 @@ export default function App() {
           currentProtocol: payload?.currentProtocol,
           message: payload?.message
         });
+      } else if (type === 'CONTRATICS_SEI_PROCESS_SCRAPED_ITEM') {
+        setSeiExtensionConnected(true);
+        if (payload?.item) {
+          handleApplyBatchScrapeResults([payload.item], 'extension_batch', undefined, {
+            skipSnapshot: !payload.isFirstItem,
+            keepScanningActive: true,
+            current: payload.current || 1,
+            total: payload.total || 1
+          });
+        }
       } else if (type === 'CONTRATICS_SEI_SCAN_COMPLETE') {
         setSeiExtensionConnected(true);
-        if (payload?.results && Array.isArray(payload.results)) {
-          handleApplyBatchScrapeResults(payload.results, 'extension_batch');
+        const resultsArr = Array.isArray(payload?.results) ? payload.results : [];
+        const totalAttempted = payload?.totalAttempted || resultsArr.length || 0;
+        const errorsArr = Array.isArray(payload?.errors) ? payload.errors : [];
+
+        if (resultsArr.length > 0) {
+          handleApplyBatchScrapeResults(resultsArr, 'extension_batch', undefined, {
+            skipSnapshot: true,
+            keepScanningActive: false,
+            current: totalAttempted,
+            total: totalAttempted,
+            errorsCount: errorsArr.length
+          });
         } else {
-          setSeiScanProgress({ isScanning: false, current: 0, total: 0 });
+          const firstError = errorsArr[0]?.error || 'Certifique-se de que a aba do SEI está aberta e logada no Controle de Processos e recarregue a extensão em chrome://extensions.';
+          setSeiScanProgress({
+            isScanning: false,
+            current: totalAttempted,
+            total: totalAttempted,
+            message: `⚠️ Varredura finalizada (0 de ${totalAttempted} processos lidos). Motivo: ${firstError}`
+          });
         }
       } else if (type === 'CONTRATICS_SEI_TRIGGER_ROLLBACK') {
         handleRevertLastSeiSync();

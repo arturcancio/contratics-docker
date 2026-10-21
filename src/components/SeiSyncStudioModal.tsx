@@ -493,7 +493,7 @@ export default function SeiSyncStudioModal({
             <div className="flex items-center justify-between text-xs font-bold text-primary">
               <span className="flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                Varredura Geral em Andamento no SEI... {scanProgress.currentProtocol && `(${scanProgress.currentProtocol})`}
+                Varredura Geral em Andamento no SEI (Gravando em Tempo Real)... {scanProgress.currentProtocol && `(${scanProgress.currentProtocol})`}
               </span>
               <span className="font-mono">
                 {scanProgress.current} / {scanProgress.total}
@@ -510,6 +510,26 @@ export default function SeiSyncStudioModal({
             {scanProgress.message && (
               <p className="text-[11px] text-on-surface-variant font-mono">{scanProgress.message}</p>
             )}
+          </div>
+        )}
+
+        {/* Completed Scan Result Banner */}
+        {!scanProgress.active && scanProgress.message && !statusBanner && (
+          <div
+            className={`mx-6 mt-4 p-3.5 rounded-xl border flex items-center justify-between text-xs font-semibold ${
+              scanProgress.message.includes('⚠️')
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {scanProgress.message.includes('⚠️') ? (
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+              )}
+              <span>{scanProgress.message}</span>
+            </div>
           </div>
         )}
 

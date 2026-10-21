@@ -84,6 +84,7 @@
 
     if (
       msg.type === 'CONTRATICS_SEI_SCAN_PROGRESS' ||
+      msg.type === 'CONTRATICS_SEI_PROCESS_SCRAPED_ITEM' ||
       msg.type === 'CONTRATICS_SEI_SCAN_COMPLETE' ||
       msg.type === 'CONTRATICS_SEI_REQUEST_PROCESS_LIST' ||
       msg.type === 'CONTRATICS_SEI_TRIGGER_ROLLBACK'

@@ -79,12 +79,27 @@ async function executeBatchScan(processes, deepScanRelated = true) {
       message: 'Nenhuma aba aberta do SEI foi encontrada! Abra e faça login no SEI em outra aba do Chrome e tente novamente.'
     });
     setTimeout(() => {
-      broadcastToContratics('CONTRATICS_SEI_SCAN_COMPLETE', { results: [] });
-    }, 3500);
+      broadcastToContratics('CONTRATICS_SEI_SCAN_COMPLETE', {
+        results: [],
+        totalAttempted: processes.length || 0,
+        errors: [{ protocolo: 'SEI', error: 'Nenhuma aba aberta e autenticada do SEI foi localizada no navegador.' }]
+      });
+    }, 1500);
     return;
   }
 
+  // Garante que o content-sei.js esteja injetado no frame principal da aba do SEI (mesmo se a aba já estava aberta antes)
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: seiTab.id, frameIds: [0] },
+      files: ['content-sei.js']
+    });
+  } catch (e) {
+    // Segue normalmente caso o script já esteja carregado
+  }
+
   const results = [];
+  const errors = [];
   const total = processes.length;
 
   for (let i = 0; i < total; i++) {
@@ -93,25 +108,41 @@ async function executeBatchScan(processes, deepScanRelated = true) {
       current: i + 1,
       total,
       currentProtocol: proc.protocolo,
-      message: `[SEI Pro Scanner] Lendo fluxo, documentos, assinaturas e processos associados de ${proc.protocolo} (${i + 1}/${total})...`
+      message: `[SEI Pro Scanner] Lendo e gravando ${proc.protocolo} (${i + 1}/${total}) — ${results.length} gravado(s) até agora...`
     });
 
     try {
-      const response = await chrome.tabs.sendMessage(seiTab.id, {
-        action: 'SCRAPE_SINGLE_PROTOCOL',
-        protocolo: proc.protocolo,
-        deepScanRelated
-      });
+      const response = await chrome.tabs.sendMessage(
+        seiTab.id,
+        {
+          action: 'SCRAPE_SINGLE_PROTOCOL',
+          protocolo: proc.protocolo,
+          deepScanRelated
+        },
+        { frameId: 0 }
+      );
 
       if (response && response.ok && response.data) {
         results.push(response.data);
+        // Envia imediatamente o processo lido para o Contratics gravar em tempo real!
+        await broadcastToContratics('CONTRATICS_SEI_PROCESS_SCRAPED_ITEM', {
+          item: response.data,
+          current: i + 1,
+          total,
+          successCount: results.length,
+          isFirstItem: results.length === 1
+        });
+      } else {
+        const errMsg = (response && response.error) || 'Processo não localizado na pesquisa do SEI.';
+        errors.push({ protocolo: proc.protocolo, error: errMsg });
       }
     } catch (err) {
       console.warn(`[Contratics SEI Studio] Falha ao ler processo ${proc.protocolo}:`, err);
+      errors.push({ protocolo: proc.protocolo, error: err.message || String(err) });
     }
 
-    // Pausa suave de 350ms entre requisições para não sobrecarregar o SEI
-    await new Promise((r) => setTimeout(r, 350));
+    // Pausa suave de 300ms entre requisições para não sobrecarregar o SEI
+    await new Promise((r) => setTimeout(r, 300));
   }
 
   // Salva timestamp da última varredura no storage da extensão
@@ -121,7 +152,9 @@ async function executeBatchScan(processes, deepScanRelated = true) {
   });
 
   await broadcastToContratics('CONTRATICS_SEI_SCAN_COMPLETE', {
-    results
+    results,
+    totalAttempted: total,
+    errors
   });
 }
 

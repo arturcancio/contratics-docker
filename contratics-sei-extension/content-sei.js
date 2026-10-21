@@ -223,80 +223,256 @@
   }
 
   /**
-   * Busca o HTML da árvore de um protocolo no SEI via fetch autenticado
+   * Retorna a URL base do SEI na aba atual (compatível com /sei/, /sip/ ou raiz do domínio)
    */
-  async function fetchArvoreHtmlForProtocol(protocolo) {
-    const baseSeiUrl = window.location.origin + '/sei/';
-    const searchForm = new URLSearchParams();
-    searchForm.append('txtPesquisaRapida', protocolo);
+  function getBaseSeiUrl() {
+    try {
+      return new URL('.', window.location.href).href;
+    } catch (e) {
+      return window.location.origin + '/sei/';
+    }
+  }
 
-    const searchResp = await fetch(
-      baseSeiUrl + 'controlador.php?acao=protocolo_pesquisar&acao_origem=procedimento_controlar',
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: searchForm.toString()
-      }
-    );
+  /**
+   * Decodifica ArrayBuffer do SEI respeitando ISO-8859-1 ou UTF-8 conforme o cabeçalho/meta
+   */
+  function decodeSeiBuffer(buf, contentTypeHeader) {
+    const ct = String(contentTypeHeader || '').toLowerCase();
+    if (ct.includes('utf-8')) {
+      return new TextDecoder('utf-8').decode(buf);
+    }
+    const isoText = new TextDecoder('iso-8859-1').decode(buf);
+    if (/charset=["']?utf-8/i.test(isoText)) {
+      return new TextDecoder('utf-8').decode(buf);
+    }
+    return isoText;
+  }
 
-    const finalUrl = searchResp.url;
-    const buf = await searchResp.arrayBuffer();
-    const pageHtml = new TextDecoder('iso-8859-1').decode(buf);
+  /**
+   * Extrai o HTML da árvore (procedimento_visualizar) a partir do HTML de procedimento_trabalhar ou de listagem
+   */
+  async function extractArvoreFromWorkOrSearchPage(pageHtml, baseUrl, targetProtocolo) {
+    const targetDigits = normalizeDigits(targetProtocolo);
 
-    let mainWorkHtml = '';
+    // Caso 1: A página já é a própria árvore (contém `new infraArvoreNo`)
+    if (/new\s+infraArvoreNo\s*\(/i.test(pageHtml)) {
+      return pageHtml;
+    }
+
+    // Caso 2: A página contém o iframe ifrArvore ou URL assinada de `acao=procedimento_visualizar`
     const arvoreSrcMatch =
-      pageHtml.match(/ifrArvore[^>]+src=["']([^"']+)["']/i) ||
-      pageHtml.match(/controlador\.php\?acao=procedimento_visualizar[^"'\s]+/i);
+      pageHtml.match(/id=["']ifrArvore["'][^>]+src=["']([^"']+)["']/i) ||
+      pageHtml.match(/name=["']ifrArvore["'][^>]+src=["']([^"']+)["']/i) ||
+      pageHtml.match(/src=["']([^"']*controlador\.php\?acao=procedimento_visualizar[^"']+)["']/i) ||
+      pageHtml.match(/(controlador\.php\?acao=procedimento_visualizar[^"'\s<>\\]+)/i);
 
     if (arvoreSrcMatch) {
       const rawSrc = (arvoreSrcMatch[1] || arvoreSrcMatch[0]).replace(/&amp;/g, '&');
-      const fullArvoreUrl = new URL(rawSrc, baseSeiUrl).href;
+      const fullArvoreUrl = new URL(rawSrc, baseUrl).href;
       const arvResp = await fetch(fullArvoreUrl, { credentials: 'include' });
       const arvBuf = await arvResp.arrayBuffer();
-      mainWorkHtml = new TextDecoder('iso-8859-1').decode(arvBuf);
-    } else {
-      const procLinkMatch = pageHtml.match(/controlador\.php\?acao=procedimento_trabalhar[^"'\s]+/i);
-      if (procLinkMatch) {
-        const workUrl = new URL(procLinkMatch[0].replace(/&amp;/g, '&'), baseSeiUrl).href;
-        const workResp = await fetch(workUrl, { credentials: 'include' });
-        const workBuf = await workResp.arrayBuffer();
-        const workHtml = new TextDecoder('iso-8859-1').decode(workBuf);
-        const subArvMatch =
-          workHtml.match(/ifrArvore[^>]+src=["']([^"']+)["']/i) ||
-          workHtml.match(/controlador\.php\?acao=procedimento_visualizar[^"'\s]+/i);
-        if (subArvMatch) {
-          const fullArvoreUrl = new URL((subArvMatch[1] || subArvMatch[0]).replace(/&amp;/g, '&'), baseSeiUrl).href;
-          const arvResp = await fetch(fullArvoreUrl, { credentials: 'include' });
-          const arvBuf = await arvResp.arrayBuffer();
-          mainWorkHtml = new TextDecoder('iso-8859-1').decode(arvBuf);
+      const arvHtml = decodeSeiBuffer(arvBuf, arvResp.headers.get('content-type'));
+      if (arvHtml && /infraArvoreNo|procedimento_consultar_historico|divArvore/i.test(arvHtml)) {
+        return arvHtml;
+      }
+    }
+
+    // Caso 3: A pesquisa retornou uma lista de resultados com links `acao=procedimento_trabalhar`
+    const allWorkLinks = [
+      ...pageHtml.matchAll(/href=["']([^"']*controlador\.php\?acao=(?:procedimento_trabalhar|protocolo_pesquisar)[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)
+    ];
+
+    let chosenWorkHref = '';
+    for (const m of allWorkLinks) {
+      const href = m[1].replace(/&amp;/g, '&');
+      const anchorTextDigits = normalizeDigits(m[2] || '');
+      if (targetDigits && (anchorTextDigits.includes(targetDigits) || href.includes(targetDigits))) {
+        chosenWorkHref = href;
+        break;
+      }
+    }
+
+    if (!chosenWorkHref) {
+      const fallbackMatch = pageHtml.match(/(controlador\.php\?acao=procedimento_trabalhar[^"'\s<>\\]+)/i);
+      if (fallbackMatch) {
+        chosenWorkHref = fallbackMatch[1].replace(/&amp;/g, '&');
+      }
+    }
+
+    if (chosenWorkHref) {
+      const workUrl = new URL(chosenWorkHref, baseUrl).href;
+      const workResp = await fetch(workUrl, { credentials: 'include' });
+      const workBuf = await workResp.arrayBuffer();
+      const workHtml = decodeSeiBuffer(workBuf, workResp.headers.get('content-type'));
+
+      if (/new\s+infraArvoreNo\s*\(/i.test(workHtml)) {
+        return workHtml;
+      }
+
+      const subArvMatch =
+        workHtml.match(/id=["']ifrArvore["'][^>]+src=["']([^"']+)["']/i) ||
+        workHtml.match(/src=["']([^"']*controlador\.php\?acao=procedimento_visualizar[^"']+)["']/i) ||
+        workHtml.match(/(controlador\.php\?acao=procedimento_visualizar[^"'\s<>\\]+)/i);
+
+      if (subArvMatch) {
+        const fullArvoreUrl = new URL((subArvMatch[1] || subArvMatch[0]).replace(/&amp;/g, '&'), baseUrl).href;
+        const arvResp = await fetch(fullArvoreUrl, { credentials: 'include' });
+        const arvBuf = await arvResp.arrayBuffer();
+        return decodeSeiBuffer(arvBuf, arvResp.headers.get('content-type'));
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Busca o HTML da árvore de um protocolo no SEI via link direto assinado ou Pesquisa Rápida com `infra_hash`
+   */
+  async function fetchArvoreHtmlForProtocol(protocolo) {
+    const baseSeiUrl = getBaseSeiUrl();
+    const targetDigits = normalizeDigits(protocolo);
+
+    // 1. Verifica se o processo já possui link direto assinado na tela atual do SEI (Controle de Processos / Acompanhamento)
+    const directLinks = document.querySelectorAll('a[href*="acao=procedimento_trabalhar"]');
+    for (const a of directLinks) {
+      const linkDigits = normalizeDigits((a.textContent || '') + ' ' + (a.getAttribute('title') || '') + ' ' + (a.getAttribute('href') || ''));
+      if (targetDigits && linkDigits.includes(targetDigits)) {
+        try {
+          const signedWorkUrl = new URL(a.getAttribute('href'), baseSeiUrl).href;
+          const workResp = await fetch(signedWorkUrl, { credentials: 'include' });
+          const workBuf = await workResp.arrayBuffer();
+          const workHtml = decodeSeiBuffer(workBuf, workResp.headers.get('content-type'));
+          const treeHtml = await extractArvoreFromWorkOrSearchPage(workHtml, baseSeiUrl, protocolo);
+          if (treeHtml) {
+            return { mainWorkHtml: treeHtml, finalUrl: signedWorkUrl };
+          }
+        } catch (e) {
+          // Continua para a Pesquisa Rápida assinada
         }
       }
     }
 
-    return { mainWorkHtml, finalUrl };
+    // 2. Localiza o formulário oficial de Pesquisa Rápida do SEI (#frmProtocoloPesquisaRapida) que contém o `infra_hash` da sessão
+    let searchFormEl =
+      document.getElementById('frmProtocoloPesquisaRapida') ||
+      document.querySelector('form[name="frmProtocoloPesquisaRapida"]') ||
+      document.querySelector('form[action*="acao=protocolo_pesquisar"]');
+
+    let searchActionUrl = '';
+    const baseFormParams = new URLSearchParams();
+
+    if (searchFormEl) {
+      const rawAction = searchFormEl.getAttribute('action') || '';
+      if (rawAction) {
+        searchActionUrl = new URL(rawAction.replace(/&amp;/g, '&'), baseSeiUrl).href;
+      }
+      const hiddenInputs = searchFormEl.querySelectorAll('input[type="hidden"]');
+      hiddenInputs.forEach((inp) => {
+        if (inp.name) baseFormParams.set(inp.name, inp.value || '');
+      });
+    }
+
+    // Fallback: procura a action assinada no HTML da página principal caso o form esteja colapsado na navbar
+    if (!searchActionUrl && document.documentElement) {
+      const actionInDom = document.documentElement.innerHTML.match(
+        /controlador\.php\?acao=protocolo_pesquisar[^"'\s<>\\]+/i
+      );
+      if (actionInDom) {
+        searchActionUrl = new URL(actionInDom[0].replace(/&amp;/g, '&'), baseSeiUrl).href;
+      }
+    }
+
+    if (!searchActionUrl) {
+      searchActionUrl = baseSeiUrl + 'controlador.php?acao=protocolo_pesquisar&acao_origem=procedimento_controlar';
+    }
+
+    // Tenta pesquisar primeiro com o protocolo formatado e, se necessário, apenas com os dígitos (padrão SEI 4.x)
+    const candidates = [String(protocolo || '').trim()];
+    if (targetDigits && !candidates.includes(targetDigits)) {
+      candidates.push(targetDigits);
+    }
+
+    for (const queryVal of candidates) {
+      try {
+        const formParams = new URLSearchParams(baseFormParams.toString());
+        formParams.set('txtPesquisaRapida', queryVal);
+        if (!formParams.has('hdnInfraTipoPagina')) {
+          formParams.set('hdnInfraTipoPagina', '1');
+        }
+
+        const searchResp = await fetch(searchActionUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formParams.toString()
+        });
+
+        const finalUrl = searchResp.url || searchActionUrl;
+        const buf = await searchResp.arrayBuffer();
+        const pageHtml = decodeSeiBuffer(buf, searchResp.headers.get('content-type'));
+
+        const mainWorkHtml = await extractArvoreFromWorkOrSearchPage(pageHtml, baseSeiUrl, protocolo);
+        if (mainWorkHtml) {
+          return { mainWorkHtml, finalUrl };
+        }
+
+        // Também tenta via GET caso a instância do SEI redirecione pesquisa rápida por query string
+        const urlWithParam = new URL(searchActionUrl);
+        urlWithParam.searchParams.set('id_procedimento', queryVal);
+        urlWithParam.searchParams.set('txtPesquisaRapida', queryVal);
+      } catch (e) {
+        console.warn('[Contratics SEI Studio] Tentativa de pesquisa falhou para', queryVal, e);
+      }
+    }
+
+    // 3. Fallback direto por URL de pesquisa de protocolo se o usuário estiver dentro de um iframe ou tela interna
+    try {
+      const fallbackUrl = `${baseSeiUrl}controlador.php?acao=procedimento_trabalhar&id_procedimento=${encodeURIComponent(targetDigits)}`;
+      const resp = await fetch(fallbackUrl, { credentials: 'include' });
+      const buf = await resp.arrayBuffer();
+      const html = decodeSeiBuffer(buf, resp.headers.get('content-type'));
+      const treeHtml = await extractArvoreFromWorkOrSearchPage(html, baseSeiUrl, protocolo);
+      if (treeHtml) {
+        return { mainWorkHtml: treeHtml, finalUrl: resp.url || fallbackUrl };
+      }
+    } catch (e) {}
+
+    return { mainWorkHtml: '', finalUrl: '' };
   }
 
   /**
    * Lê um processo específico no SEI (e opcionalmente faz inspeção de 2º nível nos processos relacionados)
    */
   async function scrapeSingleProtocolInSei(protocolo, deepScanRelated = true) {
-    const baseSeiUrl = window.location.origin + '/sei/';
+    const baseSeiUrl = getBaseSeiUrl();
+    const targetDigits = normalizeDigits(protocolo);
     let mainWorkHtml = '';
     let finalUrl = '';
 
     // Se já estiver aberto na tela atual do SEI, lê direto do iframe ifrArvore
-    if (document.title.includes(protocolo) || (document.body && document.body.innerHTML.includes(protocolo))) {
-      const ifrArvore = document.getElementById('ifrArvore');
-      if (ifrArvore && ifrArvore.src) {
+    const pageTextDigits = normalizeDigits(document.title + ' ' + (document.body ? document.body.innerText.slice(0, 4000) : ''));
+    if (targetDigits && pageTextDigits.includes(targetDigits)) {
+      const ifrArvore = document.getElementById('ifrArvore') || document.querySelector('iframe[name="ifrArvore"]');
+      if (ifrArvore) {
         try {
-          const resp = await fetch(ifrArvore.src, { credentials: 'include' });
-          const buf = await resp.arrayBuffer();
-          const candidateHtml = new TextDecoder('iso-8859-1').decode(buf);
-          if (candidateHtml.includes(protocolo)) {
-            mainWorkHtml = candidateHtml;
+          if (ifrArvore.contentDocument && ifrArvore.contentDocument.documentElement) {
+            const domHtml = ifrArvore.contentDocument.documentElement.innerHTML;
+            if (domHtml && normalizeDigits(domHtml).includes(targetDigits)) {
+              mainWorkHtml = domHtml;
+            }
           }
         } catch (e) {}
+
+        if (!mainWorkHtml && ifrArvore.src) {
+          try {
+            const resp = await fetch(ifrArvore.src, { credentials: 'include' });
+            const buf = await resp.arrayBuffer();
+            const candidateHtml = decodeSeiBuffer(buf, resp.headers.get('content-type'));
+            if (normalizeDigits(candidateHtml).includes(targetDigits)) {
+              mainWorkHtml = candidateHtml;
+            }
+          } catch (e) {}
+        }
       }
     }
 
@@ -307,7 +483,7 @@
     }
 
     if (!mainWorkHtml) {
-      throw new Error(`Não foi possível localizar a árvore do processo ${protocolo} no SEI.`);
+      throw new Error(`Não foi possível localizar o processo ${protocolo} nesta sessão do SEI. Verifique se você está logado na tela principal do SEI.`);
     }
 
     const parsedTree = parseSeiArvoreScript(mainWorkHtml);
@@ -318,7 +494,7 @@
         const histFullUrl = new URL(parsedTree.historicoUrl, baseSeiUrl).href;
         const histResp = await fetch(histFullUrl, { credentials: 'include' });
         const histBuf = await histResp.arrayBuffer();
-        const histHtml = new TextDecoder('iso-8859-1').decode(histBuf);
+        const histHtml = decodeSeiBuffer(histBuf, histResp.headers.get('content-type'));
         const parsedHist = parseSeiHistoricoHtml(histHtml);
         andamentos = parsedHist.andamentos;
         parsedHist.unidadesAbertasDetectadas.forEach((u) => {
@@ -333,10 +509,28 @@
 
     // Varredura Profunda de 2º Nível para Processos Relacionados (Pagamentos, Descentralizações, Aditivos, etc.)
     if (deepScanRelated && parsedTree.processosRelacionados.length > 0) {
-      const maxRelatedToInspect = Math.min(parsedTree.processosRelacionados.length, 6);
+      const maxRelatedToInspect = Math.min(parsedTree.processosRelacionados.length, 5);
       for (let r = 0; r < maxRelatedToInspect; r++) {
         const rel = parsedTree.processosRelacionados[r];
         try {
+          if (rel.link) {
+            const relResp = await fetch(rel.link, { credentials: 'include' });
+            const relBuf = await relResp.arrayBuffer();
+            const relWorkHtml = decodeSeiBuffer(relBuf, relResp.headers.get('content-type'));
+            const relArvHtml = await extractArvoreFromWorkOrSearchPage(relWorkHtml, baseSeiUrl, rel.protocolo);
+            if (relArvHtml) {
+              const relTree = parseSeiArvoreScript(relArvHtml);
+              rel.unidadeAtual = relTree.unidadeAtual || relTree.unidadesAbertas[0] || undefined;
+              rel.descricao = relTree.especificacao || rel.tipo;
+              rel.documentosDetectados = (relTree.documentos || []).slice(-10);
+              if (relTree.documentos && relTree.documentos.length > 0) {
+                const lastDoc = relTree.documentos[relTree.documentos.length - 1];
+                rel.ultimoAndamento = `Último doc: ${lastDoc.tipo}${lastDoc.numero ? ' ' + lastDoc.numero : ''} (SEI ${lastDoc.idSei})`;
+                rel.dataUltimoAndamento = lastDoc.data || undefined;
+              }
+              continue;
+            }
+          }
           const relFetched = await fetchArvoreHtmlForProtocol(rel.protocolo);
           if (relFetched.mainWorkHtml) {
             const relTree = parseSeiArvoreScript(relFetched.mainWorkHtml);
