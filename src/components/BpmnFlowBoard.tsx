@@ -1712,7 +1712,10 @@ export default function BpmnFlowBoard({
           })}
         </svg>
 
-        <div className="min-w-[1100px] divide-y-2 divide-outline-variant relative z-10">
+        <div
+          className="w-max min-w-full divide-y-2 divide-outline-variant relative z-10"
+          style={{ minWidth: `${Math.max(svgDimensions.width, 1100)}px` }}
+        >
           {/* Swimlanes Render */}
           {lanes.map((lane, laneIdx) => {
             const laneTasks = filteredTarefas.filter(t => {
@@ -1740,7 +1743,7 @@ export default function BpmnFlowBoard({
                 onDragOver={(e) => handleLaneDragOver(e, lane.id)}
                 onDragLeave={handleLaneDragLeave}
                 onDrop={(e) => handleLaneDrop(e, lane)}
-                className={`flex flex-row min-h-[260px] transition-all group ${
+                className={`flex flex-row w-full min-w-max min-h-[260px] transition-all group ${
                   isDropTarget 
                     ? 'bg-primary/5 ring-2 ring-inset ring-primary/40' 
                     : isCurrentSeiLane
@@ -1750,8 +1753,8 @@ export default function BpmnFlowBoard({
               >
                 {/* Cabeçalho Vertical da Raia */}
                 <div 
-                  className={`w-12 sm:w-14 border-r-2 border-outline-variant flex flex-col justify-between items-center py-4 select-none relative shrink-0 ${
-                    isCurrentSeiLane ? 'bg-emerald-500/15' : 'bg-surface-container-low'
+                  className={`w-12 sm:w-14 sticky left-0 z-30 border-r-2 border-outline-variant flex flex-col justify-between items-center py-4 select-none shrink-0 shadow-md ${
+                    isCurrentSeiLane ? 'bg-surface-container-low' : 'bg-surface-container-low'
                   }`}
                   style={{ borderLeft: `5px solid ${lane.cor || '#0ea5e9'}` }}
                 >
@@ -1813,7 +1816,7 @@ export default function BpmnFlowBoard({
                 </div>
 
                 {/* Conteúdo da Raia: Se houver `maxOrdemFluxo > 0`, alinha por colunas cronológicas para espelhar o fluxo real entre raias! */}
-                <div className="flex-1 px-8 py-6 flex items-center gap-12 sm:gap-14 overflow-visible relative">
+                <div className="flex-1 min-w-max pl-8 pr-16 py-6 flex items-center gap-12 sm:gap-14 overflow-visible relative">
                   {laneTasks.length === 0 && laneAdditionalNodes.length === 0 && maxOrdemFluxo === 0 ? (
                     <div className="h-full w-full flex items-center justify-center border-2 border-dashed border-outline-variant rounded-xl p-6 text-center">
                       <span className="text-xs text-on-surface-variant font-medium">
