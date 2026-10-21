@@ -27,7 +27,7 @@ export interface RawSeiAndamento {
 
 export interface RawSeiDocumento {
   idSei: string; // Ex: "45129834"
-  tipo: string; // Ex: "Estudo Técnico Preliminar", "Termo de Referência", "Nota Técnica", "Parecer"
+  tipo: string; // Ex: "Estudo Técnico Preliminar", "Termo de Referência", "Nota Técnica", "Despacho", "Parecer"
   numero?: string; // Ex: "14/2026"
   data?: string; // Ex: "15/10/2026"
   unidade?: string; // Ex: "GECTI"
@@ -167,6 +167,7 @@ export function repairMojibakeAndBrokenChars(input?: string | null): string {
     [/Concorr\uFFFD+ncia/gi, 'Concorrência'],
     [/Transpar\uFFFD+ncia/gi, 'Transparência'],
     [/Efici\uFFFD+ncia/gi, 'Eficiência'],
+    [/Dilig\uFFFD+ncia(s?)/gi, 'Diligência$1'],
     [/Informa\uFFFD+o/gi, 'Informação'],
     [/Informa\uFFFD+es/gi, 'Informações'],
     [/Declara\uFFFD+o/gi, 'Declaração'],
@@ -177,6 +178,12 @@ export function repairMojibakeAndBrokenChars(input?: string | null): string {
     [/Pre\uFFFD+o(s?)/gi, 'Preço$1'],
     [/Prorroga\uFFFD+o/gi, 'Prorrogação'],
     [/Altera\uFFFD+o/gi, 'Alteração'],
+    [/Altera\uFFFD+es/gi, 'Alterações'],
+    [/Recomenda\uFFFD+o/gi, 'Recomendação'],
+    [/Recomenda\uFFFD+es/gi, 'Recomendações'],
+    [/Revis\uFFFD+o/gi, 'Revisão'],
+    [/Revis\uFFFD+es/gi, 'Revisões'],
+    [/Vers\uFFFD+o/gi, 'Versão'],
     [/Fiscaliza\uFFFD+o/gi, 'Fiscalização'],
     [/Execu\uFFFD+o/gi, 'Execução'],
     [/Designa\uFFFD+o/gi, 'Designação'],
@@ -193,6 +200,7 @@ export function repairMojibakeAndBrokenChars(input?: string | null): string {
     [/Renova\uFFFD+o/gi, 'Renovação'],
     [/Ades\uFFFD+o/gi, 'Adesão'],
     [/Decis\uFFFD+o/gi, 'Decisão'],
+    [/Decis\uFFFD+ri([oa]s?)/gi, 'Decisóri$1'],
     [/Comiss\uFFFD+o/gi, 'Comissão'],
     [/Coordena\uFFFD+o/gi, 'Coordenação'],
     [/Dire\uFFFD+o/gi, 'Direção'],
@@ -254,7 +262,7 @@ export function repairMojibakeAndBrokenChars(input?: string | null): string {
     [/\bH\uFFFD+\b/gi, 'Há'],
     [/\bM\uFFFD+s\b/gi, 'Mês'],
     [/\bn\uFFFD+\s*(\d)/gi, 'nº $1'],
-    // Sufixos morfológicos gerais da língua portuguesa para capturar qualquer outra palavra
+    // Sufixos morfológicos gerais da língua portuguesa
     [/([a-zA-Z])\uFFFD\uFFFDo\b/g, '$1ção'],
     [/([a-zA-Z])\uFFFD\uFFFDes\b/g, '$1ções'],
     [/([a-zA-Z])c\uFFFDo\b/g, '$1ção'],
@@ -427,289 +435,365 @@ export function resolveSeiUnitToLane(
 }
 
 // ============================================================================
-// CATÁLOGO OFICIAL DE MARCOS DA IN SGD/ME Nº 94/2022 (GOV.BR / GOVERNO DIGITAL)
-// https://www.gov.br/governodigital/pt-br/contratacoes-de-tic/orientacoes-e-apoio-especializado/fluxo-do-processo-de-contratacao-de-tic/fluxo-in-94-22
+// MOTOR CRONOLÓGICO EQUILIBRADO ("MEIO TERMO") — MARCOS IN 94/2022, PESQUISA DE PREÇOS,
+// NOTAS TÉCNICAS, DESPACHOS RELEVANTES E CICLOS DE REVISÃO / ALTERAÇÃO DE ARTEFATOS
 // ============================================================================
 
-export interface In94MilestoneDefinition {
-  code: string;
-  ordemMacro: number;
-  faseIn94: 'Planejamento da Contratação (PCTIC)' | 'Seleção do Fornecedor (SFTI)' | 'Gestão do Contrato (GCTI)';
-  tituloMarco: string;
-  prazoPadraoDias: number;
+export type SeiStepCategory =
+  | 'DFD'
+  | 'PORTARIA_EPC'
+  | 'ETP'
+  | 'MAPA_RISCOS'
+  | 'PESQUISA_PRECOS'
+  | 'TR'
+  | 'NOTA_TECNICA'
+  | 'DESPACHO'
+  | 'CDO_ORCAMENTO'
+  | 'MINUTA_EDITAL'
+  | 'PARECER_JURIDICO'
+  | 'EDITAL_PREGAO'
+  | 'HOMOLOGACAO'
+  | 'EMPENHO_CONTRATO'
+  | 'PORTARIA_FISCALIZACAO'
+  | 'NOISE';
+
+interface ClassifiedDocInfo {
+  category: SeiStepCategory;
+  isCoreEditableArtifact: boolean; // DFD, ETP, MAPA_RISCOS, PESQUISA_PRECOS, TR, MINUTA_EDITAL
+  isAnalysisOrRecommendation: boolean; // NOTA_TECNICA, PARECER_JURIDICO, DESPACHO
   defaultUnitHint: string;
-  /** Pergunta do Gateway BPMN Exclusivo (✕) após este marco, quando aplicável no fluxo da IN 94/2022 */
-  gatewayAfter?: {
-    label: string;
-    yesBranchLabel: string;
-    descricao: string;
-  };
+  prazoPadraoDias: number;
 }
 
-export const IN94_OFFICIAL_MILESTONES: In94MilestoneDefinition[] = [
-  {
-    code: 'M1_DFD',
-    ordemMacro: 1,
-    faseIn94: 'Planejamento da Contratação (PCTIC)',
-    tituloMarco: '1. Formalização da Demanda (DFD e PCA)',
-    prazoPadraoDias: 10,
-    defaultUnitHint: 'DEMANDANTE',
-    gatewayAfter: {
-      label: 'Demanda Aprovada (PCA/PDTIC)?',
-      yesBranchLabel: 'Aprovada',
-      descricao: 'Avaliação de alinhamento ao PDTIC/PCA e encaminhamento para instituir a EPC (Art. 10, IN 94/2022).',
-    },
-  },
-  {
-    code: 'M2_EPC',
-    ordemMacro: 2,
-    faseIn94: 'Planejamento da Contratação (PCTIC)',
-    tituloMarco: '2. Instituição da Equipe de Planejamento (EPC)',
-    prazoPadraoDias: 7,
-    defaultUnitHint: 'GECTI',
-  },
-  {
-    code: 'M3_ETP_RISCOS',
-    ordemMacro: 3,
-    faseIn94: 'Planejamento da Contratação (PCTIC)',
-    tituloMarco: '3. Estudo Técnico Preliminar (ETP) e Mapa de Riscos',
-    prazoPadraoDias: 20,
-    defaultUnitHint: 'GECTI',
-    gatewayAfter: {
-      label: 'Solução Viável (ETP Aprovado)?',
-      yesBranchLabel: 'Viável',
-      descricao: 'Aprovação da viabilidade técnica/econômica do ETP e Matriz de Gerenciamento de Riscos (Art. 11, IN 94/2022).',
-    },
-  },
-  {
-    code: 'M4_TR',
-    ordemMacro: 4,
-    faseIn94: 'Planejamento da Contratação (PCTIC)',
-    tituloMarco: '4. Termo de Referência (TR) e Pesquisa de Preços',
-    prazoPadraoDias: 20,
-    defaultUnitHint: 'GECTI',
-    gatewayAfter: {
-      label: 'TR e Alçada Aprovados?',
-      yesBranchLabel: 'Aprovado',
-      descricao: 'Aprovação do Termo de Referência assinado pela EPC e Autoridade Competente (Art. 12 a 23, IN 94/2022).',
-    },
-  },
-  {
-    code: 'M5_ORCAMENTO_CDO',
-    ordemMacro: 5,
-    faseIn94: 'Planejamento da Contratação (PCTIC)',
-    tituloMarco: '5. Disponibilidade Orçamentária (CDO / DDO)',
-    prazoPadraoDias: 10,
-    defaultUnitHint: 'COFAC',
-    gatewayAfter: {
-      label: 'Recursos Certificados?',
-      yesBranchLabel: 'CDO Emitida',
-      descricao: 'Certificação de Disponibilidade Orçamentária emitida para cobertura da despesa.',
-    },
-  },
-  {
-    code: 'M6_INSTRUCAO_EDITAL',
-    ordemMacro: 6,
-    faseIn94: 'Seleção do Fornecedor (SFTI)',
-    tituloMarco: '6. Instrução Licitatória e Minuta de Edital',
-    prazoPadraoDias: 12,
-    defaultUnitHint: 'CGLIC',
-  },
-  {
-    code: 'M7_PARECER_JURIDICO',
-    ordemMacro: 7,
-    faseIn94: 'Seleção do Fornecedor (SFTI)',
-    tituloMarco: '7. Análise Jurídica (Parecer CONJUR / AGU)',
-    prazoPadraoDias: 15,
-    defaultUnitHint: 'CONJUR',
-    gatewayAfter: {
-      label: 'Parecer Jurídico Favorável?',
-      yesBranchLabel: 'Aprovado',
-      descricao: 'Controle prévio de legalidade pela Consultoria Jurídica (Art. 53, Lei 14.133/2021 e Art. 25, IN 94/2022).',
-    },
-  },
-  {
-    code: 'M8_CERTAME_HOMOLOGACAO',
-    ordemMacro: 8,
-    faseIn94: 'Seleção do Fornecedor (SFTI)',
-    tituloMarco: '8. Publicação do Edital, Pregão e Homologação',
-    prazoPadraoDias: 15,
-    defaultUnitHint: 'CGLIC',
-    gatewayAfter: {
-      label: 'Certame Homologado?',
-      yesBranchLabel: 'Homologado',
-      descricao: 'Julgamento da proposta, habilitação técnica, adjudicação e homologação do certame (Art. 26-28, IN 94/2022).',
-    },
-  },
-  {
-    code: 'M9_EMPENHO_CONTRATO',
-    ordemMacro: 9,
-    faseIn94: 'Seleção do Fornecedor (SFTI)',
-    tituloMarco: '9. Emissão de Empenho e Assinatura do Contrato',
-    prazoPadraoDias: 10,
-    defaultUnitHint: 'CGLIC',
-  },
-  {
-    code: 'M10_GESTAO_FISCALIZACAO',
-    ordemMacro: 10,
-    faseIn94: 'Gestão do Contrato (GCTI)',
-    tituloMarco: '10. Designação de Fiscais e Início da Execução',
-    prazoPadraoDias: 10,
-    defaultUnitHint: 'GECTI',
-  },
-];
-
 /**
- * Identifica se um documento da árvore do SEI representa um Marco Oficial da IN 94/2022.
- * Retorna `null` para documentos de mero expediente / movimentações simples (Despacho, Ofício simples, E-mail, Anexo, etc.),
- * evitando poluir o Fluxo BPMN e o Quadro Kanban!
+ * Classifica cada documento da árvore do SEI separando individualmente:
+ * - DFD
+ * - Portaria da EPC
+ * - ETP (Estudo Técnico Preliminar)
+ * - Mapa de Gerenciamento de Riscos (MGR)
+ * - Pesquisa de Preços / Estimativa de Preços / Mapa Comparativo (tarefa própria do planejamento!)
+ * - Termo de Referência (TR) / Projeto Básico
+ * - Nota Técnica / Parecer Técnico / Informação Técnica (análise e solicitação de ajustes nos artefatos)
+ * - Despacho / Ofício (avaliado contextualmente para manter despachos decisórios/diligências/mudanças de área)
+ * - Certificação de Disponibilidade Orçamentária (CDO / DDO)
+ * - Minuta de Edital / Check-list / Contratação Direta
+ * - Parecer Jurídico / Cota CONJUR-AGU
+ * - Edital / Pregão / Julgamento / Homologação / Empenho / Contrato
  */
-export function matchSeiDocumentToIn94Milestone(doc: RawSeiDocumento, docIndex: number, totalDocs: number): In94MilestoneDefinition | null {
+export function classifySeiDocumentCategory(doc: RawSeiDocumento, docIndex: number, totalDocs: number): ClassifiedDocInfo {
   const tipo = repairMojibakeAndBrokenChars(doc.tipo || '').trim();
   const upper = tipo.toUpperCase();
 
-  // Ignora explicitamente movimentações e documentos de mero expediente administrativo
+  // 1. Ruído burocrático puro (E-mail automático, Recibo, Termo de Encerramento de Trâmite, Capa, Boletim, Anexo avulso)
   if (
-    /^(DESPACHO|OF[IÍ]CIO|MEMORANDO|E-?MAIL|CORRESPOND[EÊ]NCIA|ANEXO|RECIBO|TERMO DE ENCERRAMENTO|ENCAMINHAMENTO|COMUNICADO|EXTRATO SIASG|PLANILHA|COTA\b|BOLETIM)/i.test(
+    /^(E-?MAIL|CORRESPOND[EÊ]NCIA|RECIBO|TERMO DE ENCERRAMENTO|COMUNICADO|EXTRATO SIASG|BOLETIM|CAPA DE PROCESSO|TERMO DE ABERTURA|TERMO DE JUNTADA|^ANEXO\b)/i.test(
       tipo
     )
   ) {
-    return null;
+    return {
+      category: 'NOISE',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'GECTI',
+      prazoPadraoDias: 3,
+    };
   }
 
-  // Marco 1: DFD / Formalização da Demanda
+  // 2. DFD / Formalização da Demanda
   if (/\bDFD\b|FORMALIZA[CÇ][AÃ]O\s+DA\s+DEMANDA|DOCUMENTO\s+DE\s+FORMALIZA|REQUISI[CÇ][AÃ]O/i.test(upper)) {
-    return IN94_OFFICIAL_MILESTONES[0];
+    return {
+      category: 'DFD',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'DEMANDANTE',
+      prazoPadraoDias: 7,
+    };
   }
 
-  // Marco 2: Instituição da EPC / Designação de Equipe de Planejamento
+  // 3. Instituição da Equipe de Planejamento da Contratação (Portaria EPC / Designação de Integrantes)
   if (
     /INSTITU[IÍ][CÇ][AÃ]O\s+DA\s+EQUIPE|INDICA[CÇ][AÃ]O.*INTEGRANTES|DESIGNA[CÇ][AÃ]O.*(?:EQUIPE|EPC|PLANEJAMENTO)/i.test(upper) ||
-    (/PORTARIA/i.test(upper) && !/FISCALIZA/i.test(upper) && docIndex <= Math.max(4, Math.floor(totalDocs * 0.45)))
+    (/PORTARIA/i.test(upper) && !/FISCALIZA/i.test(upper) && docIndex <= Math.max(5, Math.floor(totalDocs * 0.5)))
   ) {
-    return IN94_OFFICIAL_MILESTONES[1];
+    return {
+      category: 'PORTARIA_EPC',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'GECTI',
+      prazoPadraoDias: 5,
+    };
   }
 
-  // Marco 3: ETP e Mapa/Matriz de Gerenciamento de Riscos (MGR)
+  // 4. Estudo Técnico Preliminar (ETP) — separado como artefato próprio!
+  if (/\bETP\b|ESTUDO\s+T[EÉ]CNICO\s+PRELIMINAR/i.test(upper)) {
+    return {
+      category: 'ETP',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'GECTI',
+      prazoPadraoDias: 15,
+    };
+  }
+
+  // 5. Mapa / Matriz de Gerenciamento de Riscos (MGR) — separado como artefato próprio!
+  if (/MAPA\s+DE\s+(?:GERENCIAMENTO\s+DE\s+)?RISCO|MATRIZ\s+DE\s+(?:GERENCIAMENTO\s+DE\s+)?RISCO|\bMGR\b|GERENCIAMENTO\s+DE\s+RISCO|AN[AÁ]LISE\s+DE\s+RISCO/i.test(upper)) {
+    return {
+      category: 'MAPA_RISCOS',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'GECTI',
+      prazoPadraoDias: 7,
+    };
+  }
+
+  // 6. Pesquisa de Preços / Mapa Comparativo / Estimativa de Custos — tarefa própria do planejamento!
   if (
-    /\bETP\b|ESTUDO\s+T[EÉ]CNICO\s+PRELIMINAR|MAPA\s+DE\s+(?:GERENCIAMENTO\s+DE\s+)?RISCO|MATRIZ\s+DE\s+(?:GERENCIAMENTO\s+DE\s+)?RISCO|\bMGR\b|AN[AÁ]LISE\s+DE\s+RISCO/i.test(
+    /PESQUISA\s+DE\s+PRE[CÇ]O|MAPA\s+COMPARATIVO|ESTIMATIVA\s+DE\s+PRE[CÇ]O|COTA[CÇ][AÃ]O\s+DE\s+PRE[CÇ]O|PAINEL\s+DE\s+PRE[CÇ]O|RELAT[OÓ]RIO\s+DE\s+PRE[CÇ]O|MEM[OÓ]RIA\s+DE\s+C[AÁ]LCULO|PLANILHA\s+DE\s+(?:CUSTO|PRE[CÇ]O)|OR[CÇ]AMENTO\s+ESTIMAD|PROPOSTA\s+COMERCIAL/i.test(
       upper
     )
   ) {
-    return IN94_OFFICIAL_MILESTONES[2];
+    return {
+      category: 'PESQUISA_PRECOS',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'GECTI',
+      prazoPadraoDias: 12,
+    };
   }
 
-  // Marco 4: Termo de Referência (TR), Projeto Básico, Pesquisa de Preços ou Nota/Parecer Técnico de Planejamento
-  if (
-    /\bTR\b|TERMO\s+DE\s+REFER[EÊ]NCIA|PROJETO\s+B[AÁ]SICO|PESQUISA\s+DE\s+PRE[CÇ]O|MAPA\s+COMPARATIVO|NOTA\s+T[EÉ]CNICA|PARECER\s+T[EÉ]CNICO/i.test(
-      upper
-    )
-  ) {
-    return IN94_OFFICIAL_MILESTONES[3];
+  // 7. Termo de Referência (TR) / Projeto Básico — separado como artefato próprio!
+  if (/\bTR\b|TERMO\s+DE\s+REFER[EÊ]NCIA|PROJETO\s+B[AÁ]SICO/i.test(upper)) {
+    return {
+      category: 'TR',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'GECTI',
+      prazoPadraoDias: 15,
+    };
   }
 
-  // Marco 5: Disponibilidade / Adequação Orçamentária (CDO / DDO)
+  // 8. Nota Técnica / Parecer Técnico / Informação Técnica — sempre relevante (frequentemente solicita alterações no TR/ETP/Pesquisa/Riscos ou aprova alçada)
+  if (/NOTA\s+T[EÉ]CNICA|PARECER\s+T[EÉ]CNICO|INFORMA[CÇ][AÃ]O\s+T[EÉ]CNICA|MANIFESTA[CÇ][AÃ]O\s+T[EÉ]CNICA|RELAT[OÓ]RIO\s+T[EÉ]CNICO/i.test(upper)) {
+    return {
+      category: 'NOTA_TECNICA',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: true,
+      defaultUnitHint: doc.unidade || 'GECTI',
+      prazoPadraoDias: 10,
+    };
+  }
+
+  // 9. Disponibilidade / Adequação Orçamentária (CDO / DDO)
   if (
     /DISPONIBILIDADE\s+OR[CÇ]AMENT[AÁ]RIA|CERTIFICA[CÇ][AÃ]O\s+DE\s+DISPONIBILIDADE|\bCDO\b|\bDDO\b|ADEQUA[CÇ][AÃ]O\s+OR[CÇ]AMENT|DECLARA[CÇ][AÃ]O\s+DE\s+DISPONIBILIDADE|RESERVA\s+OR[CÇ]AMENT/i.test(
       upper
     )
   ) {
-    return IN94_OFFICIAL_MILESTONES[4];
+    return {
+      category: 'CDO_ORCAMENTO',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'COFAC',
+      prazoPadraoDias: 8,
+    };
   }
 
-  // Marco 6: Instrução Licitatória / Minuta de Edital / Check-list / Contratação Direta
+  // 10. Minuta de Edital / Minuta de Contrato / Lista de Verificação AGU / Contratação Direta
   if (
     /MINUTA\s+DE\s+(?:EDITAL|CONTRATO|ATA)|LISTA\s+DE\s+VERIFICA[CÇ][AÃ]O|CHECK-?LIST|TERMO\s+DE\s+(?:DISPENSA|INEXIGIBILIDADE|ADES[AÃ]O)|AUTORIZA[CÇ][AÃ]O\s+PARA\s+ABERTURA/i.test(
       upper
     )
   ) {
-    return IN94_OFFICIAL_MILESTONES[5];
+    return {
+      category: 'MINUTA_EDITAL',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'CGLIC',
+      prazoPadraoDias: 10,
+    };
   }
 
-  // Marco 7: Análise Jurídica (Parecer CONJUR / AGU / Nota Jurídica)
-  if (/PARECER\s+JUR[IÍ]DICO|PARECER\s+REFERENCIAL|NOTA\s+JUR[IÍ]DICA|\bCONJUR\b|\bAGU\b|^PARECER\b/i.test(upper)) {
-    return IN94_OFFICIAL_MILESTONES[6];
+  // 11. Parecer Jurídico / Nota Jurídica / Cota CONJUR / AGU
+  if (/PARECER\s+JUR[IÍ]DICO|PARECER\s+REFERENCIAL|NOTA\s+JUR[IÍ]DICA|\bCONJUR\b|\bAGU\b|^PARECER\b|^COTA\b/i.test(upper)) {
+    return {
+      category: 'PARECER_JURIDICO',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: true,
+      defaultUnitHint: 'CONJUR',
+      prazoPadraoDias: 15,
+    };
   }
 
-  // Marco 8: Publicação do Edital, Pregão, Julgamento, Adjudicação e Homologação
-  if (
-    /^EDITAL\b|AVISO\s+DE\s+LICITA[CÇ][AÃ]O|PUBLICA[CÇ][AÃ]O|ATA\s+DE\s+REALIZA[CÇ][AÃ]O|PREG[AÃ]O|JULGAMENTO|HABILITA[CÇ][AÃ]O|ADJUDICA[CÇ][AÃ]O|HOMOLOGA[CÇ][AÃ]O/i.test(
-      upper
-    )
-  ) {
-    return IN94_OFFICIAL_MILESTONES[7];
+  // 12. Publicação do Edital e Sessão Pública (Pregão)
+  if (/^EDITAL\b|AVISO\s+DE\s+LICITA[CÇ][AÃ]O|PUBLICA[CÇ][AÃ]O|ATA\s+DE\s+REALIZA[CÇ][AÃ]O|PREG[AÃ]O|SESS[AÃ]O\s+P[UÚ]BLICA/i.test(upper)) {
+    return {
+      category: 'EDITAL_PREGAO',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'CGLIC',
+      prazoPadraoDias: 12,
+    };
   }
 
-  // Marco 9: Nota de Empenho e Assinatura do Contrato / Ata de Registro de Preços
-  if (
-    /NOTA\s+DE\s+EMPENHO|\bNE\b|^CONTRATO\b|TERMO\s+DE\s+CONTRATO|ATA\s+DE\s+REGISTRO\s+DE\s+PRE[CÇ]O|\bARP\b|EXTRATO\s+DE\s+CONTRATO/i.test(
-      upper
-    )
-  ) {
-    return IN94_OFFICIAL_MILESTONES[8];
+  // 13. Julgamento, Habilitação, Adjudicação e Homologação
+  if (/JULGAMENTO|HABILITA[CÇ][AÃ]O|ADJUDICA[CÇ][AÃ]O|HOMOLOGA[CÇ][AÃ]O|RESULTADO\s+DA\s+LICITA/i.test(upper)) {
+    return {
+      category: 'HOMOLOGACAO',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'CGLIC',
+      prazoPadraoDias: 10,
+    };
   }
 
-  // Marco 10: Portaria de Fiscalização / Ordem de Serviço / Execução Contratual
-  if (
-    /PORTARIA|FISCALIZA[CÇ][AÃ]O|ORDEM\s+DE\s+SERVI[CÇ]O|\bO\.?S\.?\b|RECEBIMENTO\s+PROVIS[OÓ]RIO|\bTRP\b|RECEBIMENTO\s+DEFINITIVO|\bTRD\b|REUNI[AÃ]O\s+INICIAL/i.test(
-      upper
-    )
-  ) {
-    return IN94_OFFICIAL_MILESTONES[9];
+  // 14. Nota de Empenho e Assinatura do Contrato / ARP
+  if (/NOTA\s+DE\s+EMPENHO|\bNE\b|^CONTRATO\b|TERMO\s+DE\s+CONTRATO|ATA\s+DE\s+REGISTRO\s+DE\s+PRE[CÇ]O|\bARP\b|EXTRATO\s+DE\s+CONTRATO/i.test(upper)) {
+    return {
+      category: 'EMPENHO_CONTRATO',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'CGLIC',
+      prazoPadraoDias: 10,
+    };
   }
 
-  return null;
+  // 15. Portaria de Fiscalização / Ordem de Serviço / Execução
+  if (/PORTARIA|FISCALIZA[CÇ][AÃ]O|ORDEM\s+DE\s+SERVI[CÇ]O|\bO\.?S\.?\b|RECEBIMENTO\s+PROVIS[OÓ]RIO|\bTRP\b|RECEBIMENTO\s+DEFINITIVO|\bTRD\b|REUNI[AÃ]O\s+INICIAL/i.test(upper)) {
+    return {
+      category: 'PORTARIA_FISCALIZACAO',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: false,
+      defaultUnitHint: 'GECTI',
+      prazoPadraoDias: 10,
+    };
+  }
+
+  // 16. Despachos e Ofícios (avaliados contextualmente para manter aqueles que deliberam, mudam de área ou solicitam ajustes)
+  if (/^DESPACHO|DESPACHO\s+DECIS[OÓ]RIO|DILIG[EÊ]NCIA|^OF[IÍ]CIO|^MEMORANDO/i.test(upper)) {
+    return {
+      category: 'DESPACHO',
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: true,
+      defaultUnitHint: doc.unidade || 'GECTI',
+      prazoPadraoDias: 7,
+    };
+  }
+
+  return {
+    category: 'NOISE',
+    isCoreEditableArtifact: false,
+    isAnalysisOrRecommendation: false,
+    defaultUnitHint: doc.unidade || 'GECTI',
+    prazoPadraoDias: 5,
+  };
 }
 
-/**
- * Infere qual Marco da IN 94/2022 corresponde à unidade onde o processo está aberto atualmente no SEI,
- * caso a unidade aberta esteja trabalhando no próximo marco que ainda não teve seu documento final inserido.
- */
-function inferMilestoneForOpenUnit(unidadeAberta: string, highestReachedOrdem: number): In94MilestoneDefinition {
-  const upper = (unidadeAberta || '').toUpperCase();
-
-  if (/CONJUR|JURIDIC|AGU/.test(upper)) {
-    return IN94_OFFICIAL_MILESTONES[6]; // 7. Análise Jurídica
-  }
-  if (/COFAC|CGOF|ORCAMENT|FINANC|SPOA|DIORF/.test(upper)) {
-    return IN94_OFFICIAL_MILESTONES[4]; // 5. Disponibilidade Orçamentária (CDO)
-  }
-  if (/CGLIC|COLIC|DLC|CENTRAL|COMPRAS|LICIT|PREGAO|DCD/.test(upper)) {
-    if (highestReachedOrdem >= 7) {
-      return IN94_OFFICIAL_MILESTONES[7]; // 8. Publicação do Edital, Pregão e Homologação
-    }
-    return IN94_OFFICIAL_MILESTONES[5]; // 6. Instrução Licitatória e Minuta de Edital
-  }
-  if (/GECTI|CGTI|DTI|STI|TIC|CPCTI|EPCON/.test(upper)) {
-    if (highestReachedOrdem <= 1) return IN94_OFFICIAL_MILESTONES[1]; // 2. Instituição da EPC
-    if (highestReachedOrdem === 2) return IN94_OFFICIAL_MILESTONES[2]; // 3. ETP e Riscos
-    if (highestReachedOrdem <= 4) return IN94_OFFICIAL_MILESTONES[3]; // 4. Termo de Referência (TR)
-    return IN94_OFFICIAL_MILESTONES[Math.min(9, highestReachedOrdem)];
-  }
-  if (highestReachedOrdem === 0) {
-    return IN94_OFFICIAL_MILESTONES[0]; // 1. Formalização da Demanda (DFD)
-  }
-  return IN94_OFFICIAL_MILESTONES[Math.min(9, Math.max(0, highestReachedOrdem - 1))];
-}
-
-interface MilestoneBucket {
-  definition: In94MilestoneDefinition;
+interface ChronologicalStepGroup {
+  category: SeiStepCategory;
+  isCoreEditableArtifact: boolean;
+  isAnalysisOrRecommendation: boolean;
   unidade: string;
   lane: BpmnLane;
   dataInicioIso: string;
-  dataFimIso?: string;
+  dataFimIso: string;
   documentos: RawSeiDocumento[];
-  isCurrentOpenMilestone: boolean;
+  prazoPadraoDias: number;
+  versionNumber: number; // 1 = elaboração inicial; 2+ = revisão/alteração pós-recomendações
+  triggersArtifactRevisionNext: boolean; // true se logo após esta análise/despacho/NT houver revisão de ETP/TR/Pesquisa/Riscos
+  isCurrentOpenStep: boolean;
 }
 
 /**
- * Motor "Estúdio de Fluxo SEI (IN SGD/ME nº 94/2022)"
+ * Formata o título claro e objetivo de cada etapa cronológica, destacando:
+ * - Elaboração inicial vs. Alteração/Revisão (2ª, 3ª versão) de ETP, TR, Pesquisa de Preços e Mapa de Riscos;
+ * - Notas Técnicas e Despachos que solicitam alterações nos artefatos ou deliberam entre áreas.
+ */
+function buildStepTitle(step: ChronologicalStepGroup): string {
+  const mainDoc = step.documentos[step.documentos.length - 1];
+  const docNumSuffix = mainDoc?.numero ? ` ${mainDoc.numero}` : '';
+  const v = step.versionNumber;
+
+  switch (step.category) {
+    case 'DFD':
+      return v === 1
+        ? `Formalização da Demanda (DFD${docNumSuffix})`
+        : `Revisão / Alteração do DFD (${v}ª Versão${docNumSuffix})`;
+
+    case 'PORTARIA_EPC':
+      return v === 1
+        ? `Instituição da Equipe de Planejamento (Portaria${docNumSuffix})`
+        : `Atualização da Equipe de Planejamento (Portaria${docNumSuffix})`;
+
+    case 'ETP':
+      return v === 1
+        ? `Elaboração do Estudo Técnico Preliminar (ETP${docNumSuffix})`
+        : `Alteração / Revisão do ETP (${v}ª Versão${docNumSuffix})`;
+
+    case 'MAPA_RISCOS':
+      return v === 1
+        ? `Mapa de Gerenciamento de Riscos (MGR${docNumSuffix})`
+        : `Alteração / Revisão do Mapa de Riscos (${v}ª Versão)`;
+
+    case 'PESQUISA_PRECOS':
+      return v === 1
+        ? `Pesquisa de Preços e Estimativa de Custos`
+        : `Atualização / Revisão da Pesquisa de Preços (${v}ª Versão)`;
+
+    case 'TR':
+      return v === 1
+        ? `Elaboração do Termo de Referência (TR${docNumSuffix})`
+        : `Alteração / Revisão do Termo de Referência (TR — ${v}ª Versão)`;
+
+    case 'NOTA_TECNICA':
+      return step.triggersArtifactRevisionNext
+        ? `Nota Técnica${docNumSuffix} — Recomendações de Ajustes nos Artefatos`
+        : `Nota Técnica${docNumSuffix} — Análise e Manifestação Técnica`;
+
+    case 'DESPACHO':
+      if (step.triggersArtifactRevisionNext) {
+        return `Despacho${docNumSuffix} — Solicitação de Ajustes / Diligência (${step.unidade})`;
+      }
+      return `Despacho${docNumSuffix} — Análise e Deliberação (${step.unidade})`;
+
+    case 'CDO_ORCAMENTO':
+      return v === 1
+        ? `Certificação de Disponibilidade Orçamentária (CDO${docNumSuffix})`
+        : `Atualização da Disponibilidade Orçamentária (CDO — ${v}ª Versão)`;
+
+    case 'MINUTA_EDITAL':
+      return v === 1
+        ? `Instrução Licitatória e Minuta de Edital / Check-list`
+        : `Adequação da Minuta de Edital / Contrato (${v}ª Versão)`;
+
+    case 'PARECER_JURIDICO':
+      return step.triggersArtifactRevisionNext
+        ? `Parecer Jurídico CONJUR${docNumSuffix} (Com Recomendações de Ajuste)`
+        : `Parecer Jurídico CONJUR / AGU${docNumSuffix}`;
+
+    case 'EDITAL_PREGAO':
+      return `Publicação do Edital e Sessão Pública (Pregão${docNumSuffix})`;
+
+    case 'HOMOLOGACAO':
+      return `Julgamento, Habilitação e Homologação`;
+
+    case 'EMPENHO_CONTRATO':
+      return `Emissão de Empenho e Assinatura do Contrato`;
+
+    case 'PORTARIA_FISCALIZACAO':
+      return `Designação de Fiscalização e Início da Execução`;
+
+    default:
+      return `Análise e Instrução Processual (${step.unidade})`;
+  }
+}
+
+/**
+ * Motor "Estúdio de Fluxo SEI (Meio Termo Equilibrado — IN 94/2022 + Ciclos de Revisão)"
  *
- * - Filtra movimentações irrelevantes (despachos simples, ofícios de encaminhamento, e-mails, etc.);
- * - Agrupa os documentos reais da árvore do SEI exclusivamente nos **Marcos Oficiais da IN 94/2022**;
- * - Insere **Gateways BPMN 2.0 Exclusivos (`gateway_exclusive` ✕)** entre os marcos decisórios e mudanças de raia,
- *   evitando linhas coladas e espelhando a notação oficial do Governo Digital;
- * - Destaca exatamente o Marco e a Raia onde o processo se encontra aberto atualmente no SEI (`isCurrentSeiPosition`).
+ * - Mantém separados os artefatos essenciais: DFD, Portaria EPC, ETP, Mapa de Riscos, Pesquisa de Preços, TR, CDO, Minuta de Edital, Parecer Jurídico, Edital/Pregão, Homologação e Contrato;
+ * - Preserva Notas Técnicas e Despachos relevantes (aqueles que solicitam mudanças nos artefatos, deliberam ou tramitam entre áreas);
+ * - Preserva na ordem cronológica todas as Revisões / Alterações de ETP, TR, Pesquisa de Preços e Mapa de Riscos (2ª versão, 3ª versão...), mostrando quantos dias cada ciclo consumiu;
+ * - Insere Gateways BPMN 2.0 Exclusivos (`✕`) nos pontos de decisão e de retorno para ajustes, sem colar linhas nas divisórias das raias.
  */
 export function buildBpmnFlowFromSeiScrape(
   planejamento: Planejamento,
@@ -722,7 +806,7 @@ export function buildBpmnFlowFromSeiScrape(
   updatedTarefasForProcess: TarefaPlanejamento[];
   newHistoricoEntries: HistoricoPlanejamento[];
 } {
-  // 1. Sanitiza todos os textos contra qualquer problema de encoding (ex: "")
+  // 1. Sanitiza todos os textos contra qualquer falha de encoding
   const scrape = sanitizeScrapeResult(rawScrape);
 
   const sortedAndamentos = [...(scrape.andamentos || [])].sort((a, b) => {
@@ -739,7 +823,6 @@ export function buildBpmnFlowFromSeiScrape(
   const primaryCurrentUnit = openUnits[0] || 'GECTI';
 
   const lanesMap = new Map<string, BpmnLane>();
-
   const registerUnitLane = (unitName: string): BpmnLane => {
     const { lane } = resolveSeiUnitToLane(unitName, Array.from(lanesMap.values()), customRules);
     if (!lanesMap.has(lane.id)) {
@@ -748,119 +831,237 @@ export function buildBpmnFlowFromSeiScrape(
     return lanesMap.get(lane.id)!;
   };
 
-  // 2. Agrupa os documentos reais do SEI nos Marcos Oficiais da IN 94/2022 (ignorando despachos/movimentações simples)
+  // 2. Classifica os documentos da árvore do SEI na ordem cronológica exata em que foram inseridos
   const docs = scrape.documentos || [];
-  const bucketsByCode = new Map<string, MilestoneBucket>();
+  const rawClassified = docs.map((docItem, idx) => {
+    const info = classifySeiDocumentCategory(docItem, idx, docs.length);
+    // Se o documento não trouxe sigla de unidade no título da árvore, procura no histórico ou usa o hint da categoria
+    let resolvedUnit = docItem.unidade || '';
+    let resolvedDate = docItem.data || '';
 
-  docs.forEach((docItem, idx) => {
-    const matchedMilestone = matchSeiDocumentToIn94Milestone(docItem, idx, docs.length);
-    if (!matchedMilestone) return; // Ignora despachos simples, ofícios de remessa, e-mails, etc.
-
-    const unitForMilestone = docItem.unidade || matchedMilestone.defaultUnitHint || primaryCurrentUnit;
-    const resolvedLane = registerUnitLane(unitForMilestone);
-    const docIso = parseSeiDateToIso(docItem.data);
-
-    const existingBucket = bucketsByCode.get(matchedMilestone.code);
-    if (!existingBucket) {
-      bucketsByCode.set(matchedMilestone.code, {
-        definition: matchedMilestone,
-        unidade: docItem.unidade || primaryCurrentUnit,
-        lane: resolvedLane,
-        dataInicioIso: docIso,
-        dataFimIso: docIso,
-        documentos: [docItem],
-        isCurrentOpenMilestone: false,
-      });
-    } else {
-      if (!existingBucket.documentos.some(d => d.idSei === docItem.idSei)) {
-        existingBucket.documentos.push(docItem);
+    if ((!resolvedUnit || !resolvedDate) && sortedAndamentos.length > 0) {
+      const exactAnd = sortedAndamentos.find(a => docItem.idSei && a.descricao.includes(docItem.idSei));
+      if (exactAnd) {
+        if (!resolvedUnit) resolvedUnit = exactAnd.unidade;
+        if (!resolvedDate) resolvedDate = exactAnd.dataHora;
+      } else {
+        const ratio = docs.length > 1 ? idx / (docs.length - 1) : 0;
+        const approxAnd = sortedAndamentos[Math.min(sortedAndamentos.length - 1, Math.round(ratio * (sortedAndamentos.length - 1)))];
+        if (approxAnd) {
+          if (!resolvedUnit) resolvedUnit = approxAnd.unidade;
+          if (!resolvedDate) resolvedDate = approxAnd.dataHora;
+        }
       }
-      if (docItem.unidade) {
-        existingBucket.unidade = docItem.unidade;
-        existingBucket.lane = registerUnitLane(docItem.unidade);
-      }
-      existingBucket.dataFimIso = docIso;
     }
+
+    if (!resolvedUnit) {
+      resolvedUnit = info.defaultUnitHint || primaryCurrentUnit;
+    }
+
+    return {
+      doc: { ...docItem, unidade: resolvedUnit, data: resolvedDate || docItem.data },
+      info,
+      index: idx,
+    };
   });
 
-  // Se o processo ainda está no início e não teve nenhum documento com nome padronizado de marco,
-  // garante pelo menos o Marco 1 (Formalização da Demanda - DFD)
-  if (bucketsByCode.size === 0) {
-    const firstUnit = sortedAndamentos[0]?.unidade || primaryCurrentUnit;
-    const firstLane = registerUnitLane(firstUnit);
-    const m1 = IN94_OFFICIAL_MILESTONES[0];
-    bucketsByCode.set(m1.code, {
-      definition: m1,
-      unidade: firstUnit,
+  // 3. Agrupa documentos consecutivos da MESMA categoria na MESMA unidade (ex: 3 planilhas de Pesquisa de Preços seguidas viram 1 etapa de Pesquisa de Preços),
+  // mas NUNCA agrupa se houver outro documento/análise no meio (preservando os ciclos de revisão/retrabalho de TR, ETP, Pesquisa de Preços e Mapa de Riscos!)
+  const candidateGroups: ChronologicalStepGroup[] = [];
+
+  for (const item of rawClassified) {
+    if (item.info.category === 'NOISE') {
+      continue;
+    }
+
+    const lane = registerUnitLane(item.doc.unidade || item.info.defaultUnitHint);
+    const docIso = parseSeiDateToIso(item.doc.data);
+    const prevGroup = candidateGroups[candidateGroups.length - 1];
+
+    if (
+      prevGroup &&
+      prevGroup.category === item.info.category &&
+      (prevGroup.lane.id === lane.id || prevGroup.unidade.toUpperCase() === (item.doc.unidade || '').toUpperCase())
+    ) {
+      if (!prevGroup.documentos.some(d => d.idSei === item.doc.idSei)) {
+        prevGroup.documentos.push(item.doc);
+      }
+      prevGroup.dataFimIso = docIso;
+    } else {
+      candidateGroups.push({
+        category: item.info.category,
+        isCoreEditableArtifact: item.info.isCoreEditableArtifact,
+        isAnalysisOrRecommendation: item.info.isAnalysisOrRecommendation,
+        unidade: item.doc.unidade || item.info.defaultUnitHint,
+        lane,
+        dataInicioIso: docIso,
+        dataFimIso: docIso,
+        documentos: [item.doc],
+        prazoPadraoDias: item.info.prazoPadraoDias,
+        versionNumber: 1,
+        triggersArtifactRevisionNext: false,
+        isCurrentOpenStep: false,
+      });
+    }
+  }
+
+  // 4. Filtro Inteligente ("Meio Termo") para DESPACHOS:
+  // Mantém o Despacho como etapa própria sempre que:
+  // (a) O passo seguinte for uma revisão/alteração de artefato (ETP, TR, Mapa de Riscos, Pesquisa de Preços, Minuta); OU
+  // (b) Houver mudança de unidade/raia antes ou depois do Despacho (deliberação/encaminhamento de uma área para outra); OU
+  // (c) For o último passo do processo (posição atual no SEI) ou único pronunciamento daquela unidade;
+  // Caso seja apenas um despacho interno intermediário dentro da mesma unidade entre dois artefatos da própria unidade (ex: entre ETP e Mapa de Riscos na GECTI),
+  // anexa o despacho como subtarefa do artefato adjacente para não poluir!
+  const seenEditableCategories = new Set<SeiStepCategory>();
+  const preliminaryVersionCheck = candidateGroups.map(g => {
+    const isRepeatArtifact = g.isCoreEditableArtifact && seenEditableCategories.has(g.category);
+    if (g.isCoreEditableArtifact) {
+      seenEditableCategories.add(g.category);
+    }
+    return isRepeatArtifact;
+  });
+
+  const filteredSteps: ChronologicalStepGroup[] = [];
+  for (let i = 0; i < candidateGroups.length; i++) {
+    const curr = candidateGroups[i];
+    const prev = filteredSteps[filteredSteps.length - 1];
+    const next = candidateGroups[i + 1];
+    const nextIsRepeatArtifact = i + 1 < preliminaryVersionCheck.length ? preliminaryVersionCheck[i + 1] : false;
+
+    if (curr.category === 'DESPACHO') {
+      const isCrossUnitFromPrev = !prev || prev.unidade.toUpperCase() !== curr.unidade.toUpperCase() || prev.lane.id !== curr.lane.id;
+      const isCrossUnitToNext = !next || next.unidade.toUpperCase() !== curr.unidade.toUpperCase() || next.lane.id !== curr.lane.id;
+      const isLastInFlow = i === candidateGroups.length - 1;
+      const hasDeliberativeKeyword = curr.documentos.some(d =>
+        /DECIS[OÓ]RIO|APROVA[CÇ][AÃ]O|AUTORIZA[CÇ][AÃ]O|DILIG[EÊ]NCIA|RECOMENDA|DEVOLU[CÇ][AÃ]O/i.test(d.tipo)
+      );
+
+      const keepAsStandaloneStep =
+        nextIsRepeatArtifact || isCrossUnitFromPrev || isCrossUnitToNext || isLastInFlow || hasDeliberativeKeyword;
+
+      if (!keepAsStandaloneStep && prev) {
+        // Incorpora como subtarefa na etapa anterior da mesma unidade para evitar ruído
+        curr.documentos.forEach(d => {
+          if (!prev.documentos.some(pd => pd.idSei === d.idSei)) {
+            prev.documentos.push(d);
+          }
+        });
+        prev.dataFimIso = curr.dataFimIso;
+        continue;
+      }
+    }
+
+    filteredSteps.push(curr);
+  }
+
+  // Fallback caso o processo seja recém-autuado
+  if (filteredSteps.length === 0) {
+    const firstLane = registerUnitLane(primaryCurrentUnit);
+    filteredSteps.push({
+      category: 'DFD',
+      isCoreEditableArtifact: true,
+      isAnalysisOrRecommendation: false,
+      unidade: primaryCurrentUnit,
       lane: firstLane,
       dataInicioIso: sortedAndamentos[0] ? parseSeiDateToIso(sortedAndamentos[0].dataHora) : new Date().toISOString(),
+      dataFimIso: new Date().toISOString(),
       documentos: docs.slice(0, 3),
-      isCurrentOpenMilestone: false,
+      prazoPadraoDias: 10,
+      versionNumber: 1,
+      triggersArtifactRevisionNext: false,
+      isCurrentOpenStep: true,
     });
   }
 
-  // Ordena os marcos atingidos segundo a sequência oficial da IN 94/2022 (1 a 10)
-  const orderedBuckets = Array.from(bucketsByCode.values()).sort(
-    (a, b) => a.definition.ordemMacro - b.definition.ordemMacro
-  );
+  // 5. Numera as versões de cada artefato (1ª versão = Elaboração, 2ª+ versão = Revisão/Alteração pós-recomendações)
+  // e identifica quais Notas Técnicas / Despachos / Pareceres desencadearam alterações nos artefatos!
+  const categoryVersionCounter: Partial<Record<SeiStepCategory, number>> = {};
+  for (let i = 0; i < filteredSteps.length; i++) {
+    const step = filteredSteps[i];
+    const count = (categoryVersionCounter[step.category] || 0) + 1;
+    categoryVersionCounter[step.category] = count;
+    step.versionNumber = count;
+  }
 
-  // 3. Verifica a posição atual do processo no SEI (`primaryCurrentUnit`):
-  // Se o processo estiver aberto em uma unidade cujo marco seguinte está em andamento (ex: aberto na CONJUR, COFAC ou CGLIC),
-  // garante que esse marco ativo apareça no fluxo e receba o destaque "ONDE ESTÁ NO SEI"
-  const activeUnitLane = registerUnitLane(primaryCurrentUnit);
-  const highestOrdem = orderedBuckets[orderedBuckets.length - 1]?.definition.ordemMacro || 1;
-  const inferredActiveDef = inferMilestoneForOpenUnit(primaryCurrentUnit, highestOrdem);
-
-  const existingActiveBucket = orderedBuckets.find(b => b.definition.code === inferredActiveDef.code);
-  if (existingActiveBucket) {
-    existingActiveBucket.isCurrentOpenMilestone = true;
-    existingActiveBucket.unidade = primaryCurrentUnit;
-    existingActiveBucket.lane = activeUnitLane;
-  } else {
-    // Se a última etapa já era da mesma raia ativa, marca a última etapa daquela raia;
-    // caso contrário, adiciona o marco em andamento na unidade atual do SEI
-    const lastInActiveLane = [...orderedBuckets].reverse().find(b => b.lane.id === activeUnitLane.id);
-    if (lastInActiveLane && lastInActiveLane.definition.ordemMacro >= inferredActiveDef.ordemMacro) {
-      lastInActiveLane.isCurrentOpenMilestone = true;
-      lastInActiveLane.unidade = primaryCurrentUnit;
-    } else {
-      orderedBuckets.push({
-        definition: inferredActiveDef,
-        unidade: primaryCurrentUnit,
-        lane: activeUnitLane,
-        dataInicioIso: sortedAndamentos.length > 0
-          ? parseSeiDateToIso(sortedAndamentos[sortedAndamentos.length - 1].dataHora)
-          : new Date().toISOString(),
-        documentos: [],
-        isCurrentOpenMilestone: true,
-      });
-      orderedBuckets.sort((a, b) => a.definition.ordemMacro - b.definition.ordemMacro);
+  for (let i = 0; i < filteredSteps.length; i++) {
+    const step = filteredSteps[i];
+    const nextStep = filteredSteps[i + 1];
+    if (
+      nextStep &&
+      (step.isAnalysisOrRecommendation || step.lane.id !== nextStep.lane.id) &&
+      nextStep.isCoreEditableArtifact &&
+      nextStep.versionNumber >= 2
+    ) {
+      step.triggersArtifactRevisionNext = true;
     }
   }
 
-  // Garante que exatamente um marco seja o ativo (`isCurrentOpenMilestone = true`)
-  if (!orderedBuckets.some(b => b.isCurrentOpenMilestone)) {
-    orderedBuckets[orderedBuckets.length - 1].isCurrentOpenMilestone = true;
+  // 6. Verifica a unidade onde o processo está aberto AGORA no SEI (`primaryCurrentUnit`):
+  // Se o último passo já estiver na unidade atual, marca-o como posição atual;
+  // caso o processo tenha acabado de ser enviado para outra unidade (onde ainda está em análise sem documento novo assinado),
+  // acrescenta o cartão de análise em andamento naquela unidade!
+  const activeLaneObj = registerUnitLane(primaryCurrentUnit);
+  const lastStep = filteredSteps[filteredSteps.length - 1];
+  if (
+    lastStep.lane.id === activeLaneObj.id ||
+    lastStep.unidade.toUpperCase() === primaryCurrentUnit.toUpperCase()
+  ) {
+    lastStep.isCurrentOpenStep = true;
+    lastStep.unidade = primaryCurrentUnit;
+  } else {
+    const isConjur = /CONJUR|JURIDIC|AGU/i.test(primaryCurrentUnit);
+    const isOrcamento = /COFAC|CGOF|ORCAMENT|SPOA/i.test(primaryCurrentUnit);
+    const isCompras = /CGLIC|COLIC|DLC|CENTRAL|COMPRAS|LICIT|DCD/i.test(primaryCurrentUnit);
+    const inferredCat: SeiStepCategory = isConjur
+      ? 'PARECER_JURIDICO'
+      : isOrcamento
+        ? 'CDO_ORCAMENTO'
+        : isCompras
+          ? 'MINUTA_EDITAL'
+          : 'DESPACHO';
+
+    filteredSteps.push({
+      category: inferredCat,
+      isCoreEditableArtifact: false,
+      isAnalysisOrRecommendation: true,
+      unidade: primaryCurrentUnit,
+      lane: activeLaneObj,
+      dataInicioIso:
+        sortedAndamentos.length > 0
+          ? parseSeiDateToIso(sortedAndamentos[sortedAndamentos.length - 1].dataHora)
+          : new Date().toISOString(),
+      dataFimIso: new Date().toISOString(),
+      documentos: [],
+      prazoPadraoDias: 10,
+      versionNumber: (categoryVersionCounter[inferredCat] || 0) + 1,
+      triggersArtifactRevisionNext: false,
+      isCurrentOpenStep: true,
+    });
   }
 
-  // Ordena as raias conforme a ordem canônica da IN 94/2022
+  // Se a lista de etapas for muito extensa (> 18 etapas), preserva integralmente o início e as 14 etapas mais recentes
+  const effectiveSteps =
+    filteredSteps.length > 18
+      ? [...filteredSteps.slice(0, 4), ...filteredSteps.slice(filteredSteps.length - 14)]
+      : filteredSteps;
+
   const finalLanes = Array.from(lanesMap.values())
     .sort((a, b) => (a.ordem || 99) - (b.ordem || 99))
     .map((l, idx) => ({ ...l, ordem: idx + 1 }));
 
-  // 4. Constrói os Nós BPMN (Start + Tarefas de Marcos + Gateways Exclusivos ✕ + End) e Conexões Ortogonais
+  // 7. Constrói os Nós BPMN (Start + Tarefas de Marcos/Artefatos/Revisões + Gateways Exclusivos ✕ + End)
   let stepOrder = 1;
   const protoSuffix = normalizeSeiProtocol(planejamento.SEI_Processo).slice(-6) || '1';
-  const firstBucket = orderedBuckets[0];
+  const firstStep = effectiveSteps[0];
   const startNodeId = `node-sei-start-${protoSuffix}`;
 
   const startNode: BpmnNode = {
     id: startNodeId,
     type: 'start',
     label: 'Autuação no SEI',
-    laneId: firstBucket.lane.id,
+    laneId: firstStep.lane.id,
     ordemFluxo: stepOrder++,
-    seiUnidade: firstBucket.unidade,
+    seiUnidade: firstStep.unidade,
     descricao: `Processo autuado no SEI (${planejamento.SEI_Processo})`,
   };
 
@@ -872,29 +1073,30 @@ export function buildBpmnFlowFromSeiScrape(
   let previousBranchLabel = '';
   let activeNodeId = startNodeId;
 
-  orderedBuckets.forEach((bucket, idx) => {
-    const isLastBucket = idx === orderedBuckets.length - 1;
-    const nextBucket = !isLastBucket ? orderedBuckets[idx + 1] : null;
-    const isActiveStep = bucket.isCurrentOpenMilestone;
+  effectiveSteps.forEach((step, idx) => {
+    const isLastStep = idx === effectiveSteps.length - 1;
+    const nextStep = !isLastStep ? effectiveSteps[idx + 1] : null;
+    const isActiveStep = step.isCurrentOpenStep;
 
-    const mainDoc = bucket.documentos[bucket.documentos.length - 1];
+    const mainDoc = step.documentos[step.documentos.length - 1];
     const docSeiRef = mainDoc?.idSei || '';
     let allSigned = true;
     const signersList: string[] = [];
 
-    bucket.documentos.forEach(d => {
+    step.documentos.forEach(d => {
       if (!d.assinado) allSigned = false;
       if (d.assinantes) signersList.push(...d.assinantes);
     });
 
-    // Calcula dias na etapa
-    const startMs = new Date(bucket.dataInicioIso).getTime();
-    const endMs = !isActiveStep && bucket.dataFimIso ? new Date(bucket.dataFimIso).getTime() : Date.now();
-    const elapsedDays = Math.max(1, Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24)));
+    // Calcula a duração real (em dias) que o processo permaneceu nesta etapa até a etapa seguinte (para evidenciar gargalos!)
+    const startMs = new Date(step.dataInicioIso).getTime();
+    const nextStartMs = nextStep ? new Date(nextStep.dataInicioIso).getTime() : Date.now();
+    const endMs = Math.max(startMs, nextStartMs > startMs ? nextStartMs : new Date(step.dataFimIso).getTime());
+    const realElapsedDays = Math.max(1, Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24)));
 
     let statusTarefa: StatusTarefa = 'Concluído';
     if (isActiveStep && planejamento.Status_Planejamento !== 'Gerou Contrato' && planejamento.Status_Planejamento !== 'Arquivado') {
-      if (bucket.documentos.length > 0 && !allSigned) {
+      if (step.documentos.length > 0 && !allSigned) {
         statusTarefa = 'Aguardando Assinatura';
       } else {
         statusTarefa = 'Em Elaboração';
@@ -902,47 +1104,48 @@ export function buildBpmnFlowFromSeiScrape(
     }
 
     const taskOrder = stepOrder++;
-    const taskId = `tar-in94-${protoSuffix}-${bucket.definition.code.toLowerCase()}`;
+    const taskId = `tar-in94v2-${protoSuffix}-${idx + 1}-${step.category.toLowerCase()}`;
     const prevTask = existingTarefas.find(t => t.id === taskId);
+    const taskTitle = buildStepTitle(step);
 
     const newTask: TarefaPlanejamento = {
       id: taskId,
       ProcessoPlanejamento: planejamento.SEI_Processo,
-      Tarefa: bucket.definition.tituloMarco,
-      Inicio: bucket.dataInicioIso,
-      Prazo_Dias: prevTask?.Prazo_Dias || bucket.definition.prazoPadraoDias || Math.max(5, elapsedDays),
+      Tarefa: taskTitle,
+      Inicio: step.dataInicioIso,
+      Prazo_Dias: prevTask?.Prazo_Dias || realElapsedDays || step.prazoPadraoDias,
       Status_Tarefa: statusTarefa,
-      areaResponsavel: bucket.lane.nome,
+      areaResponsavel: step.lane.nome,
       ordemFluxo: taskOrder,
       bpmnType: 'task',
       descricao: [
-        `Fase IN 94/2022: ${bucket.definition.faseIn94}`,
-        `Unidade SEI: ${bucket.unidade}`,
-        docSeiRef ? `Documento Principal SEI nº ${docSeiRef}` : 'Etapa em instrução na unidade',
+        `Unidade SEI: ${step.unidade}`,
+        step.versionNumber > 1 ? `Ciclo de Revisão/Alteração (${step.versionNumber}ª Versão)` : 'Elaboração / Análise',
+        `Tempo na etapa: ${realElapsedDays} dia(s)`,
+        docSeiRef ? `Doc SEI nº ${docSeiRef}` : 'Em andamento na unidade',
       ].join(' • '),
-      dataConclusao: statusTarefa === 'Concluído' ? (bucket.dataFimIso || new Date().toISOString()) : undefined,
+      dataConclusao: statusTarefa === 'Concluído' ? (nextStep?.dataInicioIso || step.dataFimIso || new Date().toISOString()) : undefined,
       MovidoPor: 'Estúdio de Fluxo SEI (IN 94/2022)',
       MovidoEm: new Date().toISOString(),
       subTarefas:
-        bucket.documentos.length > 0
-          ? bucket.documentos.map((d, dIdx) => ({
+        step.documentos.length > 0
+          ? step.documentos.map((d, dIdx) => ({
               id: `sub-${taskId}-${dIdx}`,
               titulo: repairMojibakeAndBrokenChars(`${d.tipo}${d.numero ? ` ${d.numero}` : ''} (SEI ${d.idSei})`),
               concluida: d.assinado,
             }))
           : prevTask?.subTarefas || [],
       seiDocNumber: docSeiRef || undefined,
-      seiUnidade: bucket.unidade,
+      seiUnidade: step.unidade,
       isCurrentSeiPosition: isActiveStep,
-      seiAssinado: bucket.documentos.length > 0 ? allSigned : undefined,
+      seiAssinado: step.documentos.length > 0 ? allSigned : undefined,
       seiAssinantes: signersList.length > 0 ? Array.from(new Set(signersList)) : undefined,
     };
 
     generatedTasks.push(newTask);
 
-    // Conecta o elemento anterior (Start, Tarefa anterior ou Gateway anterior) a este Marco
     generatedConnections.push({
-      id: `conn-in94-to-${bucket.definition.code.toLowerCase()}`,
+      id: `conn-in94v2-${idx + 1}`,
       fromId: previousElementId,
       toId: taskId,
       label: previousBranchLabel,
@@ -958,36 +1161,63 @@ export function buildBpmnFlowFromSeiScrape(
       activeNodeId = taskId;
     }
 
-    // 5. INSERÇÃO DE GATEWAY BPMN 2.0 EXCLUSIVO (✕) ENTRE MARCOS (Padrão IN 94/2022)
-    // Insere um Gateway de decisão sempre que o marco possuir ponto de controle na IN 94/2022
-    // ou quando houver mudança de raia para o próximo marco!
-    if (nextBucket) {
-      const isCrossLaneToNext = nextBucket.lane.id !== bucket.lane.id;
-      const gwConfig = bucket.definition.gatewayAfter || (isCrossLaneToNext
-        ? {
-            label: 'Etapa Concluída?',
-            yesBranchLabel: 'Encaminhar',
-            descricao: `Transição formal da raia ${bucket.lane.nome} para ${nextBucket.lane.nome}`,
-          }
-        : undefined);
+    // 8. INSERÇÃO DE GATEWAYS BPMN 2.0 EXCLUSIVOS (✕) NOS PONTOS DE DECISÃO, RECOMENDAÇÃO DE AJUSTES E TRANSIÇÃO ENTRE ÁREAS
+    if (nextStep) {
+      const isCrossLane = nextStep.lane.id !== step.lane.id;
+      const isTriggeringRevision = step.triggersArtifactRevisionNext || (nextStep.isCoreEditableArtifact && nextStep.versionNumber >= 2 && step.isAnalysisOrRecommendation);
+      const isKeyDecisionMilestone =
+        step.category === 'DFD' ||
+        step.category === 'TR' ||
+        step.category === 'NOTA_TECNICA' ||
+        step.category === 'CDO_ORCAMENTO' ||
+        step.category === 'PARECER_JURIDICO' ||
+        step.category === 'HOMOLOGACAO';
 
-      if (gwConfig) {
-        const gwId = `node-gw-in94-${protoSuffix}-${bucket.definition.code.toLowerCase()}`;
+      if (isTriggeringRevision || isCrossLane || isKeyDecisionMilestone) {
+        let gwLabel = 'Etapa Concluída?';
+        let branchLabel = 'Prosseguir';
+
+        if (isTriggeringRevision) {
+          gwLabel = 'Solicita Ajustes nos Artefatos?';
+          branchLabel = 'Sim (Revisar Artefatos)';
+        } else if (step.category === 'DFD') {
+          gwLabel = 'Demanda Aprovada?';
+          branchLabel = 'Aprovada';
+        } else if (step.category === 'TR') {
+          gwLabel = step.versionNumber > 1 ? 'TR Revisado Aprovado?' : 'TR Aprovado?';
+          branchLabel = 'Aprovado';
+        } else if (step.category === 'NOTA_TECNICA') {
+          gwLabel = 'Parecer Técnico Favorável?';
+          branchLabel = 'Aprovado';
+        } else if (step.category === 'CDO_ORCAMENTO') {
+          gwLabel = 'Orçamento Certificado?';
+          branchLabel = 'CDO Emitida';
+        } else if (step.category === 'PARECER_JURIDICO') {
+          gwLabel = 'Parecer Jurídico Favorável?';
+          branchLabel = nextStep.versionNumber >= 2 ? 'Atender Recomendações' : 'Favorável';
+        } else if (step.category === 'HOMOLOGACAO') {
+          gwLabel = 'Certame Homologado?';
+          branchLabel = 'Homologado';
+        } else if (isCrossLane) {
+          gwLabel = 'Encaminhar para Próxima Área?';
+          branchLabel = nextStep.unidade;
+        }
+
+        const gwId = `node-gw-in94v2-${protoSuffix}-${idx + 1}`;
         const gwNode: BpmnNode = {
           id: gwId,
           type: 'gateway_exclusive',
-          label: gwConfig.label,
-          laneId: bucket.lane.id,
+          label: gwLabel,
+          laneId: step.lane.id,
           ordemFluxo: stepOrder++,
-          seiUnidade: bucket.unidade,
-          descricao: gwConfig.descricao,
+          seiUnidade: step.unidade,
+          descricao: `Ponto de decisão BPMN após ${taskTitle}`,
         };
 
         generatedNodes.push(gwNode);
 
-        // Conecta a Tarefa do Marco ao Gateway na mesma raia
         generatedConnections.push({
-          id: `conn-in94-gw-${bucket.definition.code.toLowerCase()}`,
+          id: `conn-gw-in94v2-${idx + 1}`,
           fromId: taskId,
           toId: gwId,
           label: '',
@@ -997,22 +1227,22 @@ export function buildBpmnFlowFromSeiScrape(
         });
 
         previousElementId = gwId;
-        previousBranchLabel = gwConfig.yesBranchLabel;
+        previousBranchLabel = branchLabel;
       }
     }
   });
 
   // Se o planejamento já gerou contrato ou está concluído/arquivado, adiciona o nó de Fim
   if (planejamento.Status_Planejamento === 'Gerou Contrato' || planejamento.Status_Planejamento === 'Arquivado') {
-    const lastBucket = orderedBuckets[orderedBuckets.length - 1];
+    const lastStep = effectiveSteps[effectiveSteps.length - 1];
     const endNodeId = `node-sei-end-${protoSuffix}`;
     generatedNodes.push({
       id: endNodeId,
       type: 'end',
       label: planejamento.Status_Planejamento === 'Gerou Contrato' ? 'Contrato Assinado' : 'Processo Concluído',
-      laneId: lastBucket.lane.id,
+      laneId: lastStep.lane.id,
       ordemFluxo: stepOrder++,
-      seiUnidade: lastBucket.unidade,
+      seiUnidade: lastStep.unidade,
     });
     generatedConnections.push({
       id: `conn-sei-end-${protoSuffix}`,
@@ -1043,58 +1273,57 @@ export function buildBpmnFlowFromSeiScrape(
     ? Math.max(0, Math.floor((Date.now() - new Date(activeTask.Inicio).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  // Filtra a árvore de documentos exibida no metadado para priorizar documentos relevantes
-  const milestoneDocsOnly = docs.filter((d, idx) => matchSeiDocumentToIn94Milestone(d, idx, docs.length) !== null);
-
+  // Preserva TODOS os documentos da árvore no metadado (sem truncar o início do processo!)
   const seiSyncMetadata: SeiProcessSyncMetadata = {
     lastSyncAt: scrape.scrapedAt || new Date().toISOString(),
     unidadesAbertas: openUnits,
     unidadeAtual: primaryCurrentUnit,
     ultimoAndamento: repairMojibakeAndBrokenChars(
-      latestAndamento?.descricao || activeTask?.Tarefa || 'Sincronizado via SEI (Marcos IN 94/2022)'
+      latestAndamento?.descricao || activeTask?.Tarefa || 'Sincronizado via SEI (IN 94/2022)'
     ),
     ultimaDataAndamento: latestAndamento?.dataHora || new Date().toLocaleDateString('pt-BR'),
     activeNodeId,
-    activeLaneId: activeUnitLane.id,
-    activeLaneNome: activeUnitLane.nome,
+    activeLaneId: activeLaneObj.id,
+    activeLaneNome: activeLaneObj.nome,
     diasNaUnidadeAtual,
     processosRelacionados: relatedClassified,
-    documentosArvore: (milestoneDocsOnly.length > 0 ? milestoneDocsOnly : docs).slice(-25),
+    documentosArvore: docs,
     etapasMapeadasCount: generatedTasks.length,
   };
 
-  // Gera novos registros de HistoricoPlanejamento APENAS para documentos de Marcos Oficiais da IN 94/2022
-  // (evitando poluir o histórico com despachos simples ou movimentações corriqueiras)
+  // 9. Alimenta o Histórico Processual (`HistoricoPlanejamento`) com todas as etapas relevantes:
+  // Artefatos (DFD, ETP, Mapa de Riscos, Pesquisa de Preços, TR, CDO, Minuta, Parecer, Edital, Contrato),
+  // todas as suas revisões/alterações (2ª, 3ª versão...), Notas Técnicas e Despachos relevantes!
   const existingHistKeys = new Set(
     existingHistorico
       .filter(h => h.Processo_SEI === planejamento.SEI_Processo)
-      .map(h => `${h.Num_SEI || ''}-${(h.Descricao || '').slice(0, 40)}`)
+      .map(h => `${h.Num_SEI || ''}-${(h.Descricao || '').slice(0, 35)}`)
   );
 
   const newHistoricoEntries: HistoricoPlanejamento[] = [];
-  docs.forEach((d, idx) => {
-    const milestoneDef = matchSeiDocumentToIn94Milestone(d, idx, docs.length);
-    if (!milestoneDef) return; // Ignora despachos simples no histórico também
-
-    const desc = repairMojibakeAndBrokenChars(
-      `[${milestoneDef.tituloMarco}] ${d.tipo}${d.numero ? ` nº ${d.numero}` : ''}${d.assinado ? ' (Assinado)' : ' (Minuta)'}`
-    );
-    const key = `${d.idSei}-${desc.slice(0, 40)}`;
-    if (!existingHistKeys.has(key)) {
-      existingHistKeys.add(key);
-      newHistoricoEntries.push({
-        id: `hist-sei-${normalizeSeiProtocol(planejamento.SEI_Processo).slice(-5)}-${d.idSei}`,
-        Processo_SEI: planejamento.SEI_Processo,
-        Data: parseSeiDateToIso(d.data).slice(0, 10),
-        Descricao: desc,
-        Num_SEI: d.idSei,
-        Coordenacao: d.unidade || primaryCurrentUnit,
-      });
+  for (const step of effectiveSteps) {
+    const stepLabel = buildStepTitle(step);
+    for (const d of step.documentos) {
+      const desc = repairMojibakeAndBrokenChars(
+        `[${stepLabel}] ${d.tipo}${d.numero ? ` nº ${d.numero}` : ''}${d.assinado ? ' (Assinado)' : ' (Minuta)'}`
+      );
+      const key = `${d.idSei}-${desc.slice(0, 35)}`;
+      if (!existingHistKeys.has(key)) {
+        existingHistKeys.add(key);
+        newHistoricoEntries.push({
+          id: `hist-sei-${normalizeSeiProtocol(planejamento.SEI_Processo).slice(-5)}-${d.idSei}`,
+          Processo_SEI: planejamento.SEI_Processo,
+          Data: parseSeiDateToIso(d.data).slice(0, 10),
+          Descricao: desc,
+          Num_SEI: d.idSei,
+          Coordenacao: d.unidade || step.unidade || primaryCurrentUnit,
+        });
+      }
     }
-  });
+  }
 
   // Extrai automaticamente Portaria da EPC caso detectada na árvore do SEI
-  const portariaDoc = docs.find(d => /PORTARIA/i.test(d.tipo));
+  const portariaDoc = docs.find(d => /PORTARIA/i.test(d.tipo) && !/FISCALIZA/i.test(d.tipo));
   const autoPortariaSei = planejamento.Portaria_Equipe_PC_SEI || (portariaDoc ? portariaDoc.idSei : '');
   const autoPortariaNum =
     planejamento.Portaria_Equipe_PC_Numero ||
@@ -1120,7 +1349,7 @@ export function buildBpmnFlowFromSeiScrape(
 }
 
 /**
- * Atualiza um Contrato vigente com os dados lidos do SEI (filtrando apenas documentos de marcos contratuais relevantes)
+ * Atualiza um Contrato vigente com os dados lidos do SEI (incluindo Notas Técnicas, Despachos Relevantes, Aditivos, Apostilamentos e Processos Associados)
  */
 export function applySeiScrapeToContrato(
   contrato: Contrato,
@@ -1155,7 +1384,6 @@ export function applySeiScrapeToContrato(
   }));
 
   const docs = scrape.documentos || [];
-  const milestoneDocsOnly = docs.filter((d, idx) => matchSeiDocumentToIn94Milestone(d, idx, docs.length) !== null);
 
   const seiSyncMetadata: SeiProcessSyncMetadata = {
     lastSyncAt: scrape.scrapedAt || new Date().toISOString(),
@@ -1164,24 +1392,24 @@ export function applySeiScrapeToContrato(
     ultimoAndamento: repairMojibakeAndBrokenChars(latestAndamento?.descricao || 'Processo monitorado no SEI'),
     ultimaDataAndamento: latestAndamento?.dataHora || new Date().toLocaleDateString('pt-BR'),
     processosRelacionados: relatedClassified,
-    documentosArvore: (milestoneDocsOnly.length > 0 ? milestoneDocsOnly : docs).slice(-25),
+    documentosArvore: docs,
   };
 
   const existingHistKeys = new Set(
     existingHistoricoContratual
       .filter(h => h.ContratoRelacionado === contrato.id)
-      .map(h => `${h.Numero_SEI || ''}-${(h.Descricao || '').slice(0, 40)}`)
+      .map(h => `${h.Numero_SEI || ''}-${(h.Descricao || '').slice(0, 35)}`)
   );
 
   const newHistoricoContratual: HistoricoContratual[] = [];
   docs.forEach((d, idx) => {
-    const milestoneDef = matchSeiDocumentToIn94Milestone(d, idx, docs.length);
-    if (!milestoneDef) return; // Ignora despachos simples
+    const info = classifySeiDocumentCategory(d, idx, docs.length);
+    if (info.category === 'NOISE') return;
 
     const desc = repairMojibakeAndBrokenChars(
-      `[SEI • ${milestoneDef.tituloMarco}] ${d.tipo}${d.numero ? ` nº ${d.numero}` : ''}${d.assinado ? ' (Assinado)' : ' (Em elaboração)'}`
+      `[SEI] ${d.tipo}${d.numero ? ` nº ${d.numero}` : ''}${d.assinado ? ' (Assinado)' : ' (Em elaboração)'}`
     );
-    const key = `${d.idSei}-${desc.slice(0, 40)}`;
+    const key = `${d.idSei}-${desc.slice(0, 35)}`;
     if (!existingHistKeys.has(key)) {
       existingHistKeys.add(key);
       newHistoricoContratual.push({

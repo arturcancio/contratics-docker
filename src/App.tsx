@@ -2207,6 +2207,7 @@ export default function App() {
       const hasOldSeiTasks = pTasks.some(
         t =>
           t.id.startsWith('tar-sei-') ||
+          t.id.startsWith('tar-in94-') ||
           t.Tarefa.includes('\uFFFD') ||
           /^(Despacho|Análise e Tramitação|Ofício)/i.test(t.Tarefa) ||
           (t.subTarefas || []).some(st => st.titulo.includes('\uFFFD'))
@@ -2239,6 +2240,7 @@ export default function App() {
     const updatedPlansToSave: Planejamento[] = [];
     const tasksToSave: TarefaPlanejamento[] = [];
     const tasksToDelete: string[] = [];
+    const histToSave: HistoricoPlanejamento[] = [];
 
     for (const plan of plansNeedingUpgrade) {
       in94AutoUpgradeRef.current.add(plan.id);
@@ -2296,6 +2298,10 @@ export default function App() {
           ...mapped.updatedTarefasForProcess
         ];
         mapped.updatedTarefasForProcess.forEach(t => tasksToSave.push(t));
+        if (mapped.newHistoricoEntries.length > 0) {
+          nextHistPlan = [...mapped.newHistoricoEntries, ...nextHistPlan];
+          mapped.newHistoricoEntries.forEach(h => histToSave.push(h));
+        }
       } else {
         const cleanedPlan: Planejamento = {
           ...plan,
@@ -2332,6 +2338,10 @@ export default function App() {
 
     setPlanejamentos(nextPlanejamentos);
     setTarefas(nextTarefas);
+    if (histToSave.length > 0) {
+      setHistoricoPlanejamentos(nextHistPlan);
+      safeLocalStorageSet('contratics_historico_planejamentos', JSON.stringify(nextHistPlan));
+    }
     safeLocalStorageSet('contratics_planejamentos', JSON.stringify(nextPlanejamentos));
     safeLocalStorageSet('contratics_tarefas', JSON.stringify(nextTarefas));
 
@@ -2339,6 +2349,7 @@ export default function App() {
     updatedPlansToSave.forEach(p => dbPromises.push(setDoc(doc(db, 'planejamentos', p.id), p).catch(() => {})));
     tasksToDelete.forEach(tid => dbPromises.push(deleteDoc(doc(db, 'tarefas', tid)).catch(() => {})));
     tasksToSave.forEach(t => dbPromises.push(setDoc(doc(db, 'tarefas', t.id), t).catch(() => {})));
+    histToSave.forEach(h => dbPromises.push(setDoc(doc(db, 'historico_planejamentos', h.id), h).catch(() => {})));
     Promise.all(dbPromises).catch(() => {});
   }, [planejamentos, tarefas]);
 

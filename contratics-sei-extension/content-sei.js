@@ -508,6 +508,34 @@
       }
     }
 
+    // Enriquece documentos da árvore com data e unidade exatas a partir do histórico (#tblHistorico)
+    if (andamentos.length > 0 && parsedTree.documentos.length > 0) {
+      const chronologicalAndamentos = [...andamentos].reverse();
+      parsedTree.documentos.forEach((docItem, idx) => {
+        // 1. Procura menção direta ao número SEI do documento no histórico
+        const directMatch = chronologicalAndamentos.find(
+          (a) => a.descricao && docItem.idSei && a.descricao.includes(docItem.idSei)
+        );
+        if (directMatch) {
+          if (!docItem.unidade && directMatch.unidade) docItem.unidade = directMatch.unidade;
+          if (!docItem.data && directMatch.dataHora) docItem.data = directMatch.dataHora.split(' ')[0];
+        }
+        // 2. Caso ainda não tenha data ou unidade, correlaciona proporcionalmente pela linha do tempo de andamentos
+        if (!docItem.unidade || !docItem.data) {
+          const ratio = parsedTree.documentos.length > 1 ? idx / (parsedTree.documentos.length - 1) : 0;
+          const approxIdx = Math.min(
+            chronologicalAndamentos.length - 1,
+            Math.max(0, Math.round(ratio * (chronologicalAndamentos.length - 1)))
+          );
+          const approxAnd = chronologicalAndamentos[approxIdx];
+          if (approxAnd) {
+            if (!docItem.unidade && approxAnd.unidade) docItem.unidade = approxAnd.unidade;
+            if (!docItem.data && approxAnd.dataHora) docItem.data = approxAnd.dataHora.split(' ')[0];
+          }
+        }
+      });
+    }
+
     // Varredura Profunda de 2º Nível para Processos Relacionados (Pagamentos, Descentralizações, Aditivos, etc.)
     if (deepScanRelated && parsedTree.processosRelacionados.length > 0) {
       const maxRelatedToInspect = Math.min(parsedTree.processosRelacionados.length, 5);
