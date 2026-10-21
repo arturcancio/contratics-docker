@@ -1342,7 +1342,7 @@ export default function BpmnFlowBoard({
             </button>
           )}
 
-          {onOpenSeiStudio && (
+          {currentUser?.role === 'GECTI' && onOpenSeiStudio && (
             <button
               type="button"
               onClick={onOpenSeiStudio}
@@ -1354,7 +1354,7 @@ export default function BpmnFlowBoard({
             </button>
           )}
 
-          {hasRollbackAvailable && onRevertLastSeiSync && (
+          {currentUser?.role === 'GECTI' && hasRollbackAvailable && onRevertLastSeiSync && (
             <button
               type="button"
               onClick={onRevertLastSeiSync}

@@ -87,6 +87,7 @@ export default function SeiSyncStudioModal({
   planejamentos,
   contratos,
   snapshots,
+  currentUser,
   extensionConnected,
   scanProgress,
   onTriggerExtensionScan,
@@ -235,7 +236,7 @@ export default function SeiSyncStudioModal({
     return items;
   }, [contratos, planejamentos]);
 
-  if (!isOpen) return null;
+  if (!isOpen || currentUser?.role !== 'GECTI') return null;
 
   const toggleProtocol = (proto: string) => {
     setSelectedProtocols(prev =>

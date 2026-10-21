@@ -959,7 +959,7 @@ export default function Planejamentos({
             </div>
             
             <div className="flex flex-wrap items-center gap-2.5" data-tour="plan-actions">
-              {onRevertLastSeiSync && hasRollbackAvailable && (
+              {currentUser?.role === 'GECTI' && onRevertLastSeiSync && hasRollbackAvailable && (
                 <button
                   onClick={onRevertLastSeiSync}
                   className="flex items-center gap-1.5 px-3 py-2 border border-amber-500/40 rounded-lg text-xs bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-all cursor-pointer font-bold"
@@ -969,7 +969,7 @@ export default function Planejamentos({
                   Voltar Dados SEI
                 </button>
               )}
-              {onOpenSeiStudio && (
+              {currentUser?.role === 'GECTI' && onOpenSeiStudio && (
                 <button
                   onClick={onOpenSeiStudio}
                   className="flex items-center gap-2 px-3.5 py-2 border border-emerald-500/40 rounded-lg text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 transition-all cursor-pointer font-bold shadow-sm"

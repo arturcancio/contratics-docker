@@ -1734,10 +1734,12 @@ export default function App() {
   };
 
   const handleDeleteSeiSnapshot = async (id: string): Promise<void> => {
+    if (currentUser?.role !== 'GECTI') return;
     persistSeiSnapshots(seiSnapshots.filter(s => s.id !== id));
   };
 
   const handleRestoreSeiSnapshot = async (snapshot: SeiSyncSnapshot): Promise<void> => {
+    if (currentUser?.role !== 'GECTI') return;
     const st = snapshot.previousState;
     if (!st) return;
 
@@ -1805,6 +1807,7 @@ export default function App() {
   };
 
   const handleRevertLastSeiSync = () => {
+    if (currentUser?.role !== 'GECTI') return;
     if (seiSnapshots.length === 0) {
       alert('Não há ponto de restauração anterior disponível.');
       return;
@@ -1827,6 +1830,7 @@ export default function App() {
       errorsCount?: number;
     }
   ) => {
+    if (currentUser?.role !== 'GECTI') return;
     if (!results || results.length === 0) {
       setSeiScanProgress({
         isScanning: false,
@@ -1988,6 +1992,7 @@ export default function App() {
     classification: 'pagamento' | 'aditivo' | 'apostilamento' | 'descentralizacao' | 'empenho' | 'os' | 'outro',
     tipoDesc?: string
   ): Promise<void> => {
+    if (currentUser?.role !== 'GECTI') return;
     const targetCont = contratos.find(c => c.id === contratoId);
     if (!targetCont) return;
 
@@ -2016,6 +2021,7 @@ export default function App() {
   };
 
   const handleTriggerExtensionScan = (selectedProtocols?: string[]) => {
+    if (currentUser?.role !== 'GECTI') return;
     const allMonitored: Array<{ protocolo: string; category: 'planejamento' | 'contrato'; id: string; label: string }> = [];
     const seen = new Set<string>();
 
@@ -2069,6 +2075,11 @@ export default function App() {
   };
 
   React.useEffect(() => {
+    if (!isLoggedIn || currentUser?.role !== 'GECTI') {
+      setSeiExtensionConnected(false);
+      return;
+    }
+
     const buildMonitoredProcessList = () => {
       const list: Array<{
         protocolo: string;
@@ -2191,7 +2202,7 @@ export default function App() {
     return () => {
       window.removeEventListener('message', handleMessage);
     };
-  }, [planejamentos, tarefas, historicoPlanejamentos, contratos, pagamentos, historicosContratuais, seiSnapshots]);
+  }, [isLoggedIn, currentUser, planejamentos, tarefas, historicoPlanejamentos, contratos, pagamentos, historicosContratuais, seiSnapshots]);
 
   // Migração / Reparo Automático: Converte processos já lidos no formato antigo (sem Gateways, com despachos avulsos ou com caracteres "")
   // para o novo padrão de Marcos Oficiais da IN SGD/ME nº 94/2022 + Gateways BPMN 2.0 (✕) + Textos UTF-8 limpos
@@ -4030,30 +4041,33 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Botão Rápido de Rollback SEI (se houver snapshot) */}
-            {seiSnapshots.length > 0 && (
-              <button
-                onClick={handleRevertLastSeiSync}
-                className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
-                title={`Reverter última leitura do SEI (${seiSnapshots[0].description})`}
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="hidden lg:inline">Voltar Dados SEI</span>
-              </button>
-            )}
+            {/* Botões do Estúdio de Fluxo SEI e Rollback SEI (Exclusivos para perfil GECTI) */}
+            {currentUser?.role === 'GECTI' && (
+              <>
+                {seiSnapshots.length > 0 && (
+                  <button
+                    onClick={handleRevertLastSeiSync}
+                    className="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                    title={`Reverter última leitura do SEI (${seiSnapshots[0].description})`}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="hidden lg:inline">Voltar Dados SEI</span>
+                  </button>
+                )}
 
-            {/* Botão Estúdio de Fluxo SEI (Extensão Chrome & Varredura Geral) */}
-            <button
-              onClick={() => setIsSeiStudioOpen(true)}
-              className="px-2.5 py-1.5 md:px-3 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-xs"
-              title="Estúdio de Fluxo SEI — Varredura Geral, Espelhamento BPMN 2.0 e Rollback"
-            >
-              <Workflow className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="hidden sm:inline">Estúdio SEI</span>
-              {seiExtensionConnected && (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" title="Extensão Chrome SEI Conectada" />
-              )}
-            </button>
+                <button
+                  onClick={() => setIsSeiStudioOpen(true)}
+                  className="px-2.5 py-1.5 md:px-3 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-xs"
+                  title="Estúdio de Fluxo SEI — Varredura Geral, Espelhamento BPMN 2.0 e Rollback"
+                >
+                  <Workflow className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="hidden sm:inline">Estúdio SEI</span>
+                  {seiExtensionConnected && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" title="Extensão Chrome SEI Conectada" />
+                  )}
+                </button>
+              </>
+            )}
 
             {/* Tutorial Guiado & Tutorials Hub Button */}
             <button
@@ -5301,9 +5315,9 @@ export default function App() {
                 onStartTour={(tourId) => setActiveTourId(tourId)}
                 completedTours={completedTours}
                 initialSelectedPlanId={tourPlanId}
-                onOpenSeiStudio={() => setIsSeiStudioOpen(true)}
-                onRevertLastSeiSync={handleRevertLastSeiSync}
-                hasRollbackAvailable={seiSnapshots.length > 0}
+                onOpenSeiStudio={currentUser?.role === 'GECTI' ? () => setIsSeiStudioOpen(true) : undefined}
+                onRevertLastSeiSync={currentUser?.role === 'GECTI' ? handleRevertLastSeiSync : undefined}
+                hasRollbackAvailable={currentUser?.role === 'GECTI' && seiSnapshots.length > 0}
               />
             </div>
           )}
@@ -5420,9 +5434,9 @@ export default function App() {
                 completedTours={completedTours}
                 initialSelectedContractId={tourContractId}
                 onCloseContractDetails={() => setTourContractId(null)}
-                onOpenSeiStudio={() => setIsSeiStudioOpen(true)}
-                onRevertLastSeiSync={handleRevertLastSeiSync}
-                hasRollbackAvailable={seiSnapshots.length > 0}
+                onOpenSeiStudio={currentUser?.role === 'GECTI' ? () => setIsSeiStudioOpen(true) : undefined}
+                onRevertLastSeiSync={currentUser?.role === 'GECTI' ? handleRevertLastSeiSync : undefined}
+                hasRollbackAvailable={currentUser?.role === 'GECTI' && seiSnapshots.length > 0}
               />
             </div>
           )}
@@ -7421,33 +7435,35 @@ export default function App() {
         onResetTours={handleResetTours}
       />
 
-      {/* Estúdio de Fluxo SEI & Varredura Geral + Rollback Modal */}
-      <SeiSyncStudioModal
-        isOpen={isSeiStudioOpen}
-        onClose={() => setIsSeiStudioOpen(false)}
-        planejamentos={planejamentos}
-        tarefas={tarefas}
-        historicoPlanejamentos={historicoPlanejamentos}
-        contratos={contratos}
-        pagamentos={pagamentos}
-        historicosContratuais={historicosContratuais}
-        snapshots={seiSnapshots}
-        currentUser={currentUser}
-        extensionConnected={seiExtensionConnected}
-        scanProgress={{
-          active: seiScanProgress.isScanning,
-          current: seiScanProgress.current,
-          total: seiScanProgress.total,
-          currentProtocol: seiScanProgress.currentProtocol,
-          message: seiScanProgress.message
-        }}
-        onTriggerExtensionScan={handleTriggerExtensionScan}
-        onApplyBatchScrapeResults={handleApplyBatchScrapeResults}
-        onCreateManualSnapshot={(desc) => handleCreateSeiSnapshot(desc, 'manual_backup', [])}
-        onRestoreSnapshot={handleRestoreSeiSnapshot}
-        onDeleteSnapshot={handleDeleteSeiSnapshot}
-        onLinkRelatedProcessToContract={handleLinkRelatedSeiProcessToContract}
-      />
+      {/* Estúdio de Fluxo SEI & Varredura Geral + Rollback Modal (Exclusivo para perfil GECTI) */}
+      {currentUser?.role === 'GECTI' && (
+        <SeiSyncStudioModal
+          isOpen={isSeiStudioOpen}
+          onClose={() => setIsSeiStudioOpen(false)}
+          planejamentos={planejamentos}
+          tarefas={tarefas}
+          historicoPlanejamentos={historicoPlanejamentos}
+          contratos={contratos}
+          pagamentos={pagamentos}
+          historicosContratuais={historicosContratuais}
+          snapshots={seiSnapshots}
+          currentUser={currentUser}
+          extensionConnected={seiExtensionConnected}
+          scanProgress={{
+            active: seiScanProgress.isScanning,
+            current: seiScanProgress.current,
+            total: seiScanProgress.total,
+            currentProtocol: seiScanProgress.currentProtocol,
+            message: seiScanProgress.message
+          }}
+          onTriggerExtensionScan={handleTriggerExtensionScan}
+          onApplyBatchScrapeResults={handleApplyBatchScrapeResults}
+          onCreateManualSnapshot={(desc) => handleCreateSeiSnapshot(desc, 'manual_backup', [])}
+          onRestoreSnapshot={handleRestoreSeiSnapshot}
+          onDeleteSnapshot={handleDeleteSeiSnapshot}
+          onLinkRelatedProcessToContract={handleLinkRelatedSeiProcessToContract}
+        />
+      )}
 
       {/* Modal de Alteração Voluntária de Senha pelo Próprio Usuário */}
       {isChangePasswordModalOpen && (
