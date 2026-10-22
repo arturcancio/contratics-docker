@@ -17,6 +17,7 @@ import {
   ItemPlanejamentoSOF
 } from '../types';
 import { formatCurrency, formatDate, formatDateTime, isModifiedRecently, parseMonetaryValue } from '../utils';
+import { repairMojibakeAndBrokenChars } from '../services/seiSyncService';
 import KanbanBoard from './KanbanBoard';
 import BpmnFlowBoard from './BpmnFlowBoard';
 import ItensPlanejamentoSOFPanel from './ItensPlanejamentoSOFPanel';
@@ -627,30 +628,47 @@ export default function Planejamentos({
           <table>
             <thead>
               <tr>
-                <th style="width: 15%">Processo SEI</th>
-                <th style="width: 32%">Objeto / Requisitante</th>
-                <th style="width: 15%">Modalidade / DFD PCA</th>
-                <th style="width: 13%">Data de Início</th>
-                <th style="width: 15%" class="text-right font-mono">Custo Estimado (R$)</th>
-                <th style="width: 10%">Status</th>
+                <th style="width: 14%">Processo SEI</th>
+                <th style="width: 28%">Objeto / Requisitante</th>
+                <th style="width: 14%">Modalidade / DFD PCA</th>
+                <th style="width: 12%">Início / Previsão</th>
+                <th style="width: 12%">Unidade Atual SEI</th>
+                <th style="width: 12%" class="text-right font-mono">Custo Estimado (R$)</th>
+                <th style="width: 8%">Status</th>
               </tr>
             </thead>
             <tbody>
-              ${filteredPlans.map(plan => `
+              ${filteredPlans.map(plan => {
+                const currentUnit = plan.seiSyncMetadata?.unidadeAtual || 'GECTI / CSTI';
+                const cleanObjeto = repairMojibakeAndBrokenChars(plan.Objeto || '');
+                const cleanReq = repairMojibakeAndBrokenChars(plan.Int_Requisitante || 'N/A');
+                const cleanReqSubst = plan.Int_Requisitante_Subst ? repairMojibakeAndBrokenChars(plan.Int_Requisitante_Subst) : '';
+                const dataInicioStr = plan.Data_Inicio_Processo_SEI ? new Date(plan.Data_Inicio_Processo_SEI).toLocaleDateString('pt-BR') : 'N/A';
+                const sessaoStr = plan.Data_Sessao_Publica ? new Date(plan.Data_Sessao_Publica).toLocaleDateString('pt-BR') : null;
+                return `
                 <tr>
-                  <td class="font-mono" style="font-weight: 700; color: #1e40af;">${plan.SEI_Processo}</td>
+                  <td class="font-mono" style="font-weight: 700; color: #1e40af;">
+                    ${plan.SEI_Processo}
+                    ${plan.Contrato_Originado ? `<div style="font-size: 9px; color: #059669; font-weight: 600;">Contrato: ${plan.Contrato_Originado}</div>` : ''}
+                  </td>
                   <td>
-                    <div style="font-weight: 600;">${plan.Objeto}</div>
+                    <div style="font-weight: 600;">${cleanObjeto}</div>
                     <div style="font-size: 10px; color: #64748b; margin-top: 3px;">
-                      Requisitante: ${plan.Int_Requisitante || 'N/A'}${plan.Int_Requisitante_Subst ? ` (Subst: ${plan.Int_Requisitante_Subst})` : ''} 
+                      Requisitante: ${cleanReq}${cleanReqSubst ? ` (Subst: ${cleanReqSubst})` : ''} 
                     </div>
                   </td>
                   <td>
                     <div><strong>${plan.Tipo_Processo}</strong> <span style="background-color: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; font-size: 9px; padding: 1px 4px; border-radius: 4px; margin-left: 4px; font-weight: 500;">${plan.Natureza_Objeto || 'Serviço'}</span></div>
                     ${plan.DFD_PNCP ? `<div style="font-size: 10px; color: #0284c7; font-weight: 500; font-family: monospace; margin-top: 2px;">DFD PCA: ${plan.DFD_PNCP}</div>` : ''}
                   </td>
-                  <td class="font-mono">
-                    ${plan.Data_Inicio_Processo_SEI ? new Date(plan.Data_Inicio_Processo_SEI).toLocaleDateString('pt-BR') : 'N/A'}
+                  <td class="font-mono" style="font-size: 11px;">
+                    <div>Início: ${dataInicioStr}</div>
+                    ${sessaoStr ? `<div style="font-size: 9.5px; color: #64748b;">Sessão: ${sessaoStr}</div>` : ''}
+                  </td>
+                  <td>
+                    <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; background-color: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; font-weight: 700; font-size: 9.5px;">
+                      ${currentUnit}
+                    </span>
                   </td>
                   <td class="font-mono text-right" style="font-weight: 600; color: #0f766e;">
                     R$ ${getPlanningCusto(plan).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -662,8 +680,15 @@ export default function Planejamentos({
                     }">${plan.Status_Planejamento || 'Em Elaboração'}</span>
                   </td>
                 </tr>
-              `).join('')}
+              `;}).join('')}
             </tbody>
+            <tfoot>
+              <tr style="background-color: #f0fdfa; font-weight: 800;">
+                <td colspan="5" class="text-right" style="color: #0f766e; text-transform: uppercase; font-size: 10px;">Total Estimado Consolidado:</td>
+                <td class="font-mono text-right" style="color: #0f766e; font-size: 11.5px;">R$ ${totalEstimadoCusto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </body>
       </html>

@@ -34,6 +34,7 @@ import {
   parseMonetaryValue,
   sortAndGroupItems
 } from '../utils';
+import { repairMojibakeAndBrokenChars } from '../services/seiSyncService';
 import { CurrencyInput } from './CurrencyInput';
 import { DescentralizacaoManager, AvailableEmpenho } from './DescentralizacaoManager';
 import { ReUIBadge, ReUIStepper, ReUICard, ReUIDropzone, ReUIProgress } from './ReUI';
@@ -466,6 +467,8 @@ export default function Contratos({
       return sum + sofRes.value;
     }, 0);
 
+    const totalContratosGlobal = filteredContratos.reduce((acc, c) => acc + (c.Valor_Contrato || 0), 0);
+
     const SOF_LOGO_SVG = `
       <svg width="220" height="70" viewBox="0 0 240 80" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;">
         <!-- Official Government Globe Icon -->
@@ -657,40 +660,51 @@ export default function Contratos({
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-label">Contratos Encontrados</div>
-              <div class="stat-value">${filteredContratos.length}</div>
+              <div class="stat-value">${filteredContratos.length} <span style="font-size: 11px; font-weight: 500; color: #64748b;">(${filteredContratos.filter(c => c.Status_Contrato !== 'Encerrado').length} vigentes)</span></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total Global Acumulado</div>
+              <div class="stat-value font-mono">R$ ${totalContratosGlobal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Total Anualizado (${selectedYear || '2026'})</div>
-              <div class="stat-value font-mono">R$ ${totalAnualizadoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Órgão Regulador</div>
-              <div class="stat-value">UASG 201130 (MPO/SOF)</div>
+              <div class="stat-value font-mono" style="color: #0284c7;">R$ ${totalAnualizadoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th style="width: 10%">Nº Contrato</th>
-                <th style="width: 10%">Processo SEI</th>
-                <th style="width: 14%">Modalidade</th>
+                <th style="width: 11%">Nº Contrato</th>
+                <th style="width: 11%">Processo SEI</th>
+                <th style="width: 12%">Modalidade</th>
                 <th style="width: 18%">Empresa / Fornecedor</th>
-                <th style="width: 26%">Objeto Regulamentar</th>
+                <th style="width: 24%">Objeto Regulamentar</th>
+                <th style="width: 12%">Vigência</th>
                 <th style="width: 12%" class="text-right font-mono">Valor Anual SOF (${selectedYear || '2026'})</th>
-                <th style="width: 10%">Status</th>
               </tr>
             </thead>
             <tbody>
               ${filteredContratos.map(cont => {
                 const fornObj = fornecedores.find(f => f.id === cont.Fornecedor);
-                const fornName = fornObj ? fornObj.Nome_Fornecedor : (cont.Fornecedor || 'Não cadastrado');
+                const fornName = repairMojibakeAndBrokenChars(fornObj ? fornObj.Nome_Fornecedor : (cont.Fornecedor || 'Não cadastrado'));
+                const cleanObjeto = repairMojibakeAndBrokenChars(cont.Objeto || '');
+                const cleanGestor = repairMojibakeAndBrokenChars(cont.Gestor_Contrato || 'N/A');
                 const sofInfo = getContractSOFValueForYear(cont, targetYearNum);
                 const orcEstimadoDate = cont.Data_Orcamento_Estimado ? formatDate(cont.Data_Orcamento_Estimado) : null;
+                const vigFimDate = cont.Vigencia_Final ? formatDate(cont.Vigencia_Final) : 'N/A';
                 return `
                   <tr>
-                    <td class="font-mono" style="font-weight: 700;">${cont.Num_Contrato}</td>
-                    <td class="font-mono">${cont.SEI_Processo}</td>
+                    <td class="font-mono" style="font-weight: 700; color: #1e3a8a;">
+                      ${cont.Num_Contrato}
+                      <div style="margin-top: 2px;">
+                        <span class="status ${
+                          cont.Status_Contrato === 'Vigente' ? 'status-vigente' : 
+                          cont.Status_Contrato === 'A Vencer' ? 'status-vencer' : 'status-encerrado'
+                        }">${cont.Status_Contrato || 'Vigente'}</span>
+                      </div>
+                    </td>
+                    <td class="font-mono" style="font-size: 10.5px;">${cont.SEI_Processo}</td>
                     <td>
                       <span style="display:inline-block; font-size:8px; font-weight:700; padding:2px 5px; border-radius:4px; text-transform:uppercase; color:${cont.Modalidade_Contratacao === 'Pregão Colaboragov' ? '#0284c7' : '#0f766e'}; background-color:${cont.Modalidade_Contratacao === 'Pregão Colaboragov' ? '#f0f9ff' : '#f0fdfa'};">
                         ${cont.Modalidade_Contratacao || 'Pregão SOF'}
@@ -698,27 +712,30 @@ export default function Contratos({
                     </td>
                     <td><strong>${fornName}</strong></td>
                     <td>
-                      ${cont.Objeto}
-                      <br/>
-                      <span style="font-size: 9px; color: #64748b;">
-                        Gestor: ${cont.Gestor_Contrato || 'N/A'} &bull; Frequência: ${cont.Periodicidade_Pagamento}
+                      <div style="font-weight: 500;">${cleanObjeto}</div>
+                      <div style="font-size: 9px; color: #64748b; margin-top: 2px;">
+                        Gestor: ${cleanGestor} &bull; Freq.: ${cont.Periodicidade_Pagamento}
                         ${orcEstimadoDate ? ` &bull; Orç. Estimado: ${orcEstimadoDate}` : ''}
-                      </span>
+                      </div>
                     </td>
-                    <td class="font-mono text-right" style="font-weight: 500;">
-                      <div style="font-weight: 700; color: #0284c7;">R$ ${sofInfo.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <td style="font-size: 10.5px;">
+                      <div>Início: ${formatDate(cont.Vigencia_Inicio)}</div>
+                      <div style="color: #64748b;">Fim: ${vigFimDate}</div>
+                    </td>
+                    <td class="font-mono text-right">
+                      <div style="font-weight: 700; color: #0284c7; font-size: 11.5px;">R$ ${sofInfo.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                       <span style="font-size: 8.5px; color: #64748b; display: block;">Global: R$ ${cont.Valor_Contrato.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </td>
-                    <td>
-                      <span class="status ${
-                        cont.Status_Contrato === 'Vigente' ? 'status-vigente' : 
-                        cont.Status_Contrato === 'A Vencer' ? 'status-vencer' : 'status-encerrado'
-                      }">${cont.Status_Contrato || 'Vigente'}</span>
                     </td>
                   </tr>
                 `;
               }).join('')}
             </tbody>
+            <tfoot>
+              <tr style="background-color: #f0fdfa; font-weight: 800;">
+                <td colspan="6" class="text-right" style="color: #0f766e; text-transform: uppercase; font-size: 10px;">Total Anualizado Consolidado (${selectedYear || '2026'}):</td>
+                <td class="font-mono text-right" style="color: #0284c7; font-size: 12px;">R$ ${totalAnualizadoValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            </tfoot>
           </table>
         </body>
       </html>
@@ -1574,6 +1591,71 @@ export default function Contratos({
               </tbody>
             </table>
           `}
+          
+          ${c.seiSyncMetadata?.processosRelacionados && c.seiSyncMetadata.processosRelacionados.length > 0 ? `
+            <div class="section-title">8. Processos Associados e Relacionados no SEI (Pagamentos, Fiscalização e Aditamentos)</div>
+            <table>
+              <thead>
+                <tr>
+                  <th width="20%">Processo SEI</th>
+                  <th width="15%">Categoria</th>
+                  <th width="25%">Tipo de Processo</th>
+                  <th width="15%">Unidade Atual</th>
+                  <th>Último Andamento Registrado</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${c.seiSyncMetadata.processosRelacionados.map(proc => `
+                  <tr>
+                    <td class="font-mono" style="font-weight: 700; color: #1e40af;">${proc.protocolo}</td>
+                    <td>
+                      <span class="status" style="background-color: ${
+                        proc.categoria === 'pagamento' ? '#e0f2fe; color: #0369a1;' :
+                        proc.categoria === 'aditivo' ? '#fef3c7; color: #b45309;' : '#f1f5f9; color: #475569;'
+                      }">
+                        ${proc.categoria.toUpperCase()}
+                      </span>
+                    </td>
+                    <td>${repairMojibakeAndBrokenChars(proc.tipo || '')}</td>
+                    <td><strong style="color: #1e3a8a;">${proc.unidadeAtual || '—'}</strong></td>
+                    <td style="font-size: 9px; color: #475569;">
+                      ${repairMojibakeAndBrokenChars(proc.ultimoAndamento || 'Processo anexado/relacionado')}
+                      ${proc.dataUltimoAndamento ? `<br/><span style="color: #94a3b8;">${formatDate(proc.dataUltimoAndamento)}</span>` : ''}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : ''}
+
+          ${(() => {
+            const contractHist = (historicosContratuais || []).filter(h => h.ContratoRelacionado === c.id || h.ContratoRelacionado === c.Num_Contrato);
+            if (contractHist.length === 0) return '';
+            const secNum = c.seiSyncMetadata?.processosRelacionados && c.seiSyncMetadata.processosRelacionados.length > 0 ? '9' : '8';
+            return `
+              <div class="section-title">${secNum}. Histórico de Acompanhamento e Eventos do Contrato</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th width="12%">Data</th>
+                    <th width="18%">Documento SEI</th>
+                    <th width="15%">Coordenação</th>
+                    <th>Descrição do Evento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${contractHist.map(h => `
+                    <tr>
+                      <td class="font-mono">${formatDate(h.Data)}</td>
+                      <td class="font-mono" style="color: #1e3a8a; font-weight: 600;">${h.Numero_SEI || 'N/A'}</td>
+                      <td>${h.Coordenacao || 'GECTI'}</td>
+                      <td>${repairMojibakeAndBrokenChars(h.Descricao || '')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `;
+          })()}
           
           <div style="margin-top: 32px; font-size: 9px; color: #64748b; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 10px; page-break-inside: avoid;">
             Fim do Relatório Oficial de Ficha Contratual &bull; Plataforma Contratics &bull; Sistema de Planejamento de Contratos de TIC (SOF)

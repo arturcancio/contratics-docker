@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { DFD } from './types';
+import { calculateDfdAnnualizedDetails } from './utils';
 
 /**
  * Fetches the SOF logo as an ArrayBuffer from /sof-logo.png
@@ -179,11 +180,12 @@ export async function exportPCAtoExcel(params: {
   // Render DFD rows
   dfds.forEach((dfd) => {
     const row = worksheet.getRow(currentRowIdx);
-    row.height = 26;
+    row.height = 28;
 
     const valEstimado = Number(dfd.Valor_Estimado) || 0;
     const isConcluido = dfd.Status_DFD === 'Concluído';
     const isDevolvido = dfd.Situacao_PNCP === 'Devolvido';
+    const details = calculateDfdAnnualizedDetails(dfd, targetYearNum);
     const valAnualizado = (isConcluido || isDevolvido) ? 0 : getDfdAnnualizedValue(dfd, targetYearNum);
 
     const isDeactivated = dfd.Contabilizar_Orcamento === false || isDevolvido;
@@ -194,18 +196,21 @@ export async function exportPCAtoExcel(params: {
       }
     }
 
-    // Determine observation
-    let obs = dfd.Situacao_PNCP || 'Mantido';
+    // Determine observation with Situacao_PNCP and calculation reason
+    const sitPncp = dfd.Situacao_PNCP || 'Aguardando Análise';
+    let obs: string = sitPncp;
     if (isDevolvido) {
-      obs = 'Devolvido (Não contabilizado)';
+      obs = 'Devolvido (Não contabilizado no orçamento)';
     } else if (dfd.Contabilizar_Orcamento === false) {
-      obs = 'Solicitada devolução para exclusão / Desativado';
+      obs = `${sitPncp} — Desativado do orçamento`;
     } else if (isConcluido) {
-      obs = 'Concluído (Contabilizado na Licitação)';
+      obs = `${sitPncp} — Concluído (Contabilizado na Licitação/Contrato)`;
     } else if (dfd.isBudgetOnlyItem) {
-      obs = 'DFD Incluído';
+      obs = `DFD Incluído (${details.shortReason})`;
     } else if (dfd.Ano_PCA && dfd.Ano_PCA !== targetYear) {
-      obs = `Importado do PCA ${dfd.Ano_PCA}`;
+      obs = `Importado do PCA ${dfd.Ano_PCA} (${details.shortReason})`;
+    } else {
+      obs = `${sitPncp} (${details.shortReason})`;
     }
 
     const seiProcess = dfd.Planejamento_Vinculado && dfd.Planejamento_Vinculado !== '-'
@@ -215,7 +220,7 @@ export async function exportPCAtoExcel(params: {
     // Col C: Título da contratação
     const cellC = row.getCell(3);
     cellC.value = dfd.Descricao_Objeto || '';
-    cellC.font = { name: 'Calibri', size: 9, color: { argb: isDeactivated ? 'FF888888' : 'FF000000' } };
+    cellC.font = { name: 'Calibri', size: 9, strike: isDevolvido, color: { argb: isDeactivated ? 'FF888888' : 'FF000000' } };
     cellC.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
     cellC.border = borderThin;
 
@@ -230,7 +235,7 @@ export async function exportPCAtoExcel(params: {
     const cellE = row.getCell(5);
     cellE.value = valEstimado;
     cellE.numFmt = '"R$"\\ #,##0.00';
-    cellE.font = { name: 'Calibri', size: 9, bold: true, color: { argb: isDeactivated ? 'FF888888' : 'FF000000' } };
+    cellE.font = { name: 'Calibri', size: 9, bold: true, strike: isDeactivated, color: { argb: isDeactivated ? 'FF888888' : 'FF000000' } };
     cellE.alignment = { horizontal: 'right', vertical: 'middle' };
     cellE.border = borderThin;
 
@@ -243,7 +248,7 @@ export async function exportPCAtoExcel(params: {
 
     // Col G: Valor Anualizado
     const cellG = row.getCell(7);
-    if (isConcluido) {
+    if (isConcluido || isDevolvido) {
       cellG.value = '-';
       cellG.font = { name: 'Calibri', size: 9, bold: true, color: { argb: 'FF666666' } };
       cellG.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -279,8 +284,8 @@ export async function exportPCAtoExcel(params: {
   // Merged Col C & D for TOTAL label
   worksheet.mergeCells(`C${currentRowIdx}:D${currentRowIdx}`);
   const totalLabelCell = totalRow.getCell(3);
-  totalLabelCell.value = 'TOTAL';
-  totalLabelCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
+  totalLabelCell.value = 'TOTAL ATIVO (EXCLUÍDOS DEVOLVIDOS)';
+  totalLabelCell.font = { name: 'Calibri', size: 9.5, bold: true, color: { argb: 'FF000000' } };
   totalLabelCell.fill = {
     type: 'pattern',
     pattern: 'solid',
@@ -292,10 +297,7 @@ export async function exportPCAtoExcel(params: {
 
   // Col E: Total Valor Estimado
   const totalEstimadoCell = totalRow.getCell(5);
-  totalEstimadoCell.value = {
-    formula: `SUM(E7:E${currentRowIdx - 1})`,
-    result: totalEstimado
-  };
+  totalEstimadoCell.value = totalEstimado;
   totalEstimadoCell.numFmt = '"R$"\\ #,##0.00';
   totalEstimadoCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
   totalEstimadoCell.fill = {

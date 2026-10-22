@@ -2531,6 +2531,10 @@ export default function OrcamentoAtual({
             .status-tag.nao-iniciado { background-color: #f1f5f9; color: #475569; }
             .status-tag.vigente { background-color: #ccfbf1; color: #0f766e; }
             .status-tag.vencer { background-color: #fef3c7; color: #b45309; }
+            @media print {
+              body { padding: 15px; }
+              @page { size: A4 landscape; margin: 1.0cm; }
+            }
           </style>
         </head>
         <body>
@@ -2542,7 +2546,7 @@ export default function OrcamentoAtual({
               </td>
               <td class="title-cell">
                 <div style="font-size: 15px; font-weight: 800; color: #0f172a; text-transform: uppercase;">Ação 8861: Orçamento Atual</div>
-                <div class="sub-title">Exercício Correspondente: ${selectedYear === 'Todos' ? currentYear : selectedYear} &bull; Gerado em: ${new Date().toLocaleDateString('pt-BR')}</div>
+                <div class="sub-title">Exercício Correspondente: ${selectedYear === 'Todos' ? currentYear : selectedYear} &bull; Gerado em: ${new Date().toLocaleString('pt-BR')}</div>
               </td>
             </tr>
           </table>
@@ -2555,24 +2559,57 @@ export default function OrcamentoAtual({
           <div class="summary-title">Demonstrativo Interno Contratics</div>
           <div class="summary-grid">
             <div class="summary-card" style="width: ${sumAnnualizedPlanejamentos > 0 ? '25%' : '33.33%'};">
-              <div class="card-label">Soma Contratos Vigentes</div>
+              <div class="card-label">Total Anualizado Contratos</div>
               <div class="card-value">R$ ${sumAnnualizedContracts.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div style="font-size: 8.5px; color: #64748b; margin-top: 3px;">${processedContracts.length} contratos vigentes ativos</div>
             </div>
             <div class="summary-card" style="width: ${sumAnnualizedPlanejamentos > 0 ? '25%' : '33.33%'};">
-              <div class="card-label">Soma DFDs (PCA)</div>
+              <div class="card-label">Soma DFDs Anualizada (PCA)</div>
               <div class="card-value">R$ ${sumAnnualizedDFDs.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div style="font-size: 8.5px; color: #64748b; margin-top: 3px;">${baseProcessedDFDs.filter(d => d.Contabilizar_Orcamento !== false).length} demandas ativas</div>
             </div>
             ${sumAnnualizedPlanejamentos > 0 ? `
             <div class="summary-card" style="width: 25%; background-color: #fffbeb; border-color: #fde68a;">
               <div class="card-label" style="color: #b45309;">Processos em Planejamento</div>
               <div class="card-value" style="color: #b45309;">R$ ${sumAnnualizedPlanejamentos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div style="font-size: 8.5px; color: #92400e; margin-top: 3px;">${processedPlanejamentos.filter(p => p.Contabilizar_Orcamento !== false).length} processos em andamento</div>
             </div>
             ` : ''}
             <div class="summary-card highlight" style="width: ${sumAnnualizedPlanejamentos > 0 ? '25%' : '33.33%'};">
-              <div class="card-label" style="color: #15803d;">Orçamento Anual Geral SOF</div>
+              <div class="card-label" style="color: #15803d;">Valor Anual Geral SOF</div>
               <div class="card-value green">R$ ${valorAnualGeralSOF.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div style="font-size: 8.5px; color: #166534; margin-top: 3px;">Custeio: R$ ${totalCusteioGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Inv.: R$ ${totalInvestimentoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           </div>
+
+          <div class="section-title">Segregação por Natureza de Despesa (Custeio vs. Investimento)</div>
+          <table class="data-table" style="margin-bottom: 20px;">
+            <thead>
+              <tr>
+                <th style="width: 28%">Grupo de Natureza de Despesa (GND)</th>
+                <th style="width: 18%" class="text-right">Planejado via DFDs (PCA)</th>
+                <th style="width: 18%" class="text-right">Processos em Planejamento</th>
+                <th style="width: 18%" class="text-right">Contratos Vigentes</th>
+                <th style="width: 18%" class="text-right">Total Consolidado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong style="color: #1d4ed8;">3 - Outras Despesas Correntes (Custeio)</strong></td>
+                <td class="font-mono text-right">R$ ${sumAnnualizedDFDsCusteio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="font-mono text-right">R$ ${sumAnnualizedPlansCusteio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="font-mono text-right">R$ ${sumAnnualizedContractsCusteio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="font-mono text-right" style="color: #1d4ed8; font-weight: 700;">R$ ${totalCusteioGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${valorAnualGeralSOF > 0 ? ((totalCusteioGeral / valorAnualGeralSOF) * 100).toFixed(1) : '0.0'}%)</td>
+              </tr>
+              <tr>
+                <td><strong style="color: #7e22ce;">4 - Investimentos (Despesas de Capital)</strong></td>
+                <td class="font-mono text-right">R$ ${sumAnnualizedDFDsInvestimento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="font-mono text-right">R$ ${sumAnnualizedPlansInvestimento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="font-mono text-right">R$ ${sumAnnualizedContractsInvestimento.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="font-mono text-right" style="color: #7e22ce; font-weight: 700;">R$ ${totalInvestimentoGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${valorAnualGeralSOF > 0 ? ((totalInvestimentoGeral / valorAnualGeralSOF) * 100).toFixed(1) : '0.0'}%)</td>
+              </tr>
+            </tbody>
+          </table>
 
           <div class="section-title">Informações Adicionais do Painel Oficial SIOP</div>
           <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 25px;">
@@ -2633,46 +2670,64 @@ export default function OrcamentoAtual({
             </div>
           </div>
 
-          <div class="section-title">1. Documentos de Formalização da Demanda (DFDs do PCA) Anualizados</div>
+          <div class="section-title">1. Planejamento de Demandas (DFDs)</div>
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 12%">Nº DFD</th>
-                <th style="width: 48%">Objeto da Contratação</th>
-                <th style="width: 15%">Periodicidade</th>
-                <th style="width: 15%" class="text-right">Valor Estimado</th>
-                <th style="width: 10%" class="text-right">Valor Anualizado</th>
+                <th style="width: 10%">Nº DFD</th>
+                <th style="width: 34%">Objeto de TIC</th>
+                <th style="width: 10%">Frequência</th>
+                <th style="width: 10%">Início Previsto</th>
+                <th style="width: 13%" class="text-right">Valor Estimado</th>
+                <th style="width: 13%" class="text-right">Valor Anualizado</th>
+                <th style="width: 10%">Situação</th>
               </tr>
             </thead>
             <tbody>
               ${sortedDFDs.length === 0 ? `
-                <tr><td colspan="5" style="text-align:center; color:#94a3b8; font-style:italic;">Nenhum DFD ativo para este exercício.</td></tr>
+                <tr><td colspan="7" style="text-align:center; color:#94a3b8; font-style:italic;">Nenhum DFD ativo para este exercício.</td></tr>
               ` : sortedDFDs.map(d => {
                 const isDeactivated = d.Contabilizar_Orcamento === false;
                 const valorExibido = d.Valor_Customizado !== undefined && d.Valor_Customizado !== null ? d.Valor_Customizado : d.Valor_Estimado;
                 return `
                 <tr style="${isDeactivated ? 'opacity: 0.55; text-decoration: line-through; background-color: #f8fafc;' : ''}">
-                  <td class="font-mono"><strong>${d.Num_DFD}</strong></td>
+                  <td class="font-mono"><strong>${d.Num_DFD}</strong><br/><span style="font-size: 8px; color: #64748b;">PCA ${d.Ano_PCA}</span></td>
                   <td>${d.Descricao_Objeto}${isDeactivated ? ' (DESATIVADO)' : ''}${d.Valor_Customizado !== undefined && d.Valor_Customizado !== null ? ' (Valor Ajustado)' : ''}</td>
                   <td>${d.Periodicidade_Pagamento}</td>
-                  <td class="font-mono text-right">R$ ${valorExibido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td class="font-mono text-right" style="color: ${isDeactivated ? '#64748b' : '#0d9488'}; font-weight:700;">R$ ${d.valor_anualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td class="font-mono">${formatDate(d.Data_conclusao_estimada)}</td>
+                  <td class="font-mono text-right">
+                    R$ ${valorExibido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${(d.Vigencia_Contratacao_Meses && d.Vigencia_Contratacao_Meses !== 12) ? `<br/><span style="font-size: 8px; color: #64748b;">Vig.: ${d.Vigencia_Contratacao_Meses}m</span>` : ''}
+                  </td>
+                  <td class="font-mono text-right" style="color: ${isDeactivated ? '#64748b' : '#0d9488'}; font-weight:700;">
+                    R$ ${d.valor_anualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${d.motivo_anualizado ? `<br/><span style="font-size: 8px; color: #64748b; font-family: 'Inter', sans-serif; font-weight: 500;">${d.motivo_anualizado}</span>` : ''}
+                  </td>
+                  <td style="font-size: 8.5px; color: #475569;">${isDeactivated ? 'Desativado' : (d.observacoes_planejamento || 'DFD Ativo')}</td>
                 </tr>
               `}).join('')}
             </tbody>
+            <tfoot>
+              <tr style="background-color: #f0fdfa; font-weight: 800;">
+                <td colspan="5" class="text-right" style="color: #0f766e; text-transform: uppercase; font-size: 9.5px;">Subtotal DFDs Anualizados (PCA):</td>
+                <td class="font-mono text-right" style="color: #0f766e; font-size: 11px;">R$ ${subtotalDFDsOnly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
 
           ${sortedPlanejamentos.length > 0 ? `
-          <div class="section-title">2. Processos de Planejamento (Licitações em Andamento / SEI)</div>
+          <div class="section-title">2. Processos de Planejamento (Licitações em Andamento)</div>
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 13%">Nº Processo SEI</th>
-                <th style="width: 35%">Objeto da Contratação</th>
-                <th style="width: 14%">Início</th>
-                <th style="width: 14%">Situação / Memória</th>
+                <th style="width: 14%">Nº Processo SEI</th>
+                <th style="width: 30%">Objeto de TIC</th>
+                <th style="width: 10%">Frequência</th>
+                <th style="width: 11%">Início</th>
                 <th style="width: 12%" class="text-right">Valor Estimado</th>
-                <th style="width: 12%" class="text-right">Valor Anualizado</th>
+                <th style="width: 13%" class="text-right">Valor Anualizado</th>
+                <th style="width: 10%">Situação</th>
               </tr>
             </thead>
             <tbody>
@@ -2685,51 +2740,80 @@ export default function OrcamentoAtual({
                 <tr style="${isDeactivated ? 'opacity: 0.55; text-decoration: line-through; background-color: #f8fafc;' : ''}">
                   <td class="font-mono"><strong>${p.Num_DFD}</strong></td>
                   <td>${p.Descricao_Objeto}${isDeactivated ? ' (DESATIVADO)' : ''}</td>
-                  <td class="font-mono">${dateLabel}<span style="font-size: 8px; color: #b45309;">${tag}</span></td>
+                  <td>${p.Periodicidade_Pagamento}</td>
+                  <td class="font-mono">${dateLabel}<br/><span style="font-size: 8px; color: #b45309;">${tag}</span></td>
+                  <td class="font-mono text-right">R$ ${valorExibido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td class="font-mono text-right" style="color: ${isDeactivated ? '#64748b' : '#b45309'}; font-weight:700;">
+                    R$ ${p.valor_anualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ${p.calculo_detalhado && !isDeactivated ? `<br/><span style="font-size: 8px; color: #64748b; font-family: 'Inter', sans-serif; font-weight: 500;">${p.calculo_detalhado}</span>` : ''}
+                  </td>
                   <td>
                     <span style="font-size: 8.5px; font-weight: 600; color: #b45309;">${p.observacoes_planejamento || 'Planejamento SEI'}</span>
-                    ${p.calculo_detalhado && !isDeactivated ? `<br/><span style="font-size: 8px; color: #64748b;">${p.calculo_detalhado}</span>` : ''}
                   </td>
-                  <td class="font-mono text-right">R$ ${valorExibido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td class="font-mono text-right" style="color: ${isDeactivated ? '#64748b' : '#b45309'}; font-weight:700;">R$ ${p.valor_anualizado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 </tr>
               `}).join('')}
             </tbody>
+            <tfoot>
+              <tr style="background-color: #fffbeb; font-weight: 800;">
+                <td colspan="5" class="text-right" style="color: #b45309; text-transform: uppercase; font-size: 9.5px;">Subtotal Processos de Planejamento:</td>
+                <td class="font-mono text-right" style="color: #b45309; font-size: 11px;">R$ ${subtotalPlanejamentosOnly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
           ` : ''}
 
-          <div class="section-title">${sortedPlanejamentos.length > 0 ? '3' : '2'}. Contratos Vigentes Relevantes e Modalidades de Execução</div>
+          <div class="section-title">3. Contratos Vigentes e Ativos (Desembolso no Exercício)</div>
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 14%">Nº Contrato</th>
-                <th style="width: 16%">Modalidade</th>
-                <th style="width: 22%">Fornecedor</th>
-                <th style="width: 33%">Objeto Regulamentar</th>
-                <th style="width: 15%" class="text-right">Valor Anual SOF</th>
+                <th style="width: 14%">Nº Contrato / SEI</th>
+                <th style="width: 14%">Modalidade</th>
+                <th style="width: 20%">Empresa / Fornecedor</th>
+                <th style="width: 27%">Objeto Regulamentar</th>
+                <th style="width: 11%" class="text-center">Status / Vigência</th>
+                <th style="width: 14%" class="text-right">Valor Anual SOF</th>
               </tr>
             </thead>
             <tbody>
               ${sortedContracts.length === 0 ? `
-                <tr><td colspan="5" style="text-align:center; color:#94a3b8; font-style:italic;">Nenhum contrato ativo para este exercício.</td></tr>
+                <tr><td colspan="6" style="text-align:center; color:#94a3b8; font-style:italic;">Nenhum contrato ativo para este exercício.</td></tr>
               ` : sortedContracts.map(c => {
                 const fornObj = fornecedores.find(f => f.id === c.Fornecedor);
                 const fornName = fornObj ? fornObj.Nome_Fornecedor : c.Fornecedor;
+                const canBeRenewed = checkIfContractCanBeRenewed(c);
+                const isExtendedBySim = simulateRenewals && canBeRenewed;
                 return `
                   <tr>
-                    <td class="font-mono"><strong>${c.Num_Contrato}</strong></td>
+                    <td class="font-mono">
+                      <strong>${c.Num_Contrato}</strong>
+                      ${c.SEI_Processo ? `<br/><span style="font-size: 8px; color: #64748b;">${c.SEI_Processo}</span>` : ''}
+                    </td>
                     <td>
                       <span style="display:inline-block; font-size:8.5px; font-weight:700; padding:2px 5px; border-radius:3px; color:${c.Modalidade_Contratacao === 'Pregão Colaboragov' ? '#0369a1' : '#0f766e'}; background-color:${c.Modalidade_Contratacao === 'Pregão Colaboragov' ? '#e0f2fe' : '#f0fdf4'};">
                         ${c.Modalidade_Contratacao || 'Pregão SOF'}
                       </span>
                     </td>
                     <td><strong>${fornName}</strong></td>
-                    <td>${c.Objeto}</td>
+                    <td>
+                      ${c.Objeto}
+                      <br/><span style="font-size: 8px; color: #64748b;">Início: ${formatDate(c.Vigencia_Inicio)} | Freq.: ${c.Periodicidade_Pagamento}</span>
+                    </td>
+                    <td class="text-center">
+                      <span style="font-size: 8.5px; font-weight: 700; color: ${isExtendedBySim ? '#7e22ce' : '#0f766e'};">${isExtendedBySim ? 'Prorrog. Simulada' : (c.Status_Contrato || 'Vigente')}</span>
+                      ${c.Vigencia_Final ? `<br/><span style="font-size: 8px; color: #64748b;">Vence: ${formatDate(c.Vigencia_Final)}</span>` : ''}
+                    </td>
                     <td class="font-mono text-right" style="color: #0284c7; font-weight:700;">R$ ${c.valor_anual_sof.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   </tr>
                 `;
               }).join('')}
             </tbody>
+            <tfoot>
+              <tr style="background-color: #f0f9ff; font-weight: 800;">
+                <td colspan="5" class="text-right" style="color: #0369a1; text-transform: uppercase; font-size: 9.5px;">Subtotal Contratos Vigentes:</td>
+                <td class="font-mono text-right" style="color: #0284c7; font-size: 11px;">R$ ${sumAnnualizedContracts.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr>
+            </tfoot>
           </table>
 
           <div class="footer">
@@ -3628,41 +3712,46 @@ export default function OrcamentoAtual({
 
       {/* DFDs Table Panel */}
       <div className="bg-surface border border-outline rounded-2xl overflow-hidden shadow-sm" data-tour="orcamento-table">
-        <div className="px-6 py-4 border-b border-outline flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-surface-container-low/30">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-4 bg-teal-500 rounded-full" />
-            <h3 className="font-extrabold text-xs uppercase tracking-wider text-on-surface">1. Planejamento de Demandas (DFDs)</h3>
+        <div className="px-6 py-4 border-b border-outline bg-surface-container-low/30 space-y-2.5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-4 bg-teal-500 rounded-full" />
+              <h3 className="font-extrabold text-xs uppercase tracking-wider text-on-surface">1. Planejamento de Demandas (DFDs)</h3>
+            </div>
+            <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
+              {selectedYear !== 'Todos' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddCustomDfdModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-teal-700 hover:text-white dark:text-teal-400 dark:hover:text-black border border-teal-600/30 hover:bg-teal-600 hover:border-teal-600 rounded-lg transition-all duration-150 cursor-pointer"
+                    title="Adicionar novo item de demanda diretamente para o orçamento deste ano"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar Item PLOA</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportModalTab('dfd');
+                      setIsImportDfdModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-teal-700 hover:text-white dark:text-teal-400 dark:hover:text-black border border-teal-600/30 hover:bg-teal-600 hover:border-teal-600 rounded-lg transition-all duration-150 cursor-pointer"
+                    title="Importar DFDs de outros exercícios para o orçamento deste ano"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Importar DFDs</span>
+                  </button>
+                </>
+              )}
+              <span className="text-[10px] bg-teal-500/10 text-teal-600 dark:text-teal-400 px-2.5 py-1.5 rounded-lg font-bold font-mono">
+                Subtotal: {formatCurrency(subtotalDFDsOnly)}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
-            {selectedYear !== 'Todos' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIsAddCustomDfdModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-teal-700 hover:text-white dark:text-teal-400 dark:hover:text-black border border-teal-600/30 hover:bg-teal-600 hover:border-teal-600 rounded-lg transition-all duration-150 cursor-pointer"
-                  title="Adicionar novo item de demanda diretamente para o orçamento deste ano"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Adicionar Item PLOA</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportModalTab('dfd');
-                    setIsImportDfdModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-teal-700 hover:text-white dark:text-teal-400 dark:hover:text-black border border-teal-600/30 hover:bg-teal-600 hover:border-teal-600 rounded-lg transition-all duration-150 cursor-pointer"
-                  title="Importar DFDs de outros exercícios para o orçamento deste ano"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Importar DFDs</span>
-                </button>
-              </>
-            )}
-            <span className="text-[10px] bg-teal-500/10 text-teal-600 dark:text-teal-400 px-2.5 py-1.5 rounded-lg font-bold font-mono">
-              Subtotal: {formatCurrency(subtotalDFDsOnly)}
-            </span>
-          </div>
+          <p className="text-xs text-on-surface-variant leading-relaxed pl-3.5 border-l-2 border-teal-500/30">
+            O registro das demandas no Plano de Contratações Anual (PCA) é necessário para garantir o planejamento das contratações públicas, a compatibilidade com o planejamento estratégico e a adequada previsão orçamentária, contribuindo para a eficiência e a transparência da Administração Pública, conforme a Lei nº 14.133/2021, especialmente o art. 12, inciso VII, e o Decreto nº 10.947/2022, que regulamenta o PCA no âmbito da Administração Pública federal direta, autárquica e fundacional.
+          </p>
         </div>
 
         <div className="overflow-x-auto">
@@ -3900,41 +3989,46 @@ export default function OrcamentoAtual({
 
       {/* Planejamentos (Licitações em Andamento) Table Panel */}
       <div className="bg-surface border border-outline rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-outline flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-surface-container-low/30">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-4 bg-amber-500 rounded-full" />
-            <h3 className="font-extrabold text-xs uppercase tracking-wider text-on-surface">2. Processos de Planejamento (Licitações em Andamento)</h3>
+        <div className="px-6 py-4 border-b border-outline bg-surface-container-low/30 space-y-2.5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-4 bg-amber-500 rounded-full" />
+              <h3 className="font-extrabold text-xs uppercase tracking-wider text-on-surface">2. Processos de Planejamento (Licitações em Andamento)</h3>
+            </div>
+            <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
+              {selectedYear !== 'Todos' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddCustomPlanModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:text-white dark:text-amber-400 dark:hover:text-black border border-amber-600/30 hover:bg-amber-600 hover:border-amber-600 rounded-lg transition-all duration-150 cursor-pointer"
+                    title="Adicionar novo processo de planejamento diretamente para o orçamento deste ano"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Adicionar Item PLOA</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportModalTab('planejamento');
+                      setIsImportDfdModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:text-white dark:text-amber-400 dark:hover:text-black border border-amber-600/30 hover:bg-amber-600 hover:border-amber-600 rounded-lg transition-all duration-150 cursor-pointer"
+                    title="Importar processos de planejamento de outros exercícios para o orçamento deste ano"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Importar Processos</span>
+                  </button>
+                </>
+              )}
+              <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-1.5 rounded-lg font-bold font-mono">
+                Subtotal: {formatCurrency(subtotalPlanejamentosOnly)}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-3 self-stretch sm:self-auto justify-between sm:justify-end">
-            {selectedYear !== 'Todos' && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setIsAddCustomPlanModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:text-white dark:text-amber-400 dark:hover:text-black border border-amber-600/30 hover:bg-amber-600 hover:border-amber-600 rounded-lg transition-all duration-150 cursor-pointer"
-                  title="Adicionar novo processo de planejamento diretamente para o orçamento deste ano"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Adicionar Item PLOA</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setImportModalTab('planejamento');
-                    setIsImportDfdModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:text-white dark:text-amber-400 dark:hover:text-black border border-amber-600/30 hover:bg-amber-600 hover:border-amber-600 rounded-lg transition-all duration-150 cursor-pointer"
-                  title="Importar processos de planejamento de outros exercícios para o orçamento deste ano"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Importar Processos</span>
-                </button>
-              </>
-            )}
-            <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-1.5 rounded-lg font-bold font-mono">
-              Subtotal: {formatCurrency(subtotalPlanejamentosOnly)}
-            </span>
-          </div>
+          <p className="text-xs text-on-surface-variant leading-relaxed pl-3.5 border-l-2 border-amber-500/30">
+            Lista dos processos de contratação e licitações iniciados no SEI que não foram concluídos no exercício anterior ou que se encontram em instrução no exercício corrente (sem contrato assinado). Esses processos precisam constar na previsão orçamentária do exercício pelo seu valor anualizado proporcional — calculado a partir da data estimada de início da execução e da periodicidade de desembolso — até que gerem instrumento contratual formal.
+          </p>
         </div>
 
         <div className="overflow-x-auto">
@@ -4199,14 +4293,19 @@ export default function OrcamentoAtual({
 
       {/* Contracts Table Panel */}
       <div className="bg-surface border border-outline rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-outline flex items-center justify-between bg-surface-container-low/30">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-4 bg-primary rounded-full" />
-            <h3 className="font-extrabold text-xs uppercase tracking-wider text-on-surface">3. Contratos Vigentes e Ativos (Desembolso no Exercício)</h3>
+        <div className="px-6 py-4 border-b border-outline bg-surface-container-low/30 space-y-2.5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-4 bg-primary rounded-full" />
+              <h3 className="font-extrabold text-xs uppercase tracking-wider text-on-surface">3. Contratos Vigentes e Ativos (Desembolso no Exercício)</h3>
+            </div>
+            <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-bold font-mono">
+              Subtotal: {formatCurrency(sumAnnualizedContracts)}
+            </span>
           </div>
-          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-bold font-mono">
-            Subtotal: {formatCurrency(sumAnnualizedContracts)}
-          </span>
+          <p className="text-xs text-on-surface-variant leading-relaxed pl-3.5 border-l-2 border-primary/30">
+            Valores anualizados necessários para cumprir com os pagamentos e compromissos financeiros dos contratos de TIC vigentes no exercício (incluindo contratações diretas da SOF e participações centralizadas ColaboraGov), calculados proporcionalmente ao período ativo no ano, à periodicidade de desembolso (Mensal, Anual ou Total), aos termos aditivos/apostilamentos registrados e às prorrogações previstas.
+          </p>
         </div>
 
         <div className="overflow-x-auto">

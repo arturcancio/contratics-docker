@@ -453,8 +453,8 @@ export default function RastreabilidadeModal({
                 </div>
               </div>
               <div class="detail-item">
-                <div class="detail-label">ANO PCA EXERCÍCIO</div>
-                <div class="detail-value">${resolvedDfd.Ano_PCA}</div>
+                <div class="detail-label">ANO PCA / SITUAÇÃO PNCP</div>
+                <div class="detail-value">PCA ${resolvedDfd.Ano_PCA} &bull; <strong style="color: ${resolvedDfd.Situacao_PNCP === 'Devolvido' ? '#dc2626' : '#059669'};">${resolvedDfd.Situacao_PNCP || 'Aguardando Análise'}</strong></div>
               </div>
               <div class="detail-item">
                 <div class="detail-label">CONTABILIZA NO PLANO ORÇAMENTÁRIO?</div>
@@ -493,7 +493,7 @@ export default function RastreabilidadeModal({
               </div>
               <div class="detail-item">
                 <div class="detail-label">STATUS DO PLANEJAMENTO</div>
-                <div class="detail-value" style="font-weight: 700;">${resolvedPlan.Status_Planejamento}</div>
+                <div class="detail-value" style="font-weight: 700;">${resolvedPlan.Status_Planejamento} <span style="font-size: 10px; font-weight: 600; color: #1e3a8a;">(Unidade SEI: ${resolvedPlan.seiSyncMetadata?.unidadeAtual || 'GECTI'})</span></div>
               </div>
               <div class="detail-item">
                 <div class="detail-label">LINKS E PORTARIA DA EQUIPE</div>
@@ -535,7 +535,7 @@ export default function RastreabilidadeModal({
                 <div class="detail-value font-mono" style="font-weight: 700; color: #1e3a8a;">${formatCurrency(computedValorAtualizado)}</div>
               </div>
               <div class="detail-item font-mono" style="background-color: #e6fcf5;">
-                <div class="detail-label">VALOR COMPROMISSADO ANUAL SOF (2026)</div>
+                <div class="detail-label">VALOR COMPROMISSADO ANUAL SOF (${new Date(currentLocalTime).getFullYear()})</div>
                 <div class="detail-value font-mono" style="font-weight: 800; color: #0ca678;">${formatCurrency(resolvedContractAnnualValue)}</div>
               </div>
               <div class="detail-item">

@@ -347,7 +347,14 @@ export default function DFDs({
 
   const exportDFDsToPDF = () => {
     const targetYearNum = selectedYear === 'Todos' ? (parseInt(currentYear, 10) || 2026) : (parseInt(selectedYear, 10) || 2026);
-    const totalDFDsAnualValue = filteredDFDs.reduce((sum, d) => sum + getDfdAnnualizedValueLocal(d, targetYearNum), 0);
+    const totalDFDsAnualValue = filteredDFDs.reduce((sum, d) => {
+      if (d.Contabilizar_Orcamento === false || d.Situacao_PNCP === 'Devolvido' || d.Status_DFD === 'Concluído') return sum;
+      return sum + getDfdAnnualizedValueLocal(d, targetYearNum);
+    }, 0);
+    const totalDFDsEstimadoAtivo = filteredDFDs.reduce((sum, d) => {
+      if (d.Contabilizar_Orcamento === false || d.Situacao_PNCP === 'Devolvido') return sum;
+      return sum + (d.Valor_Estimado || 0);
+    }, 0);
 
     const SOF_LOGO_SVG = `
       <svg width="220" height="70" viewBox="0 0 240 80" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;">
@@ -549,27 +556,29 @@ export default function DFDs({
           <div class="stats-grid">
             <div class="stat-card">
               <div class="stat-label">Demandas Filtradas</div>
-              <div class="stat-value">${filteredDFDs.length}</div>
+              <div class="stat-value">${filteredDFDs.length} <span style="font-size: 11px; font-weight: 500; color: #64748b;">(${filteredDFDs.filter(d => d.Situacao_PNCP !== 'Devolvido' && d.Contabilizar_Orcamento !== false).length} ativas)</span></div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Valor Geral Consolidado (${selectedYear === 'Todos' ? currentYear : selectedYear})</div>
-              <div class="stat-value font-mono">R$ ${totalDFDsAnualValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div class="stat-label">Valor Estimado Total (Ativos)</div>
+              <div class="stat-value font-mono">R$ ${totalDFDsEstimadoAtivo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Unidade Responsável</div>
-              <div class="stat-value">SOF / MPO (TIC)</div>
+              <div class="stat-label">Valor Anualizado Consolidado (${selectedYear === 'Todos' ? currentYear : selectedYear})</div>
+              <div class="stat-value font-mono" style="color: #0d9488;">R$ ${totalDFDsAnualValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th style="width: 15%">Unidade / UASG</th>
-                <th style="width: 12%">Nº DFD / Ano</th>
-                <th style="width: 32%">Objeto de TIC</th>
-                <th style="width: 15%" class="text-right">Valor Estimado (R$)</th>
-                <th style="width: 15%" class="text-right">Valor Anualizado (R$)</th>
-                <th style="width: 11%"><div style="text-align: center;">Status</div></th>
+                <th style="width: 11%">Unidade / UASG</th>
+                <th style="width: 10%">Nº DFD / Ano</th>
+                <th style="width: 27%">Objeto de TIC</th>
+                <th style="width: 11%">Frequência / Início</th>
+                <th style="width: 12%" class="text-right">Valor Estimado (R$)</th>
+                <th style="width: 13%" class="text-right">Valor Anualizado (R$)</th>
+                <th style="width: 9%"><div style="text-align: center;">Situação PNCP</div></th>
+                <th style="width: 7%"><div style="text-align: center;">Status</div></th>
               </tr>
             </thead>
             <tbody>
@@ -578,8 +587,14 @@ export default function DFDs({
                 const isConcluido = dfd.Status_DFD === 'Concluído';
                 const isDevolvido = dfd.Situacao_PNCP === 'Devolvido';
                 const details = getDfdAnnualizedDetailsLocal(dfd, targetYearNum);
+                const sitPncp = dfd.Situacao_PNCP || 'Aguardando Análise';
+                const sitColor = sitPncp === 'Devolvido'
+                  ? 'background-color: #fee2e2; color: #991b1b;'
+                  : sitPncp === 'Vinculado a Contratação'
+                  ? 'background-color: #d1fae5; color: #065f46;'
+                  : 'background-color: #fef3c7; color: #92400e;';
                 return `
-                  <tr>
+                  <tr style="${isDevolvido ? 'opacity: 0.6; background-color: #fff1f2;' : (!isBudgetActive ? 'opacity: 0.65; background-color: #f8fafc;' : '')}">
                     <td>
                       <div><strong>${dfd.UASG || 'Não especificado'}</strong></div>
                     </td>
@@ -588,11 +603,15 @@ export default function DFDs({
                       <div style="font-size: 10px; color: #64748b;">Ano PCA: ${dfd.Ano_PCA}</div>
                     </td>
                     <td>
-                      <div style="font-weight: 500;">${dfd.Descricao_Objeto}</div>
+                      <div style="font-weight: 500; ${isDevolvido ? 'text-decoration: line-through;' : ''}">${dfd.Descricao_Objeto}</div>
                       ${dfd.Planejamento_Vinculado ? `<span style="font-size: 10px; color: #0284c7; font-weight: 500;">Proc. Vinculado: ${dfd.Planejamento_Vinculado}</span>` : ''}
                     </td>
+                    <td>
+                      <div style="font-weight: 600; font-size: 11px;">${dfd.Periodicidade_Pagamento || 'Mensal'}</div>
+                      <div class="font-mono" style="font-size: 9.5px; color: #64748b;">${formatDate(dfd.Data_conclusao_estimada)}</div>
+                    </td>
                     <td class="font-mono text-right">
-                      <div>R$ ${(dfd.Valor_Estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div style="${!isBudgetActive ? 'text-decoration: line-through; color: #94a3b8;' : 'font-weight: 600;'}">R$ ${(dfd.Valor_Estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                       ${(dfd.Vigencia_Contratacao_Meses && dfd.Vigencia_Contratacao_Meses !== 12) ? `<span style="font-size: 9px; color: #64748b;">Vigência: ${dfd.Vigencia_Contratacao_Meses} meses</span>` : ''}
                     </td>
                     <td class="font-mono text-right">
@@ -608,6 +627,11 @@ export default function DFDs({
                     </td>
                     <td>
                       <div style="display: flex; justify-content: center;">
+                        <span class="status" style="${sitColor}">${sitPncp}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div style="display: flex; justify-content: center;">
                         <span class="status ${
                           dfd.Status_DFD === 'Concluído' ? 'status-concluido' : 
                           dfd.Status_DFD === 'Iniciado' ? 'status-iniciado' : 'status-não-iniciado'
@@ -618,6 +642,14 @@ export default function DFDs({
                 `;
               }).join('')}
             </tbody>
+            <tfoot>
+              <tr style="background-color: #f0fdfa; font-weight: 700;">
+                <td colspan="4" class="text-right" style="color: #0f766e; text-transform: uppercase; font-size: 10px;">Totais Consolidados (Excluídos Devolvidos / Desativados):</td>
+                <td class="font-mono text-right" style="color: #0f172a; font-weight: 800;">R$ ${totalDFDsEstimadoAtivo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td class="font-mono text-right" style="color: #0d9488; font-weight: 800;">R$ ${totalDFDsAnualValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td colspan="2"></td>
+              </tr>
+            </tfoot>
           </table>
         </body>
       </html>
