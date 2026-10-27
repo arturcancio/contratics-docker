@@ -722,11 +722,47 @@ export default function Planejamentos({
 
   // Selected Plan Data
   const selectedPlan = planejamentos.find(p => p.id === selectedPlanId);
-  const selectedPlanHistoricos = selectedPlan 
-    ? [...historicos.filter(h => h.Processo_SEI === selectedPlan.SEI_Processo)].sort(
-        (a, b) => new Date(b.Data).getTime() - new Date(a.Data).getTime()
-      )
-    : [];
+  const selectedPlanHistoricos = useMemo(() => {
+    if (!selectedPlan) return [];
+    const rawList = historicos
+      .filter(h => h.Processo_SEI === selectedPlan.SEI_Processo)
+      .map(h => ({
+        ...h,
+        Descricao: repairMojibakeAndBrokenChars(h.Descricao),
+        Coordenacao: repairMojibakeAndBrokenChars(h.Coordenacao),
+        Resumo_Documento: h.Resumo_Documento ? repairMojibakeAndBrokenChars(h.Resumo_Documento) : undefined,
+      }));
+
+    // Deduplica entradas com mesmo Num_SEI (ou mesma Descrição reparada), preservando o registro mais completo
+    const dedupMap = new Map<string, HistoricoPlanejamento>();
+    for (const item of rawList) {
+      const key =
+        item.Num_SEI && /^\d{6,12}$/.test(item.Num_SEI.trim())
+          ? `sei:${item.Num_SEI.trim()}`
+          : `desc:${item.Descricao.toLowerCase()}`;
+      const existing = dedupMap.get(key);
+      if (!existing) {
+        dedupMap.set(key, item);
+      } else {
+        // Prioriza o item que tem resumo de documento, versão de artefato ou descrição mais detalhada
+        const scoreItem =
+          (item.Resumo_Documento ? 4 : 0) +
+          (item.Versao_Artefato ? 2 : 0) +
+          (item.Descricao.startsWith('[') ? 1 : 0);
+        const scoreExisting =
+          (existing.Resumo_Documento ? 4 : 0) +
+          (existing.Versao_Artefato ? 2 : 0) +
+          (existing.Descricao.startsWith('[') ? 1 : 0);
+        if (scoreItem >= scoreExisting) {
+          dedupMap.set(key, { ...existing, ...item });
+        }
+      }
+    }
+
+    return Array.from(dedupMap.values()).sort(
+      (a, b) => new Date(b.Data).getTime() - new Date(a.Data).getTime()
+    );
+  }, [historicos, selectedPlan]);
 
   const handlePlanFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -2060,7 +2096,7 @@ export default function Planejamentos({
                             }`}
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-bold text-on-surface">{art.nomeArtefato}</span>
+                              <span className="text-xs font-bold text-on-surface">{repairMojibakeAndBrokenChars(art.nomeArtefato)}</span>
                               <span
                                 className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full ${
                                   hadRevisions
@@ -2094,7 +2130,7 @@ export default function Planejamentos({
                                     <span className="text-on-surface-variant font-mono">({v.data} • {v.unidade})</span>
                                     {v.versao >= 2 && (
                                       <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded">
-                                        +{v.diasDesdeAnterior}d{v.motivadoPorTipo ? ` após ${v.motivadoPorTipo}` : ''}
+                                        +{v.diasDesdeAnterior}d{v.motivadoPorTipo ? ` após ${repairMojibakeAndBrokenChars(v.motivadoPorTipo)}` : ''}
                                       </span>
                                     )}
                                   </div>
@@ -2155,11 +2191,11 @@ export default function Planejamentos({
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-on-surface mt-1 leading-relaxed font-medium">{h.Descricao}</p>
+                        <p className="text-xs text-on-surface mt-1 leading-relaxed font-medium">{repairMojibakeAndBrokenChars(h.Descricao)}</p>
                         {h.Resumo_Documento && !h.Descricao.includes(h.Resumo_Documento) && (
                           <div className="mt-1 p-2.5 rounded-lg bg-surface-container/70 border border-outline-variant/40 text-[11px] text-on-surface-variant leading-relaxed">
                             <strong className="text-primary font-mono uppercase text-[10px] mr-1.5">Resumo do Documento:</strong>
-                            {h.Resumo_Documento}
+                            {repairMojibakeAndBrokenChars(h.Resumo_Documento)}
                           </div>
                         )}
                       </div>

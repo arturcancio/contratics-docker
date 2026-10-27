@@ -1913,10 +1913,29 @@ export default function App() {
         ];
         mapped.updatedTarefasForProcess.forEach(t => tasksToSave.push(t));
 
+        // Limpa caracteres quebrados (\uFFFD) de históricos antigos deste processo
+        nextHistPlan = nextHistPlan.map(eh => {
+          if (eh.Processo_SEI === plan.SEI_Processo && (eh.Descricao?.includes('\uFFFD') || eh.Resumo_Documento?.includes('\uFFFD'))) {
+            const fixed: HistoricoPlanejamento = {
+              ...eh,
+              Descricao: repairMojibakeAndBrokenChars(eh.Descricao),
+              Coordenacao: repairMojibakeAndBrokenChars(eh.Coordenacao),
+              Resumo_Documento: eh.Resumo_Documento ? repairMojibakeAndBrokenChars(eh.Resumo_Documento) : undefined,
+            };
+            histPlanToSave.push(fixed);
+            return fixed;
+          }
+          return eh;
+        });
+
         // Add or update history items (including newly read document summaries & version statistics)
         mapped.newHistoricoEntries.forEach(nh => {
           const existingIdx = nextHistPlan.findIndex(
-            eh => eh.id === nh.id || (eh.Processo_SEI === nh.Processo_SEI && eh.Descricao === nh.Descricao)
+            eh =>
+              eh.id === nh.id ||
+              (eh.Processo_SEI === nh.Processo_SEI &&
+                ((nh.Num_SEI && /^\d{6,12}$/.test(nh.Num_SEI) && eh.Num_SEI === nh.Num_SEI) ||
+                  repairMojibakeAndBrokenChars(eh.Descricao) === repairMojibakeAndBrokenChars(nh.Descricao)))
           );
           if (existingIdx === -1) {
             nextHistPlan.push(nh);
@@ -1924,7 +1943,8 @@ export default function App() {
           } else {
             nextHistPlan[existingIdx] = {
               ...nextHistPlan[existingIdx],
-              ...nh
+              ...nh,
+              id: nextHistPlan[existingIdx].id,
             };
             histPlanToSave.push(nextHistPlan[existingIdx]);
           }
@@ -2091,6 +2111,55 @@ export default function App() {
       '*'
     );
   };
+
+  // Reparo automático em background de registros de histórico que contenham caracteres corrompidos (\uFFFD)
+  React.useEffect(() => {
+    const hasCorruptedPlanHist = historicoPlanejamentos.some(
+      h => h.Descricao?.includes('\uFFFD') || h.Resumo_Documento?.includes('\uFFFD') || h.Coordenacao?.includes('\uFFFD')
+    );
+    if (hasCorruptedPlanHist) {
+      const toPersist: HistoricoPlanejamento[] = [];
+      const cleaned = historicoPlanejamentos.map(h => {
+        if (h.Descricao?.includes('\uFFFD') || h.Resumo_Documento?.includes('\uFFFD') || h.Coordenacao?.includes('\uFFFD')) {
+          const fixed: HistoricoPlanejamento = {
+            ...h,
+            Descricao: repairMojibakeAndBrokenChars(h.Descricao),
+            Coordenacao: repairMojibakeAndBrokenChars(h.Coordenacao),
+            Resumo_Documento: h.Resumo_Documento ? repairMojibakeAndBrokenChars(h.Resumo_Documento) : undefined,
+          };
+          toPersist.push(fixed);
+          return fixed;
+        }
+        return h;
+      });
+      setHistoricoPlanejamentos(cleaned);
+      safeLocalStorageSet('contratics_historico_planejamentos', JSON.stringify(cleaned));
+      toPersist.forEach(item => {
+        setDoc(doc(db, 'historicoPlanejamentos', item.id), item).catch(() => {});
+      });
+    }
+
+    const hasCorruptedContHist = historicosContratuais.some(h => h.Descricao?.includes('\uFFFD'));
+    if (hasCorruptedContHist) {
+      const toPersistCont: HistoricoContratual[] = [];
+      const cleanedCont = historicosContratuais.map(h => {
+        if (h.Descricao?.includes('\uFFFD')) {
+          const fixed: HistoricoContratual = {
+            ...h,
+            Descricao: repairMojibakeAndBrokenChars(h.Descricao),
+          };
+          toPersistCont.push(fixed);
+          return fixed;
+        }
+        return h;
+      });
+      setHistoricosContratuais(cleanedCont);
+      safeLocalStorageSet('contratics_historicos_contratuais', JSON.stringify(cleanedCont));
+      toPersistCont.forEach(item => {
+        setDoc(doc(db, 'historicosContratuais', item.id), item).catch(() => {});
+      });
+    }
+  }, [historicoPlanejamentos, historicosContratuais]);
 
   React.useEffect(() => {
     if (!isLoggedIn || currentUser?.role !== 'GECTI') {

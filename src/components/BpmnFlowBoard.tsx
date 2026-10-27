@@ -55,7 +55,10 @@ import {
   Radio,
   ShieldCheck,
   Copy,
-  Check
+  Check,
+  Hand,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 export const DEFAULT_BPMN_LANES: BpmnLane[] = [
@@ -66,7 +69,7 @@ export const DEFAULT_BPMN_LANES: BpmnLane[] = [
   { id: 'lane-autoridade', nome: 'Autoridade Competente', cor: '#ec4899', ordem: 5 },
 ];
 
-type CanvasToolMode = 'select' | 'connect_sequence' | 'connect_association';
+type CanvasToolMode = 'pan' | 'select' | 'connect_sequence' | 'connect_association';
 
 interface PaletteItemDef {
   type: BpmnNodeType;
@@ -242,8 +245,24 @@ export default function BpmnFlowBoard({
   const canvasRef = useRef<HTMLDivElement>(null);
   const [svgDimensions, setSvgDimensions] = useState({ width: 1300, height: 700 });
 
-  // Ferramenta ativa
-  const [activeTool, setActiveTool] = useState<CanvasToolMode>('select');
+  // Ferramenta ativa ('pan' = Ferramenta de Mão ativa por padrão para arrastar fluxos grandes)
+  const [activeTool, setActiveTool] = useState<CanvasToolMode>('pan');
+  const [isPanning, setIsPanning] = useState(false);
+  const panStateRef = useRef<{
+    active: boolean;
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+    moved: boolean;
+  }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+    moved: false,
+  });
   const [paletteTab, setPaletteTab] = useState<'all' | 'events' | 'tasks' | 'gateways' | 'artifacts'>('all');
 
   // Raias
@@ -319,6 +338,85 @@ export default function BpmnFlowBoard({
     setTimeout(() => {
       setCopiedSeiId(prev => (prev === seiNum ? null : prev));
     }, 1800);
+  };
+
+  // --- FERRAMENTA DE MÃO (PAN / DRAG-TO-SCROLL HORIZONTAL E VERTICAL) ---
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !canvasRef.current) return;
+    const target = e.target as HTMLElement;
+    // Não inicia arrasto se clicou em botões interativos
+    if (target.closest('button, input, select, textarea, a')) return;
+
+    // Permite arrastar com a ferramenta "Mão" ('pan') em qualquer lugar,
+    // ou no modo 'select' ao clicar no fundo/raia fora de um cartão draggable
+    const isInsideDraggableNode = Boolean(target.closest('[draggable="true"]'));
+    if (activeTool !== 'pan' && (activeTool !== 'select' || isInsideDraggableNode)) {
+      return;
+    }
+
+    panStateRef.current = {
+      active: true,
+      startX: e.pageX,
+      startY: e.pageY,
+      scrollLeft: canvasRef.current.scrollLeft,
+      scrollTop: canvasRef.current.scrollTop,
+      moved: false,
+    };
+    setIsPanning(true);
+  };
+
+  useEffect(() => {
+    if (!isPanning) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (!panStateRef.current.active || !canvasRef.current) return;
+      const dx = e.pageX - panStateRef.current.startX;
+      const dy = e.pageY - panStateRef.current.startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+        panStateRef.current.moved = true;
+      }
+      canvasRef.current.scrollLeft = panStateRef.current.scrollLeft - dx;
+      canvasRef.current.scrollTop = panStateRef.current.scrollTop - dy;
+    };
+
+    const handleWindowMouseUp = () => {
+      panStateRef.current.active = false;
+      setIsPanning(false);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [isPanning]);
+
+  const handleCanvasClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (panStateRef.current.moved) {
+      e.stopPropagation();
+      e.preventDefault();
+      panStateRef.current.moved = false;
+    }
+  };
+
+  const scrollCanvasTo = (target: 'start' | 'end' | 'active_sei') => {
+    if (!canvasRef.current) return;
+    if (target === 'start') {
+      canvasRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    } else if (target === 'end') {
+      canvasRef.current.scrollTo({ left: canvasRef.current.scrollWidth, behavior: 'smooth' });
+    } else if (target === 'active_sei') {
+      const activeId = planejamento.seiSyncMetadata?.activeNodeId;
+      const el = activeId ? document.getElementById(`bpmn-node-${activeId}`) : null;
+      if (el) {
+        const cRect = canvasRef.current.getBoundingClientRect();
+        const eRect = el.getBoundingClientRect();
+        const targetLeft =
+          canvasRef.current.scrollLeft + (eRect.left - cRect.left) - cRect.width / 2 + eRect.width / 2;
+        canvasRef.current.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
+      }
+    }
   };
 
   // Coordenadas calculadas
@@ -1033,12 +1131,14 @@ export default function BpmnFlowBoard({
           draggable={activeTool === 'select'}
           onDragStart={(e) => handleNodeDragStart(e, node.id)}
           onClick={() => {
-            if (activeTool !== 'select' || connectSourceId) {
+            if (activeTool === 'connect_sequence' || activeTool === 'connect_association' || connectSourceId) {
               handleConnectElement(node.id);
             }
           }}
           className={`transition-all select-none relative ${
-            activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
+            activeTool === 'connect_sequence' || activeTool === 'connect_association'
+              ? 'cursor-pointer hover:ring-2 hover:ring-primary'
+              : 'cursor-grab active:cursor-grabbing'
           } ${
             isConnectingSource
               ? 'ring-4 ring-amber-400 shadow-lg'
@@ -1170,13 +1270,15 @@ export default function BpmnFlowBoard({
           draggable={activeTool === 'select'}
           onDragStart={(e) => handleTaskDragStart(e, task.id)}
           onClick={() => {
-            if (activeTool !== 'select' || connectSourceId) {
+            if (activeTool === 'connect_sequence' || activeTool === 'connect_association' || connectSourceId) {
               handleConnectElement(task.id);
             }
           }}
           title={task.resumoDocumento ? `Resumo do Documento SEI: ${task.resumoDocumento}` : task.descricao || task.Tarefa}
           className={`w-52 min-h-[112px] rounded-2xl border-2 flex flex-col justify-between p-2.5 shadow-xs relative transition-all select-none ${
-            activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
+            activeTool === 'connect_sequence' || activeTool === 'connect_association'
+              ? 'cursor-pointer hover:ring-2 hover:ring-primary'
+              : 'cursor-grab active:cursor-grabbing'
           } ${
             isConnectingSource
               ? 'border-amber-400 bg-surface-container-low ring-4 ring-amber-400 shadow-lg'
@@ -1566,15 +1668,30 @@ export default function BpmnFlowBoard({
 
           <button
             type="button"
+            onClick={() => { setActiveTool('pan'); setConnectSourceId(null); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+              activeTool === 'pan'
+                ? 'bg-emerald-500 text-slate-950 font-bold border-emerald-400 shadow-xs'
+                : 'bg-surface-container-low text-on-surface border-outline-variant hover:bg-surface-container-high'
+            }`}
+            title="Ferramenta de Mão: clique e segure em qualquer ponto do fluxo para movimentá-lo para um lado e para o outro"
+          >
+            <Hand className="w-3.5 h-3.5" />
+            <span>Mão / Arrastar Fluxo (H)</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => { setActiveTool('select'); setConnectSourceId(null); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
               activeTool === 'select'
                 ? 'bg-primary text-on-primary border-primary shadow-xs'
                 : 'bg-surface-container-low text-on-surface border-outline-variant hover:bg-surface-container-high'
             }`}
+            title="Selecionar ou mover cartões individualmente entre raias"
           >
             <MousePointer className="w-3.5 h-3.5" />
-            <span>Selecionar / Mover (V)</span>
+            <span>Selecionar / Editar (V)</span>
           </button>
 
           <button
@@ -1604,11 +1721,50 @@ export default function BpmnFlowBoard({
             <Share2 className="w-3.5 h-3.5" />
             <span>Associação Tracejada (A)</span>
           </button>
+
+          {/* Navegação Rápida Horizontal para Fluxos Grandes */}
+          <div className="flex items-center gap-1 ml-1 pl-2 border-l border-outline-variant/50">
+            <button
+              type="button"
+              onClick={() => scrollCanvasTo('start')}
+              className="flex items-center gap-0.5 px-2 py-1 rounded bg-surface-container-low hover:bg-surface-container-high border border-outline-variant text-[10.5px] font-semibold text-on-surface cursor-pointer"
+              title="Ir para o início do fluxo BPMN"
+            >
+              <ChevronLeft className="w-3 h-3" />
+              <span>Início</span>
+            </button>
+            {seiMeta?.activeNodeId && (
+              <button
+                type="button"
+                onClick={() => scrollCanvasTo('active_sei')}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-[10.5px] font-bold text-emerald-400 cursor-pointer"
+                title="Centralizar onde o processo está agora no SEI"
+              >
+                <MapPin className="w-3 h-3" />
+                <span>Onde está no SEI</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => scrollCanvasTo('end')}
+              className="flex items-center gap-0.5 px-2 py-1 rounded bg-surface-container-low hover:bg-surface-container-high border border-outline-variant text-[10.5px] font-semibold text-on-surface cursor-pointer"
+              title="Ir para o final do fluxo BPMN"
+            >
+              <span>Fim</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
         {/* Indicador do Modo Ativo */}
         <div className="text-[11px] text-on-surface-variant flex items-center gap-1.5 font-medium">
-          {activeTool === 'select' && <span>Arraste elementos para posicionar ou clique para editar</span>}
+          {activeTool === 'pan' && (
+            <span className="text-emerald-400 font-semibold flex items-center gap-1">
+              <Hand className="w-3.5 h-3.5" />
+              Clique e arraste para movimentar o fluxo para os lados
+            </span>
+          )}
+          {activeTool === 'select' && <span>Arraste elementos entre raias ou arraste o fundo para rolar</span>}
           {activeTool === 'connect_sequence' && (
             <span className="text-amber-400 font-bold flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
@@ -1715,7 +1871,15 @@ export default function BpmnFlowBoard({
       <div 
         ref={canvasRef}
         onScroll={updateNodePositions}
-        className="bg-surface-container-lowest border-2 border-outline-variant rounded-xl overflow-x-auto custom-scrollbar shadow-md relative"
+        onMouseDown={handleCanvasMouseDown}
+        onClickCapture={handleCanvasClickCapture}
+        className={`bg-surface-container-lowest border-2 border-outline-variant rounded-xl overflow-x-auto custom-scrollbar shadow-md relative ${
+          isPanning
+            ? 'cursor-grabbing select-none'
+            : activeTool === 'pan'
+              ? 'cursor-grab select-none'
+              : ''
+        }`}
       >
         {/* Camada SVG de Conectores (Setas Retas em 90 Graus) */}
         <svg 
