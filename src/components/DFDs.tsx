@@ -1013,22 +1013,22 @@ export default function DFDs({
 
       {/* DFD Grid/List */}
       <div className="overflow-x-auto" data-tour="dfd-table">
-        <table className="w-full min-w-[1000px] text-left border-separate border-spacing-y-2">
+        <table className="w-full text-left border-separate border-spacing-y-2">
           <thead>
             <tr className="text-on-surface-variant">
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-20"
                 onClick={() => handleSort('UASG')}
               >
                 <div className="flex items-center gap-1">
-                  <span>Unidade / UASG</span>
+                  <span>UASG</span>
                   {sortKey === 'UASG' && (
                     sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 text-primary" /> : <ChevronDown className="w-3 h-3 text-primary" />
                   )}
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-28"
                 onClick={() => handleSort('Num_DFD')}
               >
                 <div className="flex items-center gap-1">
@@ -1039,7 +1039,7 @@ export default function DFDs({
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none min-w-[200px]"
                 onClick={() => handleSort('Descricao_Objeto')}
               >
                 <div className="flex items-center gap-1">
@@ -1050,7 +1050,7 @@ export default function DFDs({
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-32"
                 onClick={() => handleSort('Valor_Estimado')}
               >
                 <div className="flex items-center gap-1">
@@ -1061,7 +1061,7 @@ export default function DFDs({
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 cursor-pointer hover:text-primary transition-colors select-none w-32"
                 onClick={() => handleSort('valor_anualizado')}
               >
                 <div className="flex items-center gap-1">
@@ -1072,7 +1072,7 @@ export default function DFDs({
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none w-24"
                 onClick={() => handleSort('Status_DFD')}
               >
                 <div className="flex items-center justify-center gap-1">
@@ -1083,7 +1083,7 @@ export default function DFDs({
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none w-32"
                 onClick={() => handleSort('Situacao_PNCP')}
               >
                 <div className="flex items-center justify-center gap-1">
@@ -1094,7 +1094,7 @@ export default function DFDs({
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none w-24"
                 onClick={() => handleSort('Contabilizar_Orcamento')}
               >
                 <div className="flex items-center justify-center gap-1">
@@ -1105,7 +1105,7 @@ export default function DFDs({
                 </div>
               </th>
               <th 
-                className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
+                className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none w-36"
                 onClick={() => handleSort('Planejamento_Vinculado')}
               >
                 <div className="flex items-center justify-center gap-1">
@@ -1115,7 +1115,7 @@ export default function DFDs({
                   )}
                 </div>
               </th>
-              <th className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-right select-none">Ações</th>
+              <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-right select-none w-44">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -1138,11 +1138,11 @@ export default function DFDs({
                 return (
                   <React.Fragment key={dfd.id}>
                     <tr className="group transition-all duration-150">
-                      <td className={`px-5 py-4 text-xs font-mono text-on-surface-variant ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                      <td className={`px-3 py-3 text-xs font-mono text-on-surface-variant whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         {dfd.UASG}
                       </td>
-                      <td className={`px-5 py-4 ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
-                        <div className="flex items-center gap-1.5 font-mono">
+                      <td className={`px-3 py-3 ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <div className="flex items-center gap-1 font-mono whitespace-nowrap">
                           {isRecent && (
                             <span className="bg-primary/20 text-primary border border-primary/30 text-[9px] font-bold px-1 py-0.25 rounded animate-pulse shrink-0">
                               NOVO
@@ -1163,36 +1163,36 @@ export default function DFDs({
                           <span className="text-[10px] text-on-surface-variant">({dfd.Ano_PCA})</span>
                         </div>
                       </td>
-                      <td className={`px-5 py-4 text-xs text-on-surface max-w-sm truncate ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={dfd.Descricao_Objeto}>
+                      <td className={`px-3 py-3 text-xs text-on-surface min-w-[200px] ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={dfd.Descricao_Objeto}>
                         <button
                           type="button"
                           onClick={() => {
                             setViewingPdfFilename(dfd.Anexo_PDF_Nome || 'Documento_DFD_Anexo.pdf');
                             setViewingPdfObj(dfd);
                           }}
-                          className="hover:underline hover:text-primary focus:outline-none text-left truncate w-full cursor-pointer"
+                          className="hover:underline hover:text-primary focus:outline-none text-left line-clamp-2 w-full cursor-pointer leading-snug"
                           title="Clique para visualizar o PDF do DFD"
                         >
                           {dfd.Descricao_Objeto}
                         </button>
                       </td>
-                      <td className={`px-5 py-4 text-xs font-semibold text-on-surface font-mono ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                      <td className={`px-3 py-3 text-xs font-semibold text-on-surface font-mono whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         <div className={isDevolvido ? 'line-through text-on-surface-variant/40' : ''}>{formatCurrency(dfd.Valor_Estimado)}</div>
                         {(dfd.Vigencia_Contratacao_Meses && dfd.Vigencia_Contratacao_Meses !== 12) && (
                           <div className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold font-sans mt-0.5" title={`Valor cadastrado no PCA para vigência total de ${dfd.Vigencia_Contratacao_Meses} meses. Base de 1 ano (12m): ${formatCurrency(annualDetails.annualBaseValue)}`}>
-                            Global {dfd.Vigencia_Contratacao_Meses}m (12m: {formatCurrency(annualDetails.annualBaseValue)})
+                            Global {dfd.Vigencia_Contratacao_Meses}m
                           </div>
                         )}
-                        <div className="text-[9px] text-on-surface-variant font-normal mt-0.5 space-x-1.5 flex items-center">
+                        <div className="text-[9px] text-on-surface-variant font-normal mt-0.5 flex items-center gap-1.5 font-mono">
                           <span className="text-blue-500 font-medium">C: {formatCurrency(dfd.Valor_Custeio !== undefined ? dfd.Valor_Custeio : dfd.Valor_Estimado)}</span>
                           <span className="text-purple-500 font-bold">I: {formatCurrency(dfd.Valor_Investimento || 0)}</span>
                         </div>
                       </td>
-                      <td className={`px-5 py-4 text-xs font-mono ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={annualDetails.tooltipReason}>
+                      <td className={`px-3 py-3 text-xs font-mono whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={annualDetails.tooltipReason}>
                         {dfd.Status_DFD === 'Concluído' || isDevolvido ? (
                           <div>
                             <div className="text-on-surface-variant/50 font-bold">—</div>
-                            <div className={`text-[9px] font-sans mt-0.5 ${isDevolvido ? 'text-rose-500/80 font-medium' : 'text-on-surface-variant/70'}`}>
+                            <div className={`text-[9px] font-sans mt-0.5 truncate max-w-[130px] ${isDevolvido ? 'text-rose-500/80 font-medium' : 'text-on-surface-variant/70'}`}>
                               {annualDetails.shortReason}
                             </div>
                           </div>
@@ -1201,13 +1201,13 @@ export default function DFDs({
                             <div className={`font-extrabold ${dfd.Contabilizar_Orcamento === false ? 'text-on-surface-variant/40 line-through' : 'text-teal-600 dark:text-teal-400'}`}>
                               {formatCurrency(annualDetails.value)}
                             </div>
-                            <div className="text-[9px] text-on-surface-variant/85 font-medium font-sans mt-0.5 leading-tight">
+                            <div className="text-[9px] text-on-surface-variant/85 font-medium font-sans mt-0.5 leading-tight truncate max-w-[130px]">
                               {annualDetails.shortReason}
                             </div>
                           </div>
                         )}
                       </td>
-                      <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                      <td className={`px-2.5 py-3 text-center whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium leading-none ${
                           dfd.Status_DFD === 'Concluído' 
                             ? 'bg-primary/25 border border-primary/40 text-primary' 
@@ -1218,7 +1218,7 @@ export default function DFDs({
                           {dfd.Status_DFD}
                         </span>
                       </td>
-                      <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                      <td className={`px-2.5 py-3 text-center whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         {userRole !== 'Visualizador' && userRole !== 'Auditor' ? (
                           <select
                             value={situacaoPncp}
@@ -1230,7 +1230,7 @@ export default function DFDs({
                                 updatedAt: new Date(currentLocalTime).toISOString(),
                               });
                             }}
-                            className={`px-2 py-1 rounded-lg border text-[10px] font-bold outline-none cursor-pointer transition-colors ${
+                            className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold outline-none cursor-pointer transition-colors max-w-[130px] ${
                               situacaoPncp === 'Vinculado a Contratação'
                                 ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-600 dark:text-emerald-300'
                                 : situacaoPncp === 'Devolvido'
@@ -1244,7 +1244,7 @@ export default function DFDs({
                             <option value="Devolvido" className="bg-surface text-on-surface">Devolvido</option>
                           </select>
                         ) : (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg border text-[10px] font-bold leading-none ${
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md border text-[10px] font-bold leading-none ${
                             situacaoPncp === 'Vinculado a Contratação'
                               ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-600 dark:text-emerald-300'
                               : situacaoPncp === 'Devolvido'
@@ -1255,10 +1255,10 @@ export default function DFDs({
                           </span>
                         )}
                       </td>
-                      <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                      <td className={`px-2.5 py-3 text-center whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         {isDevolvido ? (
                           <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-400 text-[10px] font-medium leading-none line-through opacity-80"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-rose-500/30 bg-rose-500/10 text-rose-400 text-[10px] font-medium leading-none line-through opacity-80"
                             title="DFDs com Situação PNCP 'Devolvido' não são contabilizados no orçamento."
                           >
                             Devolvido
@@ -1278,24 +1278,24 @@ export default function DFDs({
                           </button>
                         )}
                       </td>
-                      <td className={`px-5 py-4 text-xs text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                      <td className={`px-2.5 py-3 text-xs text-center whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                         {dfd.Planejamento_Vinculado ? (
                           <div className="inline-flex items-center justify-center gap-1 mx-auto">
                             <button
                               onClick={() => onNavigateToPlanning(dfd.Planejamento_Vinculado!)}
-                              className="text-primary font-medium hover:underline inline-flex items-center justify-center gap-1 cursor-pointer font-mono text-[11px]"
+                              className="text-primary font-medium hover:underline inline-flex items-center justify-center gap-1 cursor-pointer font-mono text-[10.5px]"
                             >
                               <FileText className="w-3 h-3 shrink-0 text-primary/70" />
-                              {dfd.Planejamento_Vinculado}
+                              <span>{dfd.Planejamento_Vinculado}</span>
                             </button>
                             <CopyButton text={dfd.Planejamento_Vinculado} label="Processo SEI" />
                           </div>
                         ) : (
-                          <span className="text-on-surface-variant/60 font-mono text-[11px] font-bold block text-center">---</span>
+                          <span className="text-on-surface-variant/60 font-mono text-[11px] font-bold block text-center">—</span>
                         )}
                       </td>
-                      <td className={`px-5 py-4 text-right ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
-                        <div className="flex items-center justify-end gap-2 opacity-80 group-hover:opacity-100 transition-all">
+                      <td className={`px-3 py-3 text-right whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <div className="flex items-center justify-end gap-1 opacity-85 group-hover:opacity-100 transition-all">
                           <button
                             type="button"
                             onClick={() => setExpandedDfdId(expandedDfdId === dfd.id ? null : dfd.id)}
@@ -1314,13 +1314,13 @@ export default function DFDs({
                             type="button"
                             onClick={() => onViewLineage && onViewLineage(dfd.id, 'dfd')}
                             className="p-1 px-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/5 hover:bg-primary/15 border border-outline rounded cursor-pointer transition-all active:scale-95 shrink-0"
-                            title="Rastreabilidade e Histórico do Processo"
+                            title="Rastreabilidade e Histórico do Processo (Percurso)"
                           >
                             <Shuffle className="w-3 h-3 text-primary animate-pulse" />
                             <span>Percurso</span>
                           </button>
 
-                          {dfd.Anexo_PDF ? (
+                          {dfd.Anexo_PDF && (
                             <button
                               type="button"
                               onClick={(e) => { 
@@ -1328,14 +1328,12 @@ export default function DFDs({
                                 setViewingPdfFilename(dfd.Anexo_PDF_Nome || 'Documento_DFD_Anexo.pdf'); 
                                 setViewingPdfObj(dfd);
                               }}
-                              className="p-1 px-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:bg-primary/10 rounded border border-primary/20 cursor-pointer active:scale-95 transition-all"
+                              className="p-1 px-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:bg-primary/10 rounded border border-primary/20 cursor-pointer active:scale-95 transition-all shrink-0"
                               title={`Visualizar PDF: ${dfd.Anexo_PDF_Nome || 'Documento_DFD_Anexo.pdf'}`}
                             >
                               <FileText className="w-3 text-primary shrink-0" />
-                              <span>Ver PDF</span>
+                              <span>PDF</span>
                             </button>
-                          ) : (
-                            <span className="text-on-surface-variant/40 text-[11px] mr-2">—</span>
                           )}
                           
                           <button
@@ -1368,7 +1366,7 @@ export default function DFDs({
                               setAttachedFileData(dfd.Anexo_PDF && dfd.Anexo_PDF.startsWith('data:') ? dfd.Anexo_PDF : '');
                               setIsModalOpen(true);
                             }}
-                            className="p-1.5 inline-flex items-center text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
+                            className="p-1 inline-flex items-center text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant shrink-0"
                             title="Editar DFD"
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -1384,7 +1382,7 @@ export default function DFDs({
                               }
                               setDfdToDelete(dfd);
                             }}
-                            className="p-1.5 inline-flex items-center text-on-surface-variant hover:text-rose-450 hover:bg-rose-550/10 rounded transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant"
+                            className="p-1 inline-flex items-center text-on-surface-variant hover:text-rose-450 hover:bg-rose-550/10 rounded transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant shrink-0"
                             title="Excluir DFD"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
