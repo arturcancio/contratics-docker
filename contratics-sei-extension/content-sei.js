@@ -151,7 +151,8 @@
           data: dateMatch ? dateMatch[1] : '',
           unidade: unitMatch ? unitMatch[1] : '',
           assinado: isSigned,
-          assinantes: signers
+          assinantes: signers,
+          href: nodeHref || undefined
         });
       }
     }
@@ -442,9 +443,211 @@
   }
 
   /**
-   * Lê um processo específico no SEI (e opcionalmente faz inspeção de 2º nível nos processos relacionados)
+   * Carrega o cache local de resumos de documentos já lidos no SEI (evita reler documentos de varreduras anteriores!)
    */
-  async function scrapeSingleProtocolInSei(protocolo, deepScanRelated = true) {
+  function getCachedDocSummaries() {
+    return new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(['contratics_read_doc_summaries'], (res) => {
+          resolve((res && res.contratics_read_doc_summaries) || {});
+        });
+      } catch (e) {
+        resolve({});
+      }
+    });
+  }
+
+  function saveCachedDocSummaries(cacheObj) {
+    return new Promise((resolve) => {
+      try {
+        // Mantém os últimos 2500 documentos em cache local para performance
+        const keys = Object.keys(cacheObj || {});
+        if (keys.length > 2500) {
+          keys.slice(0, keys.length - 2500).forEach((k) => delete cacheObj[k]);
+        }
+        chrome.storage.local.set({ contratics_read_doc_summaries: cacheObj }, () => resolve());
+      } catch (e) {
+        resolve();
+      }
+    });
+  }
+
+  /**
+   * Analisa heuristicamente o texto extraído de um documento do SEI (Despacho, Nota Técnica, Parecer, ETP, TR, etc.)
+   * para gerar um resumo executivo automático e identificar se houve solicitação de alterações em artefatos.
+   */
+  function buildHeuristicDocumentSummary(docItem, bodyText, isPdfOrExternal) {
+    const tipo = String(docItem.tipo || 'Documento').trim();
+    const numStr = docItem.numero ? ` nº ${docItem.numero}` : '';
+    const unidStr = docItem.unidade ? ` (${docItem.unidade})` : '';
+
+    if (isPdfOrExternal && (!bodyText || bodyText.length < 40)) {
+      return {
+        resumoConteudo: `Documento externo/PDF anexado ao processo (${tipo}${numStr}${unidStr} — SEI ${docItem.idSei}).`,
+        textoExtraido: '',
+        solicitaAjustes: false,
+        artefatosCitados: [],
+        isPdfOuExterno: true
+      };
+    }
+
+    // Limpa cabeçalhos repetitivos do SEI / rodapés de assinatura eletrônica
+    let cleaned = String(bodyText || '')
+      .replace(/Documento assinado eletronicamente por[\s\S]*$/i, '')
+      .replace(/A autenticidade deste documento pode ser conferida[\s\S]*$/i, '')
+      .replace(/Refer[êe]ncia:\s*Processo\s*n[º°][\s\S]{0,120}$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Detecta artefatos citados no teor do documento
+    const artefatosCitados = [];
+    if (/\bETP\b|Estudo T[eé]cnico Preliminar/i.test(cleaned)) artefatosCitados.push('ETP');
+    if (/\bTR\b|Termo de Refer[êe]ncia|Projeto B[aá]sico/i.test(cleaned)) artefatosCitados.push('TR');
+    if (/Mapa de (?:Gerenciamento de )?Risco|Matriz de Risco|\bMGR\b/i.test(cleaned)) artefatosCitados.push('Mapa de Riscos');
+    if (/Pesquisa de Pre[cç]o|Mapa Comparativo|Estimativa de Pre[cç]o|Or[cç]amento Estimado/i.test(cleaned)) artefatosCitados.push('Pesquisa de Preços');
+    if (/\bDFD\b|Formaliza[cç][aã]o da Demanda/i.test(cleaned)) artefatosCitados.push('DFD');
+    if (/Minuta de Edital|Minuta de Contrato/i.test(cleaned)) artefatosCitados.push('Minuta de Edital/Contrato');
+
+    // Detecta se o documento (especialmente Despacho, Nota Técnica ou Parecer) solicita ajustes / revisão / retificação
+    const isAnalysisDoc = /DESPACHO|NOTA T[EÉ]CNICA|PARECER|COTA|DILIG[EÊ]NCIA|INFORMA[CÇ][AÃ]O/i.test(tipo);
+    const hasRevisionKeywords =
+      /(?:solicita|sugere|recomenda|necess[aá]ri[oa]|proceder|realizar|promover|adequa[cç][aã]o|ajuste|altera[cç][aã]o|corre[cç][aã]o|revis[aã]o|retifica[cç][aã]o|complementa[cç][aã]o|restitui|devolu[cç][aã]o|ressalva)/i.test(
+        cleaned
+      );
+    const solicitaAjustes = Boolean(isAnalysisDoc && hasRevisionKeywords && artefatosCitados.length > 0);
+
+    // Procura trechos de Assunto / Objeto / Conclusão / Encaminhamento
+    let highlight = '';
+    const assuntoMatch = cleaned.match(/(?:Assunto|Objeto|Refer[êe]ncia|Ementa)\s*:\s*([^.;]{10,220}[.;])/i);
+    const conclusaoMatch = cleaned.match(
+      /(?:Diante do exposto|Ante o exposto|Isso posto|Conclus[aã]o|Encaminhamento|Assim,\s*encaminh|Sugere-se|Recomenda-se|Solicita-se|Aprovo|Autorizo)[^.]{10,260}\./i
+    );
+
+    if (assuntoMatch && conclusaoMatch) {
+      highlight = `${assuntoMatch[0].trim()} ${conclusaoMatch[0].trim()}`;
+    } else if (conclusaoMatch) {
+      highlight = conclusaoMatch[0].trim();
+    } else if (assuntoMatch) {
+      highlight = assuntoMatch[0].trim();
+    } else {
+      // Pega as primeiras frases substantivas após o cabeçalho do órgão
+      const sentences = cleaned
+        .split(/(?<=[.!?])\s+/)
+        .filter((s) => s.length > 35 && !/^(MINIST[EÉ]RIO|SECRETARIA|COORDENA[CÇ][AÃ]O|DIRETORIA|PROCESSO N|INTERESSADO)/i.test(s));
+      highlight = sentences.slice(0, 2).join(' ').slice(0, 320);
+    }
+
+    if (!highlight) {
+      highlight = cleaned.slice(0, 260);
+    }
+
+    let prefix = '';
+    if (solicitaAjustes) {
+      prefix = `[Solicita ajustes em: ${artefatosCitados.join(', ')}] `;
+    } else if (artefatosCitados.length > 0 && isAnalysisDoc) {
+      prefix = `[Análise sobre: ${artefatosCitados.join(', ')}] `;
+    }
+
+    const resumoFinal =
+      highlight.length > 15
+        ? `${prefix}${highlight}`
+        : `${prefix}${tipo}${numStr}${unidStr} registrado no SEI (${docItem.idSei}).`;
+
+    return {
+      resumoConteudo: resumoFinal.slice(0, 420),
+      textoExtraido: cleaned.slice(0, 1800),
+      solicitaAjustes,
+      artefatosCitados,
+      isPdfOuExterno: Boolean(isPdfOrExternal)
+    };
+  }
+
+  /**
+   * Lê o conteúdo interno de um documento no SEI (`acao=documento_visualizar`) SOMENTE se ele for novo (incremental)
+   */
+  async function fetchSeiDocumentSummaryIfNeeded(docItem, baseSeiUrl, cachedSummaries, knownSet, readBudgetRef) {
+    if (!docItem || !docItem.idSei) return docItem;
+
+    // 1. Se já estiver no cache local da extensão, reutiliza imediatamente sem requisição de rede!
+    const cached = cachedSummaries[docItem.idSei];
+    if (cached && cached.resumoConteudo) {
+      return {
+        ...docItem,
+        resumoConteudo: cached.resumoConteudo,
+        textoExtraido: cached.textoExtraido,
+        solicitaAjustes: cached.solicitaAjustes,
+        artefatosCitados: cached.artefatosCitados,
+        isPdfOuExterno: cached.isPdfOuExterno
+      };
+    }
+
+    // 2. Se o Contratics já informou que conhece o resumo deste documento (knownDocIds), não precisa baixar novamente
+    if (knownSet && knownSet.has(String(docItem.idSei)) && docItem.resumoConteudo) {
+      return docItem;
+    }
+
+    // 3. Filtra apenas documentos relevantes para leitura de conteúdo e respeita limite por processo para rapidez
+    if (!docItem.href || readBudgetRef.count >= readBudgetRef.maxPerProcess) {
+      return docItem;
+    }
+
+    const upperTipo = String(docItem.tipo || '').toUpperCase();
+    const isNoise = /^(E-?MAIL|CORRESPOND|RECIBO|TERMO DE ENCERRAMENTO|EXTRATO SIASG|BOLETIM|CAPA|TERMO DE ABERTURA)/i.test(
+      upperTipo
+    );
+    if (isNoise) return docItem;
+
+    try {
+      readBudgetRef.count++;
+      const docUrl = new URL(docItem.href, baseSeiUrl).href;
+      const resp = await fetch(docUrl, { credentials: 'include' });
+      const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+
+      if (contentType.includes('application/pdf') || contentType.includes('octet-stream')) {
+        const pdfSummary = buildHeuristicDocumentSummary(docItem, '', true);
+        cachedSummaries[docItem.idSei] = { ...pdfSummary, updatedAt: Date.now() };
+        return { ...docItem, ...pdfSummary };
+      }
+
+      const buf = await resp.arrayBuffer();
+      let html = decodeSeiBuffer(buf, contentType);
+
+      // Caso a página de visualização contenha um iframe interno de conteúdo (comum em alguns anexos HTML/PDF do SEI)
+      const innerIframeMatch =
+        html.match(/<iframe[^>]+src=["']([^"']*acao=documento_download_anexo[^"']+)["']/i) ||
+        html.match(/<iframe[^>]+id=["']ifrVisualizacao["'][^>]+src=["']([^"']+)["']/i);
+
+      if (innerIframeMatch && innerIframeMatch[1] && /acao=documento_download_anexo/i.test(innerIframeMatch[1])) {
+        const pdfSummary = buildHeuristicDocumentSummary(docItem, cleanText(html), true);
+        cachedSummaries[docItem.idSei] = { ...pdfSummary, updatedAt: Date.now() };
+        return { ...docItem, ...pdfSummary };
+      }
+
+      const parser = new DOMParser();
+      const parsedDoc = parser.parseFromString(html, 'text/html');
+      parsedDoc.querySelectorAll('script, style, noscript, header, nav').forEach((el) => el.remove());
+
+      const rawBodyText = cleanText(parsedDoc.body ? parsedDoc.body.innerHTML : html);
+      const summaryData = buildHeuristicDocumentSummary(docItem, rawBodyText, false);
+
+      cachedSummaries[docItem.idSei] = {
+        ...summaryData,
+        updatedAt: Date.now()
+      };
+
+      return {
+        ...docItem,
+        ...summaryData
+      };
+    } catch (e) {
+      return docItem;
+    }
+  }
+
+  /**
+   * Lê um processo específico no SEI (e opcionalmente faz inspeção de 2º nível nos processos relacionados e leitura incremental dos documentos novos)
+   */
+  async function scrapeSingleProtocolInSei(protocolo, deepScanRelated = true, knownDocIds = []) {
     const baseSeiUrl = getBaseSeiUrl();
     const targetDigits = normalizeDigits(protocolo);
     let mainWorkHtml = '';
@@ -536,6 +739,36 @@
       });
     }
 
+    // Leitura incremental do conteúdo dos documentos anexados ao processo (apenas os documentos NOVOS ainda não lidos!)
+    const cachedSummaries = await getCachedDocSummaries();
+    const knownSet = new Set(Array.isArray(knownDocIds) ? knownDocIds.map(String) : []);
+    const readBudgetRef = { count: 0, maxPerProcess: 10 };
+    let novosDocumentosLidosCount = 0;
+
+    // Prioriza a leitura dos documentos mais recentes para trás, garantindo que os novos despachos/NTs/revisões sejam lidos primeiro
+    for (let dIdx = parsedTree.documentos.length - 1; dIdx >= 0; dIdx--) {
+      const docItem = parsedTree.documentos[dIdx];
+      const wasCached = Boolean(cachedSummaries[docItem.idSei] || knownSet.has(String(docItem.idSei)));
+      const beforeCount = readBudgetRef.count;
+      const enrichedDoc = await fetchSeiDocumentSummaryIfNeeded(
+        docItem,
+        baseSeiUrl,
+        cachedSummaries,
+        knownSet,
+        readBudgetRef
+      );
+      if (!wasCached && readBudgetRef.count > beforeCount) {
+        novosDocumentosLidosCount++;
+      }
+      // Remove href temporário antes de serializar para o Contratics
+      const { href, ...cleanDoc } = enrichedDoc;
+      parsedTree.documentos[dIdx] = cleanDoc;
+    }
+
+    if (novosDocumentosLidosCount > 0) {
+      await saveCachedDocSummaries(cachedSummaries);
+    }
+
     // Varredura Profunda de 2º Nível para Processos Relacionados (Pagamentos, Descentralizações, Aditivos, etc.)
     if (deepScanRelated && parsedTree.processosRelacionados.length > 0) {
       const maxRelatedToInspect = Math.min(parsedTree.processosRelacionados.length, 5);
@@ -593,6 +826,7 @@
       processosRelacionados: parsedTree.processosRelacionados,
       documentos: parsedTree.documentos,
       andamentos: andamentos,
+      novosDocumentosLidosCount,
       urlProcessoSei: finalUrl || window.location.href,
       scrapedAt: new Date().toISOString()
     };
@@ -603,7 +837,7 @@
     if (!msg || !msg.action) return;
 
     if (msg.action === 'SCRAPE_SINGLE_PROTOCOL') {
-      scrapeSingleProtocolInSei(msg.protocolo, msg.deepScanRelated !== false)
+      scrapeSingleProtocolInSei(msg.protocolo, msg.deepScanRelated !== false, msg.knownDocIds || [])
         .then((data) => sendResponse({ ok: true, data }))
         .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
       return true;

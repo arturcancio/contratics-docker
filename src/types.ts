@@ -114,6 +114,12 @@ export interface SeiRelatedProcessInfo {
   }>;
 }
 
+export type BpmnFlowTemplateType =
+  | 'Contratacao_SOF'
+  | 'Contratacao_Colaboragov'
+  | 'Contratacao_Direta_Inexigibilidade'
+  | 'Contratacao_Direta_Dispensa';
+
 export interface SeiDocumentInfo {
   idSei: string;
   tipo: string;
@@ -122,6 +128,43 @@ export interface SeiDocumentInfo {
   unidade?: string;
   assinado: boolean;
   assinantes?: string[];
+  resumoConteudo?: string;
+  textoExtraido?: string;
+  solicitaAjustes?: boolean;
+  artefatosCitados?: string[];
+  versaoArtefato?: number;
+  diasParaElaborarAlteracao?: number;
+  isPdfOuExterno?: boolean;
+}
+
+export interface SeiArtifactVersionStat {
+  categoria: string;
+  nomeArtefato: string;
+  totalVersoes: number;
+  totalAlteracoes: number; // 0 = apenas 1ª versão; 1 = alterado 1 vez (2 versões), etc.
+  diasTotaisRetrabalho: number; // soma dos dias gastos nas alterações (a partir da 2ª versão)
+  diasPrimeiraElaboracao: number;
+  versoes: Array<{
+    versao: number;
+    idSei: string;
+    numeroDoc?: string;
+    data: string;
+    unidade: string;
+    diasDesdeAnterior: number;
+    motivadoPorDocSei?: string;
+    motivadoPorTipo?: string;
+    motivadoPorUnidade?: string;
+    resumoMudanca?: string;
+  }>;
+}
+
+export interface SeiBottleneckInfo {
+  etapa: string;
+  unidade: string;
+  dias: number;
+  seiDocNumber?: string;
+  motivo?: string;
+  isRetrabalho?: boolean;
 }
 
 export interface SeiProcessSyncMetadata {
@@ -137,6 +180,12 @@ export interface SeiProcessSyncMetadata {
   processosRelacionados?: SeiRelatedProcessInfo[];
   documentosArvore?: SeiDocumentInfo[];
   etapasMapeadasCount?: number;
+  modeloFluxoPadrao?: BpmnFlowTemplateType;
+  modeloFluxoNome?: string;
+  estatisticasVersoesArtefatos?: SeiArtifactVersionStat[];
+  gargalosDetectados?: SeiBottleneckInfo[];
+  gargaloPrincipal?: SeiBottleneckInfo;
+  novosDocumentosLidosCount?: number;
 }
 
 export interface SeiSyncSnapshot {
@@ -213,6 +262,13 @@ export interface HistoricoPlanejamento {
   Descricao: string;
   Num_SEI: string;
   Coordenacao: string;
+  Resumo_Documento?: string;
+  Tipo_Documento?: string;
+  Versao_Artefato?: number;
+  Total_Versoes_Artefato?: number;
+  Dias_Elaboracao?: number;
+  Solicita_Alteracao?: boolean;
+  Artefatos_Afetados?: string[];
 }
 
 export type StatusTarefa = 'Pendente' | 'Em Elaboração' | 'Aguardando Assinatura' | 'Concluído';
@@ -221,6 +277,9 @@ export interface SubTarefa {
   id: string;
   titulo: string;
   concluida: boolean;
+  seiDocNumber?: string;
+  resumoConteudo?: string;
+  versaoArtefato?: number;
 }
 
 export interface TarefaPlanejamento {
@@ -244,6 +303,19 @@ export interface TarefaPlanejamento {
   isCurrentSeiPosition?: boolean;
   seiAssinado?: boolean;
   seiAssinantes?: string[];
+  versaoArtefato?: number;
+  totalVersoesArtefato?: number;
+  diasRetrabalho?: number;
+  resumoDocumento?: string;
+  isTemplateFutureMilestone?: boolean;
+  isBottleneck?: boolean;
+  allSeiDocs?: Array<{
+    idSei: string;
+    tipo: string;
+    numero?: string;
+    versao?: number;
+    resumo?: string;
+  }>;
 }
 
 export type StatusContrato = 'Vigente' | 'A Vencer' | 'Encerrado';

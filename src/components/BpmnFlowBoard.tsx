@@ -12,9 +12,15 @@ import {
   BpmnNode, 
   BpmnConnection, 
   BpmnNodeType, 
+  BpmnFlowTemplateType,
   StatusTarefa 
 } from '../types';
-import { repairMojibakeAndBrokenChars } from '../services/seiSyncService';
+import { 
+  repairMojibakeAndBrokenChars, 
+  FLOW_BACKBONE_TEMPLATES, 
+  detectFlowTemplateFromPlanejamento, 
+  generateStandardTemplateBpmn 
+} from '../services/seiSyncService';
 import { 
   Workflow, 
   Plus, 
@@ -47,7 +53,9 @@ import {
   MapPin,
   RotateCcw,
   Radio,
-  ShieldCheck
+  ShieldCheck,
+  Copy,
+  Check
 } from 'lucide-react';
 
 export const DEFAULT_BPMN_LANES: BpmnLane[] = [
@@ -294,6 +302,24 @@ export default function BpmnFlowBoard({
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const [dragOverLaneId, setDragOverLaneId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'atrasadas' | 'em_andamento' | 'concluidas'>('all');
+  const [copiedSeiId, setCopiedSeiId] = useState<string | null>(null);
+  const [selectedBackboneModel, setSelectedBackboneModel] = useState<BpmnFlowTemplateType>(() =>
+    detectFlowTemplateFromPlanejamento(planejamento)
+  );
+
+  useEffect(() => {
+    setSelectedBackboneModel(detectFlowTemplateFromPlanejamento(planejamento));
+  }, [planejamento.id, planejamento.Tipo_Processo, planejamento.seiSyncMetadata?.modeloFluxoPadrao]);
+
+  const handleCopySeiDoc = (e: React.MouseEvent, seiNum: string) => {
+    e.stopPropagation();
+    if (!seiNum) return;
+    navigator.clipboard.writeText(seiNum).catch(() => {});
+    setCopiedSeiId(seiNum);
+    setTimeout(() => {
+      setCopiedSeiId(prev => (prev === seiNum ? null : prev));
+    }, 1800);
+  };
 
   // Coordenadas calculadas
   const [nodePositions, setNodePositions] = useState<Record<string, { x: number; y: number; w: number; h: number }>>({});
@@ -777,97 +803,40 @@ export default function BpmnFlowBoard({
     setTimeout(updateNodePositions, 100);
   };
 
-  // Carregador de fluxo canônico conforme imagem de referência (Start -> XOR -> Task -> XOR [loop "Yes"] -> Task -> End)
-  const handleLoadDefaultBpmnFlow = () => {
-    if (planTarefas.length > 0 && !confirm('Este planejamento já possui tarefas. Deseja carregar o fluxo padrão BPMN?')) {
+  // Carrega um dos 4 Modelos Padrão de Espinha Dorsal (Contratação SOF, Colaboragov, Inexigibilidade, Dispensa)
+  const handleApplyStandardBackboneModel = (modelType: BpmnFlowTemplateType) => {
+    const tplDef = FLOW_BACKBONE_TEMPLATES[modelType] || FLOW_BACKBONE_TEMPLATES.Contratacao_SOF;
+    if (
+      planTarefas.length > 0 &&
+      !confirm(
+        `Deseja aplicar o Modelo de Espinha Dorsal "${tplDef.nomeExibicao}" a este processo?\n\nIsso carregará todos os marcos padrão, raias e gateways decisórios desse modelo no diagrama BPMN.`
+      )
+    ) {
       return;
     }
 
-    const firstLaneName = lanes[0]?.nome || 'Área Demandante';
-    const firstLaneId = lanes[0]?.id || 'lane-demandante';
+    const generated = generateStandardTemplateBpmn(planejamento, modelType);
 
-    // Cria Nós canônicos como na imagem
-    const startNode: BpmnNode = {
-      id: `node-start-ref`,
-      type: 'start',
-      label: 'Demanda Oficializada',
-      laneId: firstLaneId,
-      ordemFluxo: 1,
-    };
-
-    const xor1Node: BpmnNode = {
-      id: `node-xor1-ref`,
-      type: 'gateway_exclusive',
-      label: 'Requisitos Prévios?',
-      laneId: firstLaneId,
-      ordemFluxo: 2,
-    };
-
-    const xor2Node: BpmnNode = {
-      id: `node-xor2-ref`,
-      type: 'gateway_exclusive',
-      label: 'Parecer Aprovado?',
-      laneId: firstLaneId,
-      ordemFluxo: 4,
-    };
-
-    const endNode: BpmnNode = {
-      id: `node-end-ref`,
-      type: 'end',
-      label: 'Contratação Homologada',
-      laneId: firstLaneId,
-      ordemFluxo: 6,
-    };
-
-    // Tarefas
-    const task1: TarefaPlanejamento = {
-      id: `tar-ref-1`,
-      ProcessoPlanejamento: planejamento.SEI_Processo,
-      Tarefa: 'Elaboração do Termo de Referência',
-      Inicio: new Date(Date.now() - 5 * 86400000).toISOString(),
-      Prazo_Dias: 10,
-      Status_Tarefa: 'Em Elaboração',
-      areaResponsavel: firstLaneName,
-      ordemFluxo: 3,
-      bpmnType: 'task',
-      MovidoPor: currentUser.name,
-      MovidoEm: new Date().toISOString(),
-      subTarefas: [],
-    };
-
-    const task2: TarefaPlanejamento = {
-      id: `tar-ref-2`,
-      ProcessoPlanejamento: planejamento.SEI_Processo,
-      Tarefa: 'Publicação do Edital no Compras.gov',
-      Inicio: new Date().toISOString(),
-      Prazo_Dias: 8,
-      Status_Tarefa: 'Pendente',
-      areaResponsavel: firstLaneName,
-      ordemFluxo: 5,
-      bpmnType: 'task',
-      MovidoPor: currentUser.name,
-      MovidoEm: new Date().toISOString(),
-      subTarefas: [],
-    };
-
-    onAddTarefa(task1);
-    onAddTarefa(task2);
-
-    // Conexões com o exato loop da imagem
-    const defaultConns: BpmnConnection[] = [
-      { id: 'c-1', fromId: 'node-start-ref', toId: 'node-xor1-ref', label: '', tipo: 'sequence' },
-      { id: 'c-2', fromId: 'node-xor1-ref', toId: 'tar-ref-1', label: '', tipo: 'sequence' },
-      { id: 'c-3', fromId: 'tar-ref-1', toId: 'node-xor2-ref', label: '', tipo: 'sequence' },
-      { id: 'c-4', fromId: 'node-xor2-ref', toId: 'tar-ref-2', label: 'Sim', tipo: 'sequence' },
-      { id: 'c-5', fromId: 'tar-ref-2', toId: 'node-end-ref', label: '', tipo: 'sequence' },
-      { id: 'c-6-loop', fromId: 'node-xor2-ref', toId: 'node-xor1-ref', label: 'Retorno', tipo: 'sequence' },
-    ];
+    // Remove tarefas anteriores deste processo e adiciona os marcos do modelo escolhido
+    planTarefas.forEach(oldT => onDeleteTarefa(oldT.id));
+    generated.tarefas.forEach(newT => onAddTarefa(newT));
 
     if (onUpdatePlanejamento) {
       onUpdatePlanejamento({
         ...planejamento,
-        bpmnNodes: [startNode, xor1Node, xor2Node, endNode],
-        bpmnConnections: defaultConns,
+        bpmnLanes: generated.lanes,
+        bpmnNodes: generated.nodes,
+        bpmnConnections: generated.connections,
+        seiSyncMetadata: {
+          ...(planejamento.seiSyncMetadata || {
+            lastSyncAt: new Date().toISOString(),
+            unidadesAbertas: ['GECTI'],
+            unidadeAtual: 'GECTI',
+          }),
+          modeloFluxoPadrao: modelType,
+          modeloFluxoNome: generated.templateDef.nomeExibicao,
+          etapasMapeadasCount: generated.tarefas.length,
+        },
       });
     }
     setTimeout(updateNodePositions, 200);
@@ -1155,11 +1124,13 @@ export default function BpmnFlowBoard({
     );
   };
 
-  // Renderizador auxiliar de uma Tarefa BPMN (com destaque de Posição Atual no SEI)
+  // Renderizador auxiliar de uma Tarefa BPMN (com destaque de Posição Atual no SEI, Botão Copiar SEI, Versões e Marcos Futuros)
   const renderTaskCard = (task: TarefaPlanejamento, laneNomeForEdit: string) => {
     const sla = getTaskSla(task);
     const isConnectingSource = connectSourceId === task.id;
     const isCurrentSeiPos = Boolean(task.isCurrentSeiPosition || seiMeta?.activeNodeId === task.id);
+    const isFutureMilestone = Boolean(task.isTemplateFutureMilestone && task.Status_Tarefa === 'Pendente');
+    const hasRevisions = Boolean((task.versaoArtefato && task.versaoArtefato >= 2) || (task.totalVersoesArtefato && task.totalVersoesArtefato > 1));
 
     return (
       <div
@@ -1174,6 +1145,26 @@ export default function BpmnFlowBoard({
           </div>
         )}
 
+        {/* Badge de Versão / Alteração do Artefato */}
+        {!isCurrentSeiPos && task.versaoArtefato && task.versaoArtefato >= 2 && (
+          <div
+            className="absolute -top-3 z-20 bg-amber-500 text-slate-950 text-[8.5px] font-extrabold font-mono px-2 py-0.5 rounded-full shadow-md flex items-center gap-1 whitespace-nowrap"
+            title={`Este documento sofreu alteração (${task.versaoArtefato}ª versão${task.diasRetrabalho ? ` — levou ${task.diasRetrabalho} dia(s)` : ''})`}
+          >
+            <RefreshCw className="w-2.5 h-2.5" />
+            <span>
+              {task.versaoArtefato}ª VERSÃO{task.diasRetrabalho ? ` (+${task.diasRetrabalho}d)` : ''}
+            </span>
+          </div>
+        )}
+
+        {/* Badge de Marco Futuro da Espinha Dorsal */}
+        {!isCurrentSeiPos && isFutureMilestone && (
+          <div className="absolute -top-3 z-20 bg-surface-container-highest text-on-surface-variant border border-outline-variant text-[8px] font-bold font-mono px-2 py-0.5 rounded-full whitespace-nowrap">
+            MARCO PREVISTO NO MODELO
+          </div>
+        )}
+
         <div
           id={`bpmn-node-${task.id}`}
           draggable={activeTool === 'select'}
@@ -1183,34 +1174,53 @@ export default function BpmnFlowBoard({
               handleConnectElement(task.id);
             }
           }}
-          className={`w-48 min-h-[104px] rounded-2xl border-2 flex flex-col justify-between p-2.5 shadow-xs relative transition-all select-none ${
+          title={task.resumoDocumento ? `Resumo do Documento SEI: ${task.resumoDocumento}` : task.descricao || task.Tarefa}
+          className={`w-52 min-h-[112px] rounded-2xl border-2 flex flex-col justify-between p-2.5 shadow-xs relative transition-all select-none ${
             activeTool !== 'select' ? 'cursor-pointer hover:ring-2 hover:ring-primary' : 'cursor-grab active:cursor-grabbing'
           } ${
             isConnectingSource
               ? 'border-amber-400 bg-surface-container-low ring-4 ring-amber-400 shadow-lg'
               : isCurrentSeiPos
                 ? 'border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/30 shadow-xl shadow-emerald-500/20'
-                : sla.isAtrasada
-                  ? 'border-rose-500 bg-surface-container-low ring-2 ring-rose-500/50'
-                  : task.Status_Tarefa === 'Concluído'
-                    ? 'border-sky-500/50 bg-surface-container-low hover:border-primary'
-                    : 'border-outline-variant bg-surface-container-low hover:border-primary hover:shadow-md'
+                : isFutureMilestone
+                  ? 'border-dashed border-outline-variant/80 bg-surface-container-low/50 opacity-80 hover:opacity-100 hover:border-primary'
+                  : task.versaoArtefato && task.versaoArtefato >= 2
+                    ? 'border-amber-500/70 bg-amber-500/[0.04] hover:border-amber-400'
+                    : sla.isAtrasada
+                      ? 'border-rose-500 bg-surface-container-low ring-2 ring-rose-500/50'
+                      : task.Status_Tarefa === 'Concluído'
+                        ? 'border-sky-500/50 bg-surface-container-low hover:border-primary'
+                        : 'border-outline-variant bg-surface-container-low hover:border-primary hover:shadow-md'
           }`}
         >
-          {/* Top Header da Tarefa: mini ícone de tipo BPMN + Doc SEI + alerta SLA */}
+          {/* Top Header da Tarefa: mini ícone de tipo BPMN + Doc SEI com Botão Copiar + alerta SLA */}
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1 min-w-0">
               <span className={isCurrentSeiPos ? 'text-emerald-400' : 'text-on-surface-variant'} title="Atividade BPMN">
                 {task.Status_Tarefa === 'Concluído' ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 ) : (
-                  <User className="w-3.5 h-3.5" />
+                  <User className="w-3.5 h-3.5 shrink-0" />
                 )}
               </span>
               {task.seiDocNumber && (
-                <span className="text-[9px] font-mono bg-surface-container-high border border-outline-variant px-1.5 py-0.2 rounded text-on-surface-variant truncate" title={`Documento SEI: ${task.seiDocNumber}`}>
-                  SEI {task.seiDocNumber}
-                </span>
+                <div className="inline-flex items-center gap-0.5 bg-surface-container-high border border-outline-variant px-1.5 py-0.5 rounded text-on-surface-variant max-w-[125px]">
+                  <span className="text-[9px] font-mono font-bold truncate" title={`Documento SEI nº ${task.seiDocNumber}`}>
+                    SEI {task.seiDocNumber}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleCopySeiDoc(e, task.seiDocNumber!)}
+                    className="p-0.5 hover:bg-primary/20 hover:text-primary rounded transition-colors cursor-pointer shrink-0"
+                    title={`Copiar número SEI ${task.seiDocNumber} para pesquisar no SEI`}
+                  >
+                    {copiedSeiId === task.seiDocNumber ? (
+                      <Check className="w-2.5 h-2.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-2.5 h-2.5" />
+                    )}
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1231,7 +1241,7 @@ export default function BpmnFlowBoard({
             ) : null}
           </div>
 
-          {/* Texto Principal Centralizado */}
+          {/* Texto Principal Centralizado + Resumo ou Indicador de Revisões */}
           <div className="flex-1 flex flex-col items-center justify-center text-center px-1 my-1 gap-0.5">
             <p className={`text-xs font-semibold leading-snug line-clamp-3 ${isCurrentSeiPos ? 'text-emerald-300 font-bold' : 'text-on-surface'}`}>
               {repairMojibakeAndBrokenChars(task.Tarefa)}
@@ -1241,18 +1251,28 @@ export default function BpmnFlowBoard({
                 ({repairMojibakeAndBrokenChars(task.seiUnidade)})
               </span>
             )}
+            {hasRevisions && task.totalVersoesArtefato && task.totalVersoesArtefato > 1 && (
+              <span className="text-[8.5px] font-mono font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 rounded mt-0.5">
+                Alterado {task.totalVersoesArtefato - 1}x ({task.versaoArtefato || 1}ª/{task.totalVersoesArtefato} vers.)
+              </span>
+            )}
+            {task.resumoDocumento && (
+              <p className="text-[9px] text-on-surface-variant/90 line-clamp-2 italic mt-0.5 leading-tight bg-surface-container/60 px-1.5 py-0.5 rounded border border-outline-variant/30">
+                {repairMojibakeAndBrokenChars(task.resumoDocumento)}
+              </p>
+            )}
           </div>
 
           {/* Rodapé discreto com Prazo e Status */}
           <div className="flex items-center justify-between text-[9.5px] text-on-surface-variant font-mono pt-1 border-t border-outline-variant/60">
-            <span className="flex items-center gap-0.5">
+            <span className="flex items-center gap-0.5" title="Tempo / Prazo na etapa">
               <Clock className="w-2.5 h-2.5" />
               <strong>{sla.prazo}d</strong>
             </span>
-            <span className={`truncate max-w-[100px] font-sans font-semibold ${
+            <span className={`truncate max-w-[105px] font-sans font-semibold ${
               isCurrentSeiPos ? 'text-emerald-400' : task.Status_Tarefa === 'Concluído' ? 'text-sky-400' : ''
             }`}>
-              {task.Status_Tarefa}
+              {isFutureMilestone ? 'Previsto' : task.Status_Tarefa}
             </span>
           </div>
 
@@ -1385,56 +1405,155 @@ export default function BpmnFlowBoard({
             <span>+ Nova Tarefa</span>
           </button>
 
-          {planTarefas.length === 0 && (
+          {/* Seletor dos 4 Modelos Padrão de Espinha Dorsal */}
+          <div className="flex items-center gap-1 bg-surface-container border border-outline-variant rounded-lg px-2 py-1">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <select
+              value={selectedBackboneModel}
+              onChange={(e) => setSelectedBackboneModel(e.target.value as BpmnFlowTemplateType)}
+              className="bg-transparent text-xs font-semibold text-on-surface focus:outline-none cursor-pointer"
+              title="Selecione um dos 4 Modelos de Espinha Dorsal de Contratação"
+            >
+              <option value="Contratacao_SOF" className="bg-slate-900 text-white">Modelo: Contratação SOF</option>
+              <option value="Contratacao_Colaboragov" className="bg-slate-900 text-white">Modelo: Contratação Colaboragov</option>
+              <option value="Contratacao_Direta_Inexigibilidade" className="bg-slate-900 text-white">Modelo: Contratação Direta - Inexigibilidade</option>
+              <option value="Contratacao_Direta_Dispensa" className="bg-slate-900 text-white">Modelo: Contratação Direta - Dispensa</option>
+            </select>
             <button
               type="button"
-              onClick={handleLoadDefaultBpmnFlow}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-xs font-bold text-emerald-400 rounded-lg transition-all cursor-pointer"
+              onClick={() => handleApplyStandardBackboneModel(selectedBackboneModel)}
+              className="ml-1 px-2 py-0.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-[10.5px] font-bold rounded cursor-pointer transition-all whitespace-nowrap"
+              title="Aplicar esta Espinha Dorsal Padrão ao diagrama BPMN deste processo"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Carregar Fluxo Modelo</span>
+              Aplicar Modelo
             </button>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Banner de Posição Atual no SEI (Quando Sincronizado pelo Estúdio de Fluxo SEI) */}
+      {/* Banner de Posição Atual no SEI + Diagnóstico de Versões de Artefatos e Gargalos */}
       {seiMeta && (
-        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
-              <MapPin className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
-                  Posição Atual no SEI: {seiMeta.unidadeAtual}
-                </span>
-                {seiMeta.unidadesAbertas && seiMeta.unidadesAbertas.length > 1 && (
-                  <span className="text-[10px] font-mono bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded border border-outline-variant">
-                    Também aberto em: {seiMeta.unidadesAbertas.slice(1).join(', ')}
-                  </span>
-                )}
-                {seiMeta.diasNaUnidadeAtual !== undefined && (
-                  <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">
-                    Há {seiMeta.diasNaUnidadeAtual} dia(s) nesta etapa
-                  </span>
-                )}
+        <div className="space-y-3">
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                <MapPin className="w-5 h-5" />
               </div>
-              <p className="text-xs text-on-surface mt-0.5">
-                <strong>Último andamento SEI:</strong> {seiMeta.ultimoAndamento || 'Processo mapeado'}{' '}
-                {seiMeta.ultimaDataAndamento && (
-                  <span className="text-on-surface-variant font-mono">({seiMeta.ultimaDataAndamento})</span>
-                )}
-              </p>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-400">
+                    Posição Atual no SEI: {seiMeta.unidadeAtual}
+                  </span>
+                  {seiMeta.modeloFluxoNome && (
+                    <span className="text-[10px] font-mono bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded font-bold">
+                      Espinha Dorsal: {seiMeta.modeloFluxoNome}
+                    </span>
+                  )}
+                  {seiMeta.unidadesAbertas && seiMeta.unidadesAbertas.length > 1 && (
+                    <span className="text-[10px] font-mono bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded border border-outline-variant">
+                      Também aberto em: {seiMeta.unidadesAbertas.slice(1).join(', ')}
+                    </span>
+                  )}
+                  {seiMeta.diasNaUnidadeAtual !== undefined && (
+                    <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">
+                      Há {seiMeta.diasNaUnidadeAtual} dia(s) nesta etapa
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-on-surface mt-0.5">
+                  <strong>Último andamento SEI:</strong> {seiMeta.ultimoAndamento || 'Processo mapeado'}{' '}
+                  {seiMeta.ultimaDataAndamento && (
+                    <span className="text-on-surface-variant font-mono">({seiMeta.ultimaDataAndamento})</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 text-[11px] text-on-surface-variant font-mono">
+              <span>
+                Sincronizado em: {new Date(seiMeta.lastSyncAt).toLocaleString('pt-BR')}
+              </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 text-[11px] text-on-surface-variant font-mono">
-            <span>
-              Sincronizado em: {new Date(seiMeta.lastSyncAt).toLocaleString('pt-BR')}
-            </span>
-          </div>
+          {/* Painel de Controle de Versões de Artefatos (ETP, TR, Mapa de Riscos, Pesquisa de Preços) & Gargalos do Processo */}
+          {((seiMeta.estatisticasVersoesArtefatos && seiMeta.estatisticasVersoesArtefatos.length > 0) ||
+            (seiMeta.gargalosDetectados && seiMeta.gargalosDetectados.length > 0)) && (
+            <div className="bg-surface-container border border-outline-variant rounded-xl p-3.5 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-on-surface">
+                    Diagnóstico de Alterações de Artefatos (Versões) & Gargalos do Fluxo
+                  </span>
+                </div>
+                {seiMeta.gargaloPrincipal && (
+                  <span className="text-[10.5px] font-mono bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2.5 py-0.5 rounded-full font-bold">
+                    Maior Gargalo: {seiMeta.gargaloPrincipal.etapa} ({seiMeta.gargaloPrincipal.unidade}) — {seiMeta.gargaloPrincipal.dias} dia(s)
+                  </span>
+                )}
+              </div>
+
+              {seiMeta.estatisticasVersoesArtefatos && seiMeta.estatisticasVersoesArtefatos.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                  {seiMeta.estatisticasVersoesArtefatos.map((art) => {
+                    const hadChanges = art.totalAlteracoes > 0;
+                    const lastVer = art.versoes[art.versoes.length - 1];
+                    return (
+                      <div
+                        key={art.categoria}
+                        className={`p-2.5 rounded-lg border text-xs flex flex-col justify-between gap-1.5 ${
+                          hadChanges
+                            ? 'bg-amber-500/10 border-amber-500/40'
+                            : 'bg-surface-container-low border-outline-variant/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-on-surface truncate" title={art.nomeArtefato}>
+                            {art.nomeArtefato}
+                          </span>
+                          <span
+                            className={`text-[9.5px] font-mono font-extrabold px-1.5 py-0.5 rounded shrink-0 ${
+                              hadChanges
+                                ? 'bg-amber-500 text-slate-950'
+                                : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            }`}
+                          >
+                            {hadChanges ? `Alterado ${art.totalAlteracoes}x (${art.totalVersoes} versões)` : '1ª Versão (Sem alterações)'}
+                          </span>
+                        </div>
+
+                        <div className="text-[10.5px] text-on-surface-variant flex items-center justify-between font-mono">
+                          <span>
+                            {hadChanges
+                              ? `Tempo em alterações: +${art.diasTotaisRetrabalho} dia(s)`
+                              : `Elaboração: ${art.diasPrimeiraElaboracao} dia(s)`}
+                          </span>
+                          {lastVer?.idSei && (
+                            <span className="inline-flex items-center gap-1 text-primary font-bold">
+                              SEI {lastVer.idSei}
+                              <button
+                                type="button"
+                                onClick={(e) => handleCopySeiDoc(e, lastVer.idSei)}
+                                className="p-0.5 hover:bg-primary/20 rounded cursor-pointer"
+                                title={`Copiar SEI ${lastVer.idSei}`}
+                              >
+                                {copiedSeiId === lastVer.idSei ? (
+                                  <Check className="w-2.5 h-2.5 text-emerald-400" />
+                                ) : (
+                                  <Copy className="w-2.5 h-2.5" />
+                                )}
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

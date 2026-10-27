@@ -10,8 +10,11 @@ import {
   BpmnLane,
   BpmnNode,
   BpmnConnection,
+  BpmnFlowTemplateType,
   SeiProcessSyncMetadata,
   SeiRelatedProcessInfo,
+  SeiArtifactVersionStat,
+  SeiBottleneckInfo,
   Contrato,
   HistoricoContratual,
   Pagamento,
@@ -33,6 +36,11 @@ export interface RawSeiDocumento {
   unidade?: string; // Ex: "GECTI"
   assinado: boolean;
   assinantes?: string[];
+  resumoConteudo?: string;
+  textoExtraido?: string;
+  solicitaAjustes?: boolean;
+  artefatosCitados?: string[];
+  isPdfOuExterno?: boolean;
 }
 
 export interface RawSeiProcessoRelacionado {
@@ -53,6 +61,7 @@ export interface RawSeiProcessScrapeResult {
   andamentos: RawSeiAndamento[];
   documentos: RawSeiDocumento[];
   processosRelacionados: RawSeiProcessoRelacionado[];
+  novosDocumentosLidosCount?: number;
   scrapedAt: string;
 }
 
@@ -305,6 +314,9 @@ export function sanitizeScrapeResult(raw: RawSeiProcessScrapeResult): RawSeiProc
       data: d.data ? repairMojibakeAndBrokenChars(d.data) : undefined,
       unidade: d.unidade ? repairMojibakeAndBrokenChars(d.unidade) : undefined,
       assinantes: d.assinantes ? d.assinantes.map(s => repairMojibakeAndBrokenChars(s)) : undefined,
+      resumoConteudo: d.resumoConteudo ? repairMojibakeAndBrokenChars(d.resumoConteudo) : undefined,
+      textoExtraido: d.textoExtraido ? repairMojibakeAndBrokenChars(d.textoExtraido) : undefined,
+      artefatosCitados: d.artefatosCitados ? d.artefatosCitados.map(a => repairMojibakeAndBrokenChars(a)) : undefined,
     })),
     processosRelacionados: (raw.processosRelacionados || []).map(r => ({
       ...r,
@@ -787,6 +799,744 @@ function buildStepTitle(step: ChronologicalStepGroup): string {
   }
 }
 
+// ============================================================================
+// OS 4 MODELOS DE ESPINHA DORSAL DE FLUXO BPMN ("BACKBONE MODELS")
+// 1. Contratação SOF (Pregão SOF)
+// 2. Contratação Colaboragov (Pregão do ColaboraGov)
+// 3. Contratação Direta - Inexigibilidade
+// 4. Contratação Direta - Dispensa
+// ============================================================================
+
+export interface FlowBackboneMilestone {
+  category: SeiStepCategory;
+  titulo: string;
+  unidadePadrao: string;
+  prazoDias: number;
+  gatewayQuestionAfter?: string;
+  gatewayYesLabel?: string;
+  gatewayNoRevisionLabel?: string;
+  descricaoPadrao: string;
+}
+
+export interface FlowBackboneTemplateDef {
+  id: BpmnFlowTemplateType;
+  nomeExibicao: string;
+  tipoProcessoMatch: string[];
+  descricao: string;
+  milestones: FlowBackboneMilestone[];
+}
+
+export const FLOW_BACKBONE_TEMPLATES: Record<BpmnFlowTemplateType, FlowBackboneTemplateDef> = {
+  Contratacao_SOF: {
+    id: 'Contratacao_SOF',
+    nomeExibicao: 'Contratação SOF (Pregão Eletrônico)',
+    tipoProcessoMatch: ['Pregão SOF', 'Contratação SOF'],
+    descricao: 'Fluxo padrão IN SGD/ME nº 94/2022 e Lei nº 14.133/2021 conduzido no âmbito da SOF/MPO.',
+    milestones: [
+      {
+        category: 'DFD',
+        titulo: 'Formalização da Demanda (DFD / PCA)',
+        unidadePadrao: 'DEMANDANTE',
+        prazoDias: 7,
+        gatewayQuestionAfter: 'Demanda Aprovada?',
+        gatewayYesLabel: 'Sim (Instituir EPC)',
+        descricaoPadrao: 'Elaboração e aprovação do Documento de Formalização da Demanda no PCA.',
+      },
+      {
+        category: 'PORTARIA_EPC',
+        titulo: 'Instituição da Equipe de Planejamento (Portaria EPC)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Designação formal dos integrantes Requisitante, Técnico e Administrativo.',
+      },
+      {
+        category: 'ETP',
+        titulo: 'Elaboração do Estudo Técnico Preliminar (ETP)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 15,
+        descricaoPadrao: 'Estudo de viabilidade técnica, análise de soluções de mercado e parcelamento.',
+      },
+      {
+        category: 'MAPA_RISCOS',
+        titulo: 'Mapa de Gerenciamento de Riscos (MGR)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 7,
+        descricaoPadrao: 'Identificação de riscos da fase de planejamento, seleção do fornecedor e gestão contratual.',
+      },
+      {
+        category: 'PESQUISA_PRECOS',
+        titulo: 'Pesquisa de Preços e Estimativa de Custos',
+        unidadePadrao: 'GECTI',
+        prazoDias: 12,
+        descricaoPadrao: 'Levantamento de preços públicos (Painel de Preços, contratações similares e cotações) conforme IN 65/2021.',
+      },
+      {
+        category: 'TR',
+        titulo: 'Elaboração do Termo de Referência (TR)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 15,
+        gatewayQuestionAfter: 'Artefatos Técnicos Aprovados?',
+        gatewayYesLabel: 'Aprovados',
+        gatewayNoRevisionLabel: 'Solicitar Ajustes (ETP/TR/Riscos)',
+        descricaoPadrao: 'Consolidação das especificações técnicas, níveis mínimos de serviço (ANS) e critérios de medição.',
+      },
+      {
+        category: 'CDO_ORCAMENTO',
+        titulo: 'Certificação de Disponibilidade Orçamentária (CDO)',
+        unidadePadrao: 'COFAC',
+        prazoDias: 7,
+        gatewayQuestionAfter: 'Orçamento Certificado?',
+        gatewayYesLabel: 'CDO Emitida',
+        descricaoPadrao: 'Declaração de adequação orçamentária e reserva de dotação na Ação/PO correspondente.',
+      },
+      {
+        category: 'MINUTA_EDITAL',
+        titulo: 'Instrução Licitatória e Minuta de Edital / Contrato',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 10,
+        descricaoPadrao: 'Elaboração da Minuta de Edital de Pregão Eletrônico, Minuta de Contrato e Check-list AGU.',
+      },
+      {
+        category: 'PARECER_JURIDICO',
+        titulo: 'Análise e Parecer Jurídico (CONJUR / AGU)',
+        unidadePadrao: 'CONJUR',
+        prazoDias: 15,
+        gatewayQuestionAfter: 'Parecer Jurídico Favorável sem Ressalvas?',
+        gatewayYesLabel: 'Saneado / Favorável',
+        gatewayNoRevisionLabel: 'Atender Recomendações nos Artefatos',
+        descricaoPadrao: 'Controle prévio de legalidade pela Consultoria Jurídica (art. 53 da Lei nº 14.133/2021).',
+      },
+      {
+        category: 'EDITAL_PREGAO',
+        titulo: 'Publicação do Edital e Sessão Pública (Pregão)',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 12,
+        descricaoPadrao: 'Divulgação do Edital no PNCP/Compras.gov.br e condução da fase de lances e julgamento.',
+      },
+      {
+        category: 'HOMOLOGACAO',
+        titulo: 'Adjudicação e Homologação do Certame',
+        unidadePadrao: 'AUTORIDADE',
+        prazoDias: 7,
+        gatewayQuestionAfter: 'Certame Homologado?',
+        gatewayYesLabel: 'Homologado',
+        descricaoPadrao: 'Habilitação da licitante vencedora, adjudicação do objeto e homologação pela Autoridade Competente.',
+      },
+      {
+        category: 'EMPENHO_CONTRATO',
+        titulo: 'Emissão de Empenho e Assinatura do Contrato',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 10,
+        descricaoPadrao: 'Emissão da Nota de Empenho, convocação para assinatura do Contrato e publicação no PNCP/DOU.',
+      },
+      {
+        category: 'PORTARIA_FISCALIZACAO',
+        titulo: 'Designação da Equipe de Fiscalização e Início da Execução',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Publicação da Portaria de Gestor e Fiscais do Contrato e realização da Reunião Inicial.',
+      },
+    ],
+  },
+
+  Contratacao_Colaboragov: {
+    id: 'Contratacao_Colaboragov',
+    nomeExibicao: 'Contratação Colaboragov (Central de Compras / MGI)',
+    tipoProcessoMatch: ['Pregão do ColaboraGov', 'Pregão Colaboragov', 'Contratação Colaboragov'],
+    descricao: 'Fluxo padrão para contratações compartilhadas / centralizadas conduzidas via ColaboraGov / DCD / Central de Compras (MGI).',
+    milestones: [
+      {
+        category: 'DFD',
+        titulo: 'Formalização da Demanda (DFD / Intenção de Registro)',
+        unidadePadrao: 'DEMANDANTE',
+        prazoDias: 7,
+        gatewayQuestionAfter: 'Demanda Validada?',
+        gatewayYesLabel: 'Sim (Prosseguir)',
+        descricaoPadrao: 'Registro da demanda setorial SOF e alinhamento ao calendário de contratações ColaboraGov.',
+      },
+      {
+        category: 'PORTARIA_EPC',
+        titulo: 'Designação da Equipe de Planejamento (Portaria EPC)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Instituição formal dos representantes técnicos e requisitantes no processo.',
+      },
+      {
+        category: 'ETP',
+        titulo: 'Estudo Técnico Preliminar (ETP) e Dimensionamento',
+        unidadePadrao: 'GECTI',
+        prazoDias: 15,
+        descricaoPadrao: 'Demonstração da necessidade, quantitativos da SOF e aderência ao modelo compartilhado.',
+      },
+      {
+        category: 'MAPA_RISCOS',
+        titulo: 'Mapa de Gerenciamento de Riscos (MGR)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 7,
+        descricaoPadrao: 'Avaliação dos riscos de adesão/contratação compartilhada e transição contratual.',
+      },
+      {
+        category: 'PESQUISA_PRECOS',
+        titulo: 'Pesquisa de Preços e Validação de Custos',
+        unidadePadrao: 'GECTI',
+        prazoDias: 10,
+        descricaoPadrao: 'Comprovação da vantajosidade econômica e memória de cálculo da estimativa.',
+      },
+      {
+        category: 'TR',
+        titulo: 'Termo de Referência (TR) / Encarte do Órgão',
+        unidadePadrao: 'GECTI',
+        prazoDias: 15,
+        gatewayQuestionAfter: 'Artefatos Aprovados pela Área Técnica?',
+        gatewayYesLabel: 'Sim',
+        gatewayNoRevisionLabel: 'Revisar Artefatos (ETP/TR/Riscos)',
+        descricaoPadrao: 'Consolidação do Termo de Referência e requisitos específicos de entrega na SOF.',
+      },
+      {
+        category: 'NOTA_TECNICA',
+        titulo: 'Análise Técnica e Validação de Governança (CGTI / DCD-MGI)',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 10,
+        gatewayQuestionAfter: 'Solicita Ajustes nos Artefatos?',
+        gatewayYesLabel: 'Não (Aprovado)',
+        gatewayNoRevisionLabel: 'Sim (Devolver para Ajustes)',
+        descricaoPadrao: 'Exame de conformidade técnica e normativa pela unidade centralizadora do ColaboraGov.',
+      },
+      {
+        category: 'CDO_ORCAMENTO',
+        titulo: 'Certificação de Disponibilidade Orçamentária (CDO / Descentralização)',
+        unidadePadrao: 'COFAC',
+        prazoDias: 8,
+        gatewayQuestionAfter: 'Orçamento Certificado?',
+        gatewayYesLabel: 'CDO Emitida',
+        descricaoPadrao: 'Ateste de disponibilidade orçamentária na SOF para cobertura da despesa ou destaque/TED.',
+      },
+      {
+        category: 'MINUTA_EDITAL',
+        titulo: 'Instrução no ColaboraGov (Minuta de Edital / Ata / Contrato)',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 10,
+        descricaoPadrao: 'Preparação dos instrumentos convocatórios e listas de verificação pela equipe de licitações MGI.',
+      },
+      {
+        category: 'PARECER_JURIDICO',
+        titulo: 'Parecer Jurídico (CONJUR / AGU)',
+        unidadePadrao: 'CONJUR',
+        prazoDias: 15,
+        gatewayQuestionAfter: 'Parecer Jurídico Favorável?',
+        gatewayYesLabel: 'Favorável',
+        gatewayNoRevisionLabel: 'Saneamento de Recomendações',
+        descricaoPadrao: 'Manifestação jurídica conclusiva ou aplicação de Parecer Referencial.',
+      },
+      {
+        category: 'EDITAL_PREGAO',
+        titulo: 'Sessão Pública do Pregão ColaboraGov',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 15,
+        descricaoPadrao: 'Publicação do Edital, disputa de lances, análise técnica de propostas e habilitação.',
+      },
+      {
+        category: 'HOMOLOGACAO',
+        titulo: 'Adjudicação e Homologação no ColaboraGov',
+        unidadePadrao: 'AUTORIDADE',
+        prazoDias: 7,
+        descricaoPadrao: 'Homologação do resultado final e disponibilização para contratação.',
+      },
+      {
+        category: 'EMPENHO_CONTRATO',
+        titulo: 'Emissão de Nota de Empenho e Assinatura do Contrato',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 10,
+        descricaoPadrao: 'Emissão do empenho, formalização do Contrato derivado e publicação no PNCP.',
+      },
+      {
+        category: 'PORTARIA_FISCALIZACAO',
+        titulo: 'Designação da Fiscalização na SOF (Portaria)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Designação de Gestor e Fiscais do Contrato e início da execução contratual.',
+      },
+    ],
+  },
+
+  Contratacao_Direta_Inexigibilidade: {
+    id: 'Contratacao_Direta_Inexigibilidade',
+    nomeExibicao: 'Contratação Direta - Inexigibilidade',
+    tipoProcessoMatch: ['Contratação Direta - Inexigibilidade', 'Contratação Direta por Inexigibilidade'],
+    descricao: 'Fluxo padrão de Inexigibilidade de Licitação (art. 74 da Lei nº 14.133/2021 e IN SGD/ME nº 94/2022) — sem fase de disputa pública de edital.',
+    milestones: [
+      {
+        category: 'DFD',
+        titulo: 'Formalização da Demanda (DFD / PCA)',
+        unidadePadrao: 'DEMANDANTE',
+        prazoDias: 5,
+        gatewayQuestionAfter: 'Demanda Aprovada?',
+        gatewayYesLabel: 'Sim',
+        descricaoPadrao: 'Oficialização da necessidade e previsão da contratação direta no PCA.',
+      },
+      {
+        category: 'PORTARIA_EPC',
+        titulo: 'Instituição da Equipe de Planejamento (Portaria EPC)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Designação formal da Equipe de Planejamento da Contratação.',
+      },
+      {
+        category: 'ETP',
+        titulo: 'Estudo Técnico Preliminar (ETP) e Inviabilidade de Competição',
+        unidadePadrao: 'GECTI',
+        prazoDias: 12,
+        descricaoPadrao: 'Demonstração técnica da singularidade/exclusividade do fornecedor (art. 74 da Lei 14.133/2021).',
+      },
+      {
+        category: 'MAPA_RISCOS',
+        titulo: 'Mapa de Gerenciamento de Riscos (MGR)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Análise de riscos da contratação direta e controles mitigatórios.',
+      },
+      {
+        category: 'PESQUISA_PRECOS',
+        titulo: 'Justificativa de Preços, Exclusividade e Habilitação',
+        unidadePadrao: 'GECTI',
+        prazoDias: 10,
+        descricaoPadrao: 'Comprovação de preços praticados pelo fornecedor junto a outros entes públicos/privados (IN 65/2021, art. 7º) e Atestado de Exclusividade.',
+      },
+      {
+        category: 'TR',
+        titulo: 'Elaboração do Termo de Referência (TR)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 10,
+        gatewayQuestionAfter: 'Instrução Técnica Concluída?',
+        gatewayYesLabel: 'Aprovada',
+        gatewayNoRevisionLabel: 'Revisar Artefatos (ETP/TR/Preços)',
+        descricaoPadrao: 'Definição do objeto, obrigações, níveis de serviço e condições de recebimento.',
+      },
+      {
+        category: 'CDO_ORCAMENTO',
+        titulo: 'Certificação de Disponibilidade Orçamentária (CDO)',
+        unidadePadrao: 'COFAC',
+        prazoDias: 5,
+        gatewayQuestionAfter: 'Orçamento Certificado?',
+        gatewayYesLabel: 'CDO Emitida',
+        descricaoPadrao: 'Declaração de disponibilidade orçamentária para a contratação direta.',
+      },
+      {
+        category: 'MINUTA_EDITAL',
+        titulo: 'Termo de Inexigibilidade, Minuta de Contrato e Check-list AGU',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 8,
+        descricaoPadrao: 'Instrução do Termo de Reconhecimento de Inexigibilidade e verificação de regularidade fiscal/trabalhista.',
+      },
+      {
+        category: 'PARECER_JURIDICO',
+        titulo: 'Parecer Jurídico (CONJUR / AGU)',
+        unidadePadrao: 'CONJUR',
+        prazoDias: 12,
+        gatewayQuestionAfter: 'Parecer Jurídico Favorável?',
+        gatewayYesLabel: 'Favorável',
+        gatewayNoRevisionLabel: 'Atender Recomendações Jurídicas',
+        descricaoPadrao: 'Análise jurídica da caracterização da inexigibilidade e da minuta contratual.',
+      },
+      {
+        category: 'HOMOLOGACAO',
+        titulo: 'Autorização da Inexigibilidade pela Autoridade Competente',
+        unidadePadrao: 'AUTORIDADE',
+        prazoDias: 5,
+        gatewayQuestionAfter: 'Contratação Direta Autorizada?',
+        gatewayYesLabel: 'Autorizada',
+        descricaoPadrao: 'Ato de autorização da contratação direta por Inexigibilidade (art. 72, VIII, da Lei 14.133/2021).',
+      },
+      {
+        category: 'EMPENHO_CONTRATO',
+        titulo: 'Emissão de Empenho, Assinatura do Contrato e Divulgação no PNCP',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 8,
+        descricaoPadrao: 'Emissão da Nota de Empenho, assinatura do Contrato e publicação obrigatória no PNCP em até 10 dias úteis.',
+      },
+      {
+        category: 'PORTARIA_FISCALIZACAO',
+        titulo: 'Designação de Fiscalização e Início da Execução',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Designação formal da equipe de fiscalização do contrato.',
+      },
+    ],
+  },
+
+  Contratacao_Direta_Dispensa: {
+    id: 'Contratacao_Direta_Dispensa',
+    nomeExibicao: 'Contratação Direta - Dispensa de Licitação',
+    tipoProcessoMatch: ['Contratação Direta - Dispensa', 'Contratação Direta por Dispensa'],
+    descricao: 'Fluxo padrão de Dispensa de Licitação / Dispensa Eletrônica (art. 75 da Lei nº 14.133/2021 e IN SEGES/ME nº 67/2021).',
+    milestones: [
+      {
+        category: 'DFD',
+        titulo: 'Formalização da Demanda (DFD / PCA)',
+        unidadePadrao: 'DEMANDANTE',
+        prazoDias: 5,
+        gatewayQuestionAfter: 'Demanda Aprovada?',
+        gatewayYesLabel: 'Sim',
+        descricaoPadrao: 'Documento de Formalização da Demanda com justificativa da necessidade.',
+      },
+      {
+        category: 'PORTARIA_EPC',
+        titulo: 'Designação da Equipe de Planejamento (Quando Aplicável)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 4,
+        descricaoPadrao: 'Indicação dos responsáveis técnicos e requisitantes pela instrução da dispensa.',
+      },
+      {
+        category: 'ETP',
+        titulo: 'Estudo Técnico Preliminar (ETP)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 10,
+        descricaoPadrao: 'Análise de viabilidade técnica e enquadramento nos requisitos da Dispensa.',
+      },
+      {
+        category: 'MAPA_RISCOS',
+        titulo: 'Mapa de Gerenciamento de Riscos (MGR)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Mapeamento dos principais riscos da contratação e ações preventivas.',
+      },
+      {
+        category: 'PESQUISA_PRECOS',
+        titulo: 'Pesquisa de Preços e Estimativa da Despesa',
+        unidadePadrao: 'GECTI',
+        prazoDias: 8,
+        descricaoPadrao: 'Estimativa de preços conforme IN SEGES/ME nº 65/2021 (concomitante ou prévia à disputa).',
+      },
+      {
+        category: 'TR',
+        titulo: 'Elaboração do Termo de Referência (TR)',
+        unidadePadrao: 'GECTI',
+        prazoDias: 10,
+        gatewayQuestionAfter: 'TR Aprovado?',
+        gatewayYesLabel: 'Aprovado',
+        gatewayNoRevisionLabel: 'Revisar TR / Pesquisa de Preços',
+        descricaoPadrao: 'Especificação do objeto, critérios de aceitação e condições da dispensa.',
+      },
+      {
+        category: 'CDO_ORCAMENTO',
+        titulo: 'Certificação de Disponibilidade Orçamentária (CDO)',
+        unidadePadrao: 'COFAC',
+        prazoDias: 5,
+        gatewayQuestionAfter: 'Orçamento Certificado?',
+        gatewayYesLabel: 'CDO Emitida',
+        descricaoPadrao: 'Comprovação de previsão de recursos orçamentários para o exercício.',
+      },
+      {
+        category: 'MINUTA_EDITAL',
+        titulo: 'Aviso de Dispensa Eletrônica / Termo de Dispensa',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 6,
+        descricaoPadrao: 'Elaboração do Aviso de Contratação Direta e Check-list de conformidade.',
+      },
+      {
+        category: 'PARECER_JURIDICO',
+        titulo: 'Análise Jurídica / Parecer Referencial (CONJUR / AGU)',
+        unidadePadrao: 'CONJUR',
+        prazoDias: 10,
+        gatewayQuestionAfter: 'Conformidade Jurídica Atestada?',
+        gatewayYesLabel: 'Favorável',
+        gatewayNoRevisionLabel: 'Adequar Artefatos',
+        descricaoPadrao: 'Parecer jurídico ou ateste de conformidade com Parecer Referencial AGU.',
+      },
+      {
+        category: 'EDITAL_PREGAO',
+        titulo: 'Publicação do Aviso e Disputa da Dispensa Eletrônica (3 dias úteis)',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 5,
+        descricaoPadrao: 'Divulgação no Compras.gov.br/PNCP e recebimento de lances de fornecedores.',
+      },
+      {
+        category: 'HOMOLOGACAO',
+        titulo: 'Julgamento, Habilitação e Autorização da Dispensa',
+        unidadePadrao: 'AUTORIDADE',
+        prazoDias: 5,
+        gatewayQuestionAfter: 'Dispensa Autorizada?',
+        gatewayYesLabel: 'Autorizada',
+        descricaoPadrao: 'Adjudicação da proposta vencedora e autorização pela Autoridade Competente.',
+      },
+      {
+        category: 'EMPENHO_CONTRATO',
+        titulo: 'Emissão de Nota de Empenho e Assinatura do Contrato',
+        unidadePadrao: 'CGLIC',
+        prazoDias: 7,
+        descricaoPadrao: 'Emissão do Empenho, assinatura do instrumento contratual e divulgação no PNCP.',
+      },
+      {
+        category: 'PORTARIA_FISCALIZACAO',
+        titulo: 'Designação de Fiscalização e Execução',
+        unidadePadrao: 'GECTI',
+        prazoDias: 5,
+        descricaoPadrao: 'Designação dos responsáveis pelo acompanhamento e recebimento do objeto.',
+      },
+    ],
+  },
+};
+
+/**
+ * Detecta automaticamente qual dos 4 Modelos de Espinha Dorsal se aplica a um processo de Planejamento
+ */
+export function detectFlowTemplateFromPlanejamento(
+  planejamento: Planejamento,
+  scrape?: RawSeiProcessScrapeResult
+): BpmnFlowTemplateType {
+  if (planejamento.seiSyncMetadata?.modeloFluxoPadrao) {
+    return planejamento.seiSyncMetadata.modeloFluxoPadrao;
+  }
+
+  const combinedText = `${planejamento.Tipo_Processo || ''} ${planejamento.Modalidade_Contratacao || ''} ${scrape?.tipoProcessoSei || ''} ${scrape?.especificacao || ''}`.toUpperCase();
+
+  if (/INEXIGIBILIDADE/i.test(combinedText)) {
+    return 'Contratacao_Direta_Inexigibilidade';
+  }
+  if (/DISPENSA/i.test(combinedText)) {
+    return 'Contratacao_Direta_Dispensa';
+  }
+  if (/COLABORAGOV|CENTRAL DE COMPRAS|\bDCD\b|COMPARTILHAD/i.test(combinedText)) {
+    return 'Contratacao_Colaboragov';
+  }
+  return 'Contratacao_SOF';
+}
+
+/**
+ * Gera a estrutura BPMN completa (Raias + Tarefas + Gateways + Setas) a partir de um dos 4 Modelos Padrão
+ * (usado quando o usuário seleciona/aplica um modelo manualmente no quadro BPMN ou cria um novo planejamento)
+ */
+export function generateStandardTemplateBpmn(
+  planejamento: Planejamento,
+  templateType?: BpmnFlowTemplateType,
+  customRules: UnitLaneMappingRule[] = DEFAULT_SEI_UNIT_LANE_RULES
+): {
+  lanes: BpmnLane[];
+  nodes: BpmnNode[];
+  connections: BpmnConnection[];
+  tarefas: TarefaPlanejamento[];
+  templateDef: FlowBackboneTemplateDef;
+} {
+  const chosenType = templateType || detectFlowTemplateFromPlanejamento(planejamento);
+  const templateDef = FLOW_BACKBONE_TEMPLATES[chosenType] || FLOW_BACKBONE_TEMPLATES.Contratacao_SOF;
+  const protoSuffix = normalizeSeiProtocol(planejamento.SEI_Processo).slice(-6) || '1';
+
+  const lanesMap = new Map<string, BpmnLane>();
+  const registerLane = (unitHint: string): BpmnLane => {
+    const { lane } = resolveSeiUnitToLane(unitHint, Array.from(lanesMap.values()), customRules);
+    if (!lanesMap.has(lane.id)) {
+      lanesMap.set(lane.id, { ...lane });
+    }
+    return lanesMap.get(lane.id)!;
+  };
+
+  let stepOrder = 1;
+  const firstLane = registerLane(templateDef.milestones[0]?.unidadePadrao || 'DEMANDANTE');
+  const startNodeId = `node-tpl-start-${protoSuffix}`;
+
+  const nodes: BpmnNode[] = [
+    {
+      id: startNodeId,
+      type: 'start',
+      label: 'Início do Processo',
+      laneId: firstLane.id,
+      ordemFluxo: stepOrder++,
+      descricao: `Espinha dorsal padrão: ${templateDef.nomeExibicao}`,
+    },
+  ];
+  const tarefas: TarefaPlanejamento[] = [];
+  const connections: BpmnConnection[] = [];
+
+  let prevElementId = startNodeId;
+  let prevBranchLabel = '';
+
+  templateDef.milestones.forEach((m, idx) => {
+    const lane = registerLane(m.unidadePadrao);
+    const taskId = `tar-tpl-${protoSuffix}-${idx + 1}-${m.category.toLowerCase()}`;
+    const taskOrder = stepOrder++;
+
+    const status: StatusTarefa =
+      planejamento.Status_Planejamento === 'Gerou Contrato'
+        ? 'Concluído'
+        : idx === 0
+          ? 'Em Elaboração'
+          : 'Pendente';
+
+    tarefas.push({
+      id: taskId,
+      ProcessoPlanejamento: planejamento.SEI_Processo,
+      Tarefa: m.titulo,
+      Inicio: new Date(Date.now() + idx * 86400000).toISOString(),
+      Prazo_Dias: m.prazoDias,
+      Status_Tarefa: status,
+      areaResponsavel: lane.nome,
+      ordemFluxo: taskOrder,
+      bpmnType: 'task',
+      descricao: `${m.descricaoPadrao} • Modelo: ${templateDef.nomeExibicao}`,
+      seiUnidade: m.unidadePadrao,
+      isTemplateFutureMilestone: status === 'Pendente',
+      subTarefas: [],
+    });
+
+    connections.push({
+      id: `conn-tpl-${protoSuffix}-${idx + 1}`,
+      fromId: prevElementId,
+      toId: taskId,
+      label: prevBranchLabel,
+      tipo: 'sequence',
+      cor: status === 'Concluído' ? '#0ea5e9' : '#64748b',
+    });
+
+    prevElementId = taskId;
+    prevBranchLabel = '';
+
+    if (m.gatewayQuestionAfter && idx < templateDef.milestones.length - 1) {
+      const gwId = `node-tpl-gw-${protoSuffix}-${idx + 1}`;
+      nodes.push({
+        id: gwId,
+        type: 'gateway_exclusive',
+        label: m.gatewayQuestionAfter,
+        laneId: lane.id,
+        ordemFluxo: stepOrder++,
+        seiUnidade: m.unidadePadrao,
+        descricao: `Decisão de marco do modelo ${templateDef.nomeExibicao}`,
+      });
+      connections.push({
+        id: `conn-tpl-gw-${protoSuffix}-${idx + 1}`,
+        fromId: taskId,
+        toId: gwId,
+        label: '',
+        tipo: 'sequence',
+        cor: '#0ea5e9',
+      });
+      prevElementId = gwId;
+      prevBranchLabel = m.gatewayYesLabel || 'Aprovado';
+    }
+  });
+
+  const lastLane = registerLane(templateDef.milestones[templateDef.milestones.length - 1]?.unidadePadrao || 'GECTI');
+  const endNodeId = `node-tpl-end-${protoSuffix}`;
+  nodes.push({
+    id: endNodeId,
+    type: 'end',
+    label: 'Contratação Concluída',
+    laneId: lastLane.id,
+    ordemFluxo: stepOrder++,
+  });
+  connections.push({
+    id: `conn-tpl-end-${protoSuffix}`,
+    fromId: prevElementId,
+    toId: endNodeId,
+    label: prevBranchLabel || 'Concluído',
+    tipo: 'sequence',
+    cor: '#10b981',
+  });
+
+  const finalLanes = Array.from(lanesMap.values())
+    .sort((a, b) => (a.ordem || 99) - (b.ordem || 99))
+    .map((l, idx) => ({ ...l, ordem: idx + 1 }));
+
+  return { lanes: finalLanes, nodes, connections, tarefas, templateDef };
+}
+
+/**
+ * Integração opcional com IA (Google Gemini API) para enriquecer os resumos dos documentos novos lidos pela extensão.
+ * Se não houver chave configurada, utiliza imediatamente o resumo heurístico extraído pela extensão (zero dependência obrigatória!).
+ */
+export async function enrichNewDocumentsWithGeminiAi(
+  rawScrape: RawSeiProcessScrapeResult,
+  geminiApiKey?: string | null
+): Promise<RawSeiProcessScrapeResult> {
+  const apiKey = (geminiApiKey || localStorage.getItem('contratics_gemini_api_key') || '').trim();
+  if (!apiKey || !rawScrape.documentos || rawScrape.documentos.length === 0) {
+    return rawScrape;
+  }
+
+  // Seleciona até 6 documentos que possuem textoExtraido e ainda não foram refinados por IA
+  const docsToRefine = rawScrape.documentos
+    .filter(d => d.textoExtraido && d.textoExtraido.length > 60 && !d.resumoConteudo?.startsWith('✨ [IA]'))
+    .slice(-6);
+
+  if (docsToRefine.length === 0) {
+    return rawScrape;
+  }
+
+  try {
+    const promptPayload = docsToRefine.map(d => ({
+      idSei: d.idSei,
+      tipo: d.tipo,
+      numero: d.numero || '',
+      unidade: d.unidade || '',
+      trechoTexto: (d.textoExtraido || '').slice(0, 1400),
+    }));
+
+    const systemInstruction = `Você é um especialista em contratações públicas de TIC (Lei 14.133/2021 e IN SGD/ME 94/2022).
+Para cada documento do SEI abaixo, retorne um JSON array com objetos contendo:
+- "idSei": string (exatamente igual ao enviado)
+- "resumoExecutivo": string (resumo objetivo em 1 ou 2 frases de até 280 caracteres explicando o que o documento trata, decide ou encaminha)
+- "solicitaAjustes": boolean (true se o despacho/nota técnica/parecer solicitar correções, alterações ou revisões em ETP, TR, Mapa de Riscos ou Pesquisa de Preços)
+- "artefatosAfetados": string[] (lista de artefatos cuja alteração foi solicitada, ex: ["ETP", "TR"])
+Responda APENAS com o JSON puro.`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: `${systemInstruction}\n\nDocumentos:\n${JSON.stringify(promptPayload)}` }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      return rawScrape;
+    }
+
+    const data = await response.json();
+    const rawJsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!rawJsonText) return rawScrape;
+
+    const parsedAi = JSON.parse(rawJsonText.replace(/```json|```/g, '').trim());
+    if (!Array.isArray(parsedAi)) return rawScrape;
+
+    const aiMap = new Map<string, any>();
+    parsedAi.forEach(item => {
+      if (item && item.idSei) aiMap.set(String(item.idSei), item);
+    });
+
+    const updatedDocs = rawScrape.documentos.map(d => {
+      const aiItem = aiMap.get(String(d.idSei));
+      if (!aiItem || !aiItem.resumoExecutivo) return d;
+      return {
+        ...d,
+        resumoConteudo: `✨ [IA] ${String(aiItem.resumoExecutivo).trim()}`,
+        solicitaAjustes: Boolean(aiItem.solicitaAjustes ?? d.solicitaAjustes),
+        artefatosCitados:
+          Array.isArray(aiItem.artefatosAfetados) && aiItem.artefatosAfetados.length > 0
+            ? aiItem.artefatosAfetados
+            : d.artefatosCitados,
+      };
+    });
+
+    return {
+      ...rawScrape,
+      documentos: updatedDocs,
+    };
+  } catch {
+    return rawScrape;
+  }
+}
+
 /**
  * Motor "Estúdio de Fluxo SEI (Meio Termo Equilibrado — IN 94/2022 + Ciclos de Revisão)"
  *
@@ -974,7 +1724,7 @@ export function buildBpmnFlowFromSeiScrape(
   }
 
   // 5. Numera as versões de cada artefato (1ª versão = Elaboração, 2ª+ versão = Revisão/Alteração pós-recomendações)
-  // e identifica quais Notas Técnicas / Despachos / Pareceres desencadearam alterações nos artefatos!
+  // e computa as estatísticas detalhadas de quantas vezes cada artefato foi alterado e quanto tempo cada alteração levou!
   const categoryVersionCounter: Partial<Record<SeiStepCategory, number>> = {};
   for (let i = 0; i < filteredSteps.length; i++) {
     const step = filteredSteps[i];
@@ -986,15 +1736,100 @@ export function buildBpmnFlowFromSeiScrape(
   for (let i = 0; i < filteredSteps.length; i++) {
     const step = filteredSteps[i];
     const nextStep = filteredSteps[i + 1];
+    const hasDocRequestingAdjustments = step.documentos.some(d => d.solicitaAjustes);
     if (
-      nextStep &&
-      (step.isAnalysisOrRecommendation || step.lane.id !== nextStep.lane.id) &&
-      nextStep.isCoreEditableArtifact &&
-      nextStep.versionNumber >= 2
+      hasDocRequestingAdjustments ||
+      (nextStep &&
+        (step.isAnalysisOrRecommendation || step.lane.id !== nextStep.lane.id) &&
+        nextStep.isCoreEditableArtifact &&
+        nextStep.versionNumber >= 2)
     ) {
       step.triggersArtifactRevisionNext = true;
     }
   }
+
+  // Calcula Estatísticas de Versões e Tempo de Alteração por Artefato (DFD, ETP, Mapa de Riscos, Pesquisa de Preços, TR, Minuta)
+  const ARTIFACT_LABELS: Partial<Record<SeiStepCategory, string>> = {
+    DFD: 'DFD (Formalização da Demanda)',
+    ETP: 'ETP (Estudo Técnico Preliminar)',
+    MAPA_RISCOS: 'Mapa de Gerenciamento de Riscos (MGR)',
+    PESQUISA_PRECOS: 'Pesquisa de Preços / Estimativa',
+    TR: 'Termo de Referência (TR)',
+    MINUTA_EDITAL: 'Minuta de Edital / Contrato',
+    CDO_ORCAMENTO: 'Certificação Orçamentária (CDO)',
+  };
+
+  const artifactStatsMap = new Map<SeiStepCategory, SeiArtifactVersionStat>();
+  for (let i = 0; i < filteredSteps.length; i++) {
+    const step = filteredSteps[i];
+    const artName = ARTIFACT_LABELS[step.category];
+    if (!artName) continue;
+
+    // Procura a análise/despacho/NT imediatamente anterior que motivou esta alteração (se versao >= 2)
+    let motivatorStep: ChronologicalStepGroup | undefined;
+    if (step.versionNumber >= 2) {
+      for (let j = i - 1; j >= 0; j--) {
+        if (filteredSteps[j].category === step.category) break;
+        if (filteredSteps[j].isAnalysisOrRecommendation || filteredSteps[j].lane.id !== step.lane.id) {
+          motivatorStep = filteredSteps[j];
+          break;
+        }
+      }
+    }
+
+    const prevSameCategoryStep = filteredSteps
+      .slice(0, i)
+      .reverse()
+      .find(s => s.category === step.category);
+
+    const refStartMs = motivatorStep
+      ? new Date(motivatorStep.dataInicioIso).getTime()
+      : prevSameCategoryStep
+        ? new Date(prevSameCategoryStep.dataFimIso).getTime()
+        : new Date(step.dataInicioIso).getTime();
+
+    const stepEndMs = new Date(step.dataFimIso).getTime();
+    const diasElapsed = Math.max(1, Math.ceil(Math.abs(stepEndMs - refStartMs) / (1000 * 60 * 60 * 24)));
+
+    const mainDoc = step.documentos[step.documentos.length - 1];
+    const motivatorDoc = motivatorStep?.documentos[motivatorStep.documentos.length - 1];
+
+    if (!artifactStatsMap.has(step.category)) {
+      artifactStatsMap.set(step.category, {
+        categoria: step.category,
+        nomeArtefato: artName,
+        totalVersoes: 0,
+        totalAlteracoes: 0,
+        diasTotaisRetrabalho: 0,
+        diasPrimeiraElaboracao: diasElapsed,
+        versoes: [],
+      });
+    }
+
+    const stat = artifactStatsMap.get(step.category)!;
+    stat.totalVersoes = step.versionNumber;
+    stat.totalAlteracoes = Math.max(0, step.versionNumber - 1);
+    if (step.versionNumber >= 2) {
+      stat.diasTotaisRetrabalho += diasElapsed;
+    } else {
+      stat.diasPrimeiraElaboracao = diasElapsed;
+    }
+
+    stat.versoes.push({
+      versao: step.versionNumber,
+      idSei: mainDoc?.idSei || '',
+      numeroDoc: mainDoc?.numero,
+      data: mainDoc?.data || new Date(step.dataFimIso).toLocaleDateString('pt-BR'),
+      unidade: step.unidade,
+      diasDesdeAnterior: step.versionNumber >= 2 ? diasElapsed : stat.diasPrimeiraElaboracao,
+      motivadoPorDocSei: motivatorDoc?.idSei,
+      motivadoPorTipo: motivatorDoc?.tipo,
+      motivadoPorUnidade: motivatorStep?.unidade,
+      resumoMudanca: mainDoc?.resumoConteudo || motivatorDoc?.resumoConteudo,
+    });
+  }
+
+  const estatisticasVersoesArtefatos = Array.from(artifactStatsMap.values());
 
   // 6. Verifica a unidade onde o processo está aberto AGORA no SEI (`primaryCurrentUnit`):
   // Se o último passo já estiver na unidade atual, marca-o como posição atual;
@@ -1039,17 +1874,46 @@ export function buildBpmnFlowFromSeiScrape(
     });
   }
 
-  // Se a lista de etapas for muito extensa (> 18 etapas), preserva integralmente o início e as 14 etapas mais recentes
+  // Detecta o Modelo de Espinha Dorsal ("Backbone") aplicável ao processo
+  const templateType = detectFlowTemplateFromPlanejamento(planejamento, scrape);
+  const backboneTemplate = FLOW_BACKBONE_TEMPLATES[templateType] || FLOW_BACKBONE_TEMPLATES.Contratacao_SOF;
+
+  // Se a lista de etapas executadas for muito extensa (> 16 etapas), preserva o início e as 12 etapas mais recentes
   const effectiveSteps =
-    filteredSteps.length > 18
-      ? [...filteredSteps.slice(0, 4), ...filteredSteps.slice(filteredSteps.length - 14)]
+    filteredSteps.length > 16
+      ? [...filteredSteps.slice(0, 4), ...filteredSteps.slice(filteredSteps.length - 12)]
       : filteredSteps;
+
+  // Identifica quais marcos da Espinha Dorsal ("Backbone") ainda NÃO foram alcançados pelo processo em curso
+  const executedCategories = new Set<SeiStepCategory>(filteredSteps.map(s => s.category));
+  let highestReachedMilestoneIdx = -1;
+  backboneTemplate.milestones.forEach((m, mIdx) => {
+    if (executedCategories.has(m.category)) {
+      highestReachedMilestoneIdx = mIdx;
+    }
+  });
+
+  const isProcessAlreadyFinished =
+    planejamento.Status_Planejamento === 'Gerou Contrato' || planejamento.Status_Planejamento === 'Arquivado';
+
+  const pendingBackboneMilestones: FlowBackboneMilestone[] = isProcessAlreadyFinished
+    ? []
+    : backboneTemplate.milestones.filter((m, mIdx) => {
+        if (executedCategories.has(m.category)) return false;
+        // Inclui marcos posteriores ao último marco atingido (ou marcos essenciais de seleção/contratação ainda pendentes)
+        return mIdx > highestReachedMilestoneIdx || ['CDO_ORCAMENTO', 'PARECER_JURIDICO', 'EDITAL_PREGAO', 'HOMOLOGACAO', 'EMPENHO_CONTRATO'].includes(m.category);
+      });
+
+  // Garante que as raias dos marcos futuros da espinha dorsal também estejam registradas no diagrama
+  pendingBackboneMilestones.forEach(pm => {
+    registerUnitLane(pm.unidadePadrao);
+  });
 
   const finalLanes = Array.from(lanesMap.values())
     .sort((a, b) => (a.ordem || 99) - (b.ordem || 99))
     .map((l, idx) => ({ ...l, ordem: idx + 1 }));
 
-  // 7. Constrói os Nós BPMN (Start + Tarefas de Marcos/Artefatos/Revisões + Gateways Exclusivos ✕ + End)
+  // 7. Constrói os Nós BPMN (Start + Tarefas Executadas no SEI + Gateways de Decisão/Alteração + Marcos Futuros da Espinha Dorsal + End)
   let stepOrder = 1;
   const protoSuffix = normalizeSeiProtocol(planejamento.SEI_Processo).slice(-6) || '1';
   const firstStep = effectiveSteps[0];
@@ -1062,12 +1926,13 @@ export function buildBpmnFlowFromSeiScrape(
     laneId: firstStep.lane.id,
     ordemFluxo: stepOrder++,
     seiUnidade: firstStep.unidade,
-    descricao: `Processo autuado no SEI (${planejamento.SEI_Processo})`,
+    descricao: `Processo autuado no SEI (${planejamento.SEI_Processo}) • Modelo: ${backboneTemplate.nomeExibicao}`,
   };
 
   const generatedNodes: BpmnNode[] = [startNode];
   const generatedTasks: TarefaPlanejamento[] = [];
   const generatedConnections: BpmnConnection[] = [];
+  const gargalosDetectados: SeiBottleneckInfo[] = [];
 
   let previousElementId = startNodeId;
   let previousBranchLabel = '';
@@ -1095,7 +1960,7 @@ export function buildBpmnFlowFromSeiScrape(
     const realElapsedDays = Math.max(1, Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24)));
 
     let statusTarefa: StatusTarefa = 'Concluído';
-    if (isActiveStep && planejamento.Status_Planejamento !== 'Gerou Contrato' && planejamento.Status_Planejamento !== 'Arquivado') {
+    if (isActiveStep && !isProcessAlreadyFinished) {
       if (step.documentos.length > 0 && !allSigned) {
         statusTarefa = 'Aguardando Assinatura';
       } else {
@@ -1103,10 +1968,28 @@ export function buildBpmnFlowFromSeiScrape(
       }
     }
 
+    const totalVersionsOfThisCat = categoryVersionCounter[step.category] || 1;
+    const isBottleneckStep = realElapsedDays > Math.max(15, step.prazoPadraoDias * 1.4) || step.versionNumber >= 2;
+
+    if (realElapsedDays >= 10 || step.versionNumber >= 2) {
+      gargalosDetectados.push({
+        etapa: buildStepTitle(step),
+        unidade: step.unidade,
+        dias: realElapsedDays,
+        seiDocNumber: docSeiRef || undefined,
+        motivo:
+          step.versionNumber >= 2
+            ? `Retrabalho / ${step.versionNumber}ª versão do artefato (${realElapsedDays} dias)`
+            : mainDoc?.resumoConteudo || `Permanência de ${realElapsedDays} dias na unidade ${step.unidade}`,
+        isRetrabalho: step.versionNumber >= 2,
+      });
+    }
+
     const taskOrder = stepOrder++;
     const taskId = `tar-in94v2-${protoSuffix}-${idx + 1}-${step.category.toLowerCase()}`;
     const prevTask = existingTarefas.find(t => t.id === taskId);
     const taskTitle = buildStepTitle(step);
+    const resumoDocPrincipal = mainDoc?.resumoConteudo || step.documentos.find(d => d.resumoConteudo)?.resumoConteudo;
 
     const newTask: TarefaPlanejamento = {
       id: taskId,
@@ -1120,12 +2003,19 @@ export function buildBpmnFlowFromSeiScrape(
       bpmnType: 'task',
       descricao: [
         `Unidade SEI: ${step.unidade}`,
-        step.versionNumber > 1 ? `Ciclo de Revisão/Alteração (${step.versionNumber}ª Versão)` : 'Elaboração / Análise',
-        `Tempo na etapa: ${realElapsedDays} dia(s)`,
+        step.versionNumber > 1
+          ? `Alterado ${step.versionNumber - 1}x (${step.versionNumber}ª Versão de ${totalVersionsOfThisCat})`
+          : totalVersionsOfThisCat > 1
+            ? `1ª Versão (Teve ${totalVersionsOfThisCat - 1} alteração(ões) posterior(es))`
+            : 'Elaboração / Análise',
+        `Duração: ${realElapsedDays} dia(s)`,
         docSeiRef ? `Doc SEI nº ${docSeiRef}` : 'Em andamento na unidade',
-      ].join(' • '),
+        resumoDocPrincipal ? `Resumo: ${resumoDocPrincipal}` : '',
+      ]
+        .filter(Boolean)
+        .join(' • '),
       dataConclusao: statusTarefa === 'Concluído' ? (nextStep?.dataInicioIso || step.dataFimIso || new Date().toISOString()) : undefined,
-      MovidoPor: 'Estúdio de Fluxo SEI (IN 94/2022)',
+      MovidoPor: `Estúdio de Fluxo SEI (${backboneTemplate.nomeExibicao})`,
       MovidoEm: new Date().toISOString(),
       subTarefas:
         step.documentos.length > 0
@@ -1133,6 +2023,8 @@ export function buildBpmnFlowFromSeiScrape(
               id: `sub-${taskId}-${dIdx}`,
               titulo: repairMojibakeAndBrokenChars(`${d.tipo}${d.numero ? ` ${d.numero}` : ''} (SEI ${d.idSei})`),
               concluida: d.assinado,
+              seiDocNumber: d.idSei,
+              resumoConteudo: d.resumoConteudo,
             }))
           : prevTask?.subTarefas || [],
       seiDocNumber: docSeiRef || undefined,
@@ -1140,6 +2032,18 @@ export function buildBpmnFlowFromSeiScrape(
       isCurrentSeiPosition: isActiveStep,
       seiAssinado: step.documentos.length > 0 ? allSigned : undefined,
       seiAssinantes: signersList.length > 0 ? Array.from(new Set(signersList)) : undefined,
+      versaoArtefato: step.isCoreEditableArtifact ? step.versionNumber : undefined,
+      totalVersoesArtefato: step.isCoreEditableArtifact ? totalVersionsOfThisCat : undefined,
+      diasRetrabalho: step.versionNumber >= 2 ? realElapsedDays : undefined,
+      resumoDocumento: resumoDocPrincipal,
+      isBottleneck: isBottleneckStep,
+      allSeiDocs: step.documentos.map(d => ({
+        idSei: d.idSei,
+        tipo: d.tipo,
+        numero: d.numero,
+        versao: step.versionNumber,
+        resumo: d.resumoConteudo,
+      })),
     };
 
     generatedTasks.push(newTask);
@@ -1164,7 +2068,9 @@ export function buildBpmnFlowFromSeiScrape(
     // 8. INSERÇÃO DE GATEWAYS BPMN 2.0 EXCLUSIVOS (✕) NOS PONTOS DE DECISÃO, RECOMENDAÇÃO DE AJUSTES E TRANSIÇÃO ENTRE ÁREAS
     if (nextStep) {
       const isCrossLane = nextStep.lane.id !== step.lane.id;
-      const isTriggeringRevision = step.triggersArtifactRevisionNext || (nextStep.isCoreEditableArtifact && nextStep.versionNumber >= 2 && step.isAnalysisOrRecommendation);
+      const isTriggeringRevision =
+        step.triggersArtifactRevisionNext ||
+        (nextStep.isCoreEditableArtifact && nextStep.versionNumber >= 2 && (step.isAnalysisOrRecommendation || isCrossLane));
       const isKeyDecisionMilestone =
         step.category === 'DFD' ||
         step.category === 'TR' ||
@@ -1178,17 +2084,18 @@ export function buildBpmnFlowFromSeiScrape(
         let branchLabel = 'Prosseguir';
 
         if (isTriggeringRevision) {
-          gwLabel = 'Solicita Ajustes nos Artefatos?';
-          branchLabel = 'Sim (Revisar Artefatos)';
+          const targetArtName = ARTIFACT_LABELS[nextStep.category]?.split(' (')[0] || 'Artefatos';
+          gwLabel = `Solicita Alteração em ${targetArtName}?`;
+          branchLabel = `Sim (${nextStep.versionNumber}ª Versão)`;
         } else if (step.category === 'DFD') {
           gwLabel = 'Demanda Aprovada?';
           branchLabel = 'Aprovada';
         } else if (step.category === 'TR') {
-          gwLabel = step.versionNumber > 1 ? 'TR Revisado Aprovado?' : 'TR Aprovado?';
-          branchLabel = 'Aprovado';
+          gwLabel = step.versionNumber > 1 ? `TR (${step.versionNumber}ª Versão) Aprovado?` : 'TR Aprovado?';
+          branchLabel = 'Sim (Prosseguir)';
         } else if (step.category === 'NOTA_TECNICA') {
-          gwLabel = 'Parecer Técnico Favorável?';
-          branchLabel = 'Aprovado';
+          gwLabel = 'Haverá Mudança nos Documentos?';
+          branchLabel = 'Não (Aprovado)';
         } else if (step.category === 'CDO_ORCAMENTO') {
           gwLabel = 'Orçamento Certificado?';
           branchLabel = 'CDO Emitida';
@@ -1196,11 +2103,11 @@ export function buildBpmnFlowFromSeiScrape(
           gwLabel = 'Parecer Jurídico Favorável?';
           branchLabel = nextStep.versionNumber >= 2 ? 'Atender Recomendações' : 'Favorável';
         } else if (step.category === 'HOMOLOGACAO') {
-          gwLabel = 'Certame Homologado?';
-          branchLabel = 'Homologado';
+          gwLabel = 'Contratação Autorizada / Homologada?';
+          branchLabel = 'Sim';
         } else if (isCrossLane) {
-          gwLabel = 'Encaminhar para Próxima Área?';
-          branchLabel = nextStep.unidade;
+          gwLabel = `Haverá Ajustes (${step.unidade})?`;
+          branchLabel = `Seguir → ${nextStep.unidade}`;
         }
 
         const gwId = `node-gw-in94v2-${protoSuffix}-${idx + 1}`;
@@ -1211,7 +2118,7 @@ export function buildBpmnFlowFromSeiScrape(
           laneId: step.lane.id,
           ordemFluxo: stepOrder++,
           seiUnidade: step.unidade,
-          descricao: `Ponto de decisão BPMN após ${taskTitle}`,
+          descricao: `Decisão BPMN sobre alterações em documentos / encaminhamento após ${taskTitle}`,
         };
 
         generatedNodes.push(gwNode);
@@ -1222,7 +2129,7 @@ export function buildBpmnFlowFromSeiScrape(
           toId: gwId,
           label: '',
           tipo: 'sequence',
-          cor: '#0ea5e9',
+          cor: isTriggeringRevision ? '#f59e0b' : '#0ea5e9',
           isSeiExecuted: true,
         });
 
@@ -1232,28 +2139,104 @@ export function buildBpmnFlowFromSeiScrape(
     }
   });
 
-  // Se o planejamento já gerou contrato ou está concluído/arquivado, adiciona o nó de Fim
-  if (planejamento.Status_Planejamento === 'Gerou Contrato' || planejamento.Status_Planejamento === 'Arquivado') {
-    const lastStep = effectiveSteps[effectiveSteps.length - 1];
-    const endNodeId = `node-sei-end-${protoSuffix}`;
-    generatedNodes.push({
-      id: endNodeId,
-      type: 'end',
-      label: planejamento.Status_Planejamento === 'Gerou Contrato' ? 'Contrato Assinado' : 'Processo Concluído',
-      laneId: lastStep.lane.id,
-      ordemFluxo: stepOrder++,
-      seiUnidade: lastStep.unidade,
-    });
-    generatedConnections.push({
-      id: `conn-sei-end-${protoSuffix}`,
-      fromId: previousElementId,
-      toId: endNodeId,
-      label: previousBranchLabel || 'Finalizado',
-      tipo: 'sequence',
-      cor: '#10b981',
-      isSeiExecuted: true,
+  // 8.5. ENCAIXE DOS MARCOS FUTUROS DA ESPINHA DORSAL ("BACKBONE") PARA PROCESSOS EM CURSO
+  // Deixa claro para o gestor tudo o que já ocorreu no SEI (colorido/executado) e o que ainda falta percorrer segundo o modelo!
+  if (pendingBackboneMilestones.length > 0) {
+    pendingBackboneMilestones.forEach((futureMilestone, fIdx) => {
+      const targetLane = registerUnitLane(futureMilestone.unidadePadrao);
+      const futureTaskOrder = stepOrder++;
+      const futureTaskId = `tar-backbone-future-${protoSuffix}-${fIdx + 1}-${futureMilestone.category.toLowerCase()}`;
+
+      const futureTask: TarefaPlanejamento = {
+        id: futureTaskId,
+        ProcessoPlanejamento: planejamento.SEI_Processo,
+        Tarefa: futureMilestone.titulo,
+        Inicio: new Date(Date.now() + (fIdx + 1) * 86400000).toISOString(),
+        Prazo_Dias: futureMilestone.prazoDias,
+        Status_Tarefa: 'Pendente',
+        areaResponsavel: targetLane.nome,
+        ordemFluxo: futureTaskOrder,
+        bpmnType: 'task',
+        descricao: `[Marco Previsto no Modelo ${backboneTemplate.nomeExibicao}] ${futureMilestone.descricaoPadrao}`,
+        seiUnidade: futureMilestone.unidadePadrao,
+        isTemplateFutureMilestone: true,
+        subTarefas: [],
+      };
+
+      generatedTasks.push(futureTask);
+
+      generatedConnections.push({
+        id: `conn-backbone-future-${protoSuffix}-${fIdx + 1}`,
+        fromId: previousElementId,
+        toId: futureTaskId,
+        label: previousBranchLabel || (fIdx === 0 ? 'Próximo Marco' : ''),
+        tipo: 'sequence',
+        cor: '#64748b',
+        isSeiExecuted: false,
+      });
+
+      previousElementId = futureTaskId;
+      previousBranchLabel = '';
+
+      if (futureMilestone.gatewayQuestionAfter && fIdx < pendingBackboneMilestones.length - 1) {
+        const futureGwId = `node-gw-future-${protoSuffix}-${fIdx + 1}`;
+        generatedNodes.push({
+          id: futureGwId,
+          type: 'gateway_exclusive',
+          label: futureMilestone.gatewayQuestionAfter,
+          laneId: targetLane.id,
+          ordemFluxo: stepOrder++,
+          seiUnidade: futureMilestone.unidadePadrao,
+          descricao: `Decisão prevista no modelo ${backboneTemplate.nomeExibicao}`,
+        });
+
+        generatedConnections.push({
+          id: `conn-gw-future-${protoSuffix}-${fIdx + 1}`,
+          fromId: futureTaskId,
+          toId: futureGwId,
+          label: '',
+          tipo: 'sequence',
+          cor: '#64748b',
+          isSeiExecuted: false,
+        });
+
+        previousElementId = futureGwId;
+        previousBranchLabel = futureMilestone.gatewayYesLabel || 'Sim';
+      }
     });
   }
+
+  // Nó de Fim da Espinha Dorsal (sempre presente ao final do fluxo para fechar o modelo BPMN)
+  const endLane =
+    pendingBackboneMilestones.length > 0
+      ? registerUnitLane(pendingBackboneMilestones[pendingBackboneMilestones.length - 1].unidadePadrao)
+      : effectiveSteps[effectiveSteps.length - 1].lane;
+  const endNodeId = `node-sei-end-${protoSuffix}`;
+  generatedNodes.push({
+    id: endNodeId,
+    type: 'end',
+    label:
+      planejamento.Status_Planejamento === 'Gerou Contrato'
+        ? 'Contrato Assinado'
+        : isProcessAlreadyFinished
+          ? 'Processo Concluído'
+          : 'Fim Previsto (Contrato)',
+    laneId: endLane.id,
+    ordemFluxo: stepOrder++,
+  });
+  generatedConnections.push({
+    id: `conn-sei-end-${protoSuffix}`,
+    fromId: previousElementId,
+    toId: endNodeId,
+    label: previousBranchLabel || (isProcessAlreadyFinished ? 'Finalizado' : 'Conclusão'),
+    tipo: 'sequence',
+    cor: isProcessAlreadyFinished ? '#10b981' : '#64748b',
+    isSeiExecuted: isProcessAlreadyFinished,
+  });
+
+  // Ordena gargalos do maior tempo para o menor
+  gargalosDetectados.sort((a, b) => b.dias - a.dias);
+  const gargaloPrincipal = gargalosDetectados[0];
 
   // Classifica processos relacionados
   const relatedClassified: SeiRelatedProcessInfo[] = (scrape.processosRelacionados || []).map(rel => ({
@@ -1273,7 +2256,7 @@ export function buildBpmnFlowFromSeiScrape(
     ? Math.max(0, Math.floor((Date.now() - new Date(activeTask.Inicio).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
 
-  // Preserva TODOS os documentos da árvore no metadado (sem truncar o início do processo!)
+  // Preserva TODOS os documentos da árvore no metadado (com seus resumos e versões!)
   const seiSyncMetadata: SeiProcessSyncMetadata = {
     lastSyncAt: scrape.scrapedAt || new Date().toISOString(),
     unidadesAbertas: openUnits,
@@ -1288,35 +2271,63 @@ export function buildBpmnFlowFromSeiScrape(
     diasNaUnidadeAtual,
     processosRelacionados: relatedClassified,
     documentosArvore: docs,
-    etapasMapeadasCount: generatedTasks.length,
+    etapasMapeadasCount: generatedTasks.filter(t => !t.isTemplateFutureMilestone).length,
+    modeloFluxoPadrao: templateType,
+    modeloFluxoNome: backboneTemplate.nomeExibicao,
+    estatisticasVersoesArtefatos,
+    gargalosDetectados: gargalosDetectados.slice(0, 6),
+    gargaloPrincipal,
+    novosDocumentosLidosCount: scrape.novosDocumentosLidosCount,
   };
 
-  // 9. Alimenta o Histórico Processual (`HistoricoPlanejamento`) com todas as etapas relevantes:
-  // Artefatos (DFD, ETP, Mapa de Riscos, Pesquisa de Preços, TR, CDO, Minuta, Parecer, Edital, Contrato),
-  // todas as suas revisões/alterações (2ª, 3ª versão...), Notas Técnicas e Despachos relevantes!
-  const existingHistKeys = new Set(
-    existingHistorico
-      .filter(h => h.Processo_SEI === planejamento.SEI_Processo)
-      .map(h => `${h.Num_SEI || ''}-${(h.Descricao || '').slice(0, 35)}`)
-  );
+  // 9. Alimenta o Histórico Processual (`HistoricoPlanejamento`) com todas as etapas relevantes,
+  // incluindo o RESUMO DO CONTEÚDO lido do documento, o número de versões/alterações e o tempo gasto!
+  const existingHistBySei = new Map<string, HistoricoPlanejamento>();
+  existingHistorico
+    .filter(h => h.Processo_SEI === planejamento.SEI_Processo)
+    .forEach(h => {
+      if (h.Num_SEI) existingHistBySei.set(String(h.Num_SEI), h);
+    });
 
   const newHistoricoEntries: HistoricoPlanejamento[] = [];
-  for (const step of effectiveSteps) {
+  for (const step of filteredSteps) {
     const stepLabel = buildStepTitle(step);
+    const totalVersoesCat = categoryVersionCounter[step.category] || 1;
+    const statForCat = artifactStatsMap.get(step.category);
+    const verInfo = statForCat?.versoes.find(v => v.versao === step.versionNumber);
+
     for (const d of step.documentos) {
+      const versionBadgeText =
+        step.isCoreEditableArtifact && totalVersoesCat > 1
+          ? ` • ${step.versionNumber}ª de ${totalVersoesCat} versões (${totalVersoesCat - 1} alteração(ões)${
+              verInfo && step.versionNumber >= 2 ? `, levou ${verInfo.diasDesdeAnterior}d` : ''
+            })`
+          : '';
+
+      const summarySuffix = d.resumoConteudo ? ` — Resumo: ${d.resumoConteudo}` : '';
+
       const desc = repairMojibakeAndBrokenChars(
-        `[${stepLabel}] ${d.tipo}${d.numero ? ` nº ${d.numero}` : ''}${d.assinado ? ' (Assinado)' : ' (Minuta)'}`
+        `[${stepLabel}${versionBadgeText}] ${d.tipo}${d.numero ? ` nº ${d.numero}` : ''}${
+          d.assinado ? ' (Assinado)' : ' (Minuta)'
+        }${summarySuffix}`
       );
-      const key = `${d.idSei}-${desc.slice(0, 35)}`;
-      if (!existingHistKeys.has(key)) {
-        existingHistKeys.add(key);
+
+      const prevHist = existingHistBySei.get(String(d.idSei));
+      if (!prevHist || (d.resumoConteudo && !prevHist.Resumo_Documento)) {
         newHistoricoEntries.push({
-          id: `hist-sei-${normalizeSeiProtocol(planejamento.SEI_Processo).slice(-5)}-${d.idSei}`,
+          id: prevHist?.id || `hist-sei-${normalizeSeiProtocol(planejamento.SEI_Processo).slice(-5)}-${d.idSei}`,
           Processo_SEI: planejamento.SEI_Processo,
           Data: parseSeiDateToIso(d.data).slice(0, 10),
           Descricao: desc,
           Num_SEI: d.idSei,
           Coordenacao: d.unidade || step.unidade || primaryCurrentUnit,
+          Resumo_Documento: d.resumoConteudo,
+          Tipo_Documento: d.tipo,
+          Versao_Artefato: step.isCoreEditableArtifact ? step.versionNumber : undefined,
+          Total_Versoes_Artefato: step.isCoreEditableArtifact ? totalVersoesCat : undefined,
+          Dias_Elaboracao: verInfo?.diasDesdeAnterior,
+          Solicita_Alteracao: d.solicitaAjustes || step.triggersArtifactRevisionNext,
+          Artefatos_Afetados: d.artefatosCitados,
         });
       }
     }

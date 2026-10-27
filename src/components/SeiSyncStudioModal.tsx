@@ -18,6 +18,7 @@ import {
   RawSeiProcessScrapeResult,
   UnitLaneMappingRule,
   DEFAULT_SEI_UNIT_LANE_RULES,
+  FLOW_BACKBONE_TEMPLATES,
   normalizeSeiProtocol,
 } from '../services/seiSyncService';
 import {
@@ -183,6 +184,30 @@ export default function SeiSyncStudioModal({
   const [newRulePattern, setNewRulePattern] = useState('');
   const [newRuleLaneNome, setNewRuleLaneNome] = useState('');
   const [newRuleCor, setNewRuleCor] = useState('#0ea5e9');
+
+  // Chave opcional da API do Google Gemini para resumos executivos com IA
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+    try {
+      return localStorage.getItem('contratics_gemini_api_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [geminiSavedNotice, setGeminiSavedNotice] = useState(false);
+
+  const handleSaveGeminiKey = () => {
+    try {
+      if (geminiApiKey.trim()) {
+        localStorage.setItem('contratics_gemini_api_key', geminiApiKey.trim());
+      } else {
+        localStorage.removeItem('contratics_gemini_api_key');
+      }
+      setGeminiSavedNotice(true);
+      setTimeout(() => setGeminiSavedNotice(false), 2500);
+    } catch {
+      // ignore
+    }
+  };
 
   // Todos os processos relacionados detectados em Contratos e Planejamentos
   const allDetectedRelated = useMemo(() => {
@@ -717,9 +742,83 @@ export default function SeiSyncStudioModal({
             </div>
           )}
 
-          {/* TAB 2: ESTÚDIO DE FLUXO (MAPEAMENTO UNIDADES SEI -> RAIAS BPMN) */}
+          {/* TAB 2: ESTÚDIO DE FLUXO (MAPEAMENTO UNIDADES SEI -> RAIAS BPMN + MODELOS + IA) */}
           {activeTab === 'studio_rules' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Seção A: Os 4 Modelos de Espinha Dorsal de Contratação */}
+              <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 space-y-3">
+                <div>
+                  <h4 className="text-sm font-bold text-on-surface flex items-center gap-2">
+                    <Workflow className="w-4 h-4 text-emerald-400" />
+                    Modelos de Espinha Dorsal de Fluxo BPMN ("Backbone")
+                  </h4>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    O Contratics encaixa automaticamente cada processo lido do SEI em um dos <strong>4 modelos padrão de fluxo</strong> conforme a modalidade do planejamento. As etapas já executadas no SEI (incluindo revisões de ETP/TR/Mapa de Riscos/Pesquisa de Preços e despachos) aparecem preenchidas, e os marcos futuros que faltam percorrer aparecem encaixados na sequência.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {Object.values(FLOW_BACKBONE_TEMPLATES).map((tpl) => (
+                    <div
+                      key={tpl.id}
+                      className="bg-surface-container border border-outline-variant/70 rounded-xl p-3.5 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold text-primary">{tpl.nomeExibicao}</span>
+                        <span className="text-[10px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                          {tpl.milestones.length} marcos padrão
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-on-surface-variant leading-relaxed">{tpl.descricao}</p>
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {tpl.milestones.map((m, mIdx) => (
+                          <span
+                            key={`${tpl.id}-${m.category}-${mIdx}`}
+                            className="text-[9.5px] font-mono bg-surface-container-low border border-outline-variant/50 px-1.5 py-0.5 rounded text-on-surface"
+                          >
+                            {mIdx + 1}. {m.category} ({m.unidadePadrao})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Seção B: Leitura Incremental de Documentos + Integração Opcional com IA (Google Gemini) */}
+              <div className="bg-surface-container-low border border-primary/30 rounded-xl p-4 space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-on-surface flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      Leitura Incremental de Documentos do SEI & Resumo com IA (Opcional — Google Gemini)
+                    </h4>
+                    <p className="text-xs text-on-surface-variant leading-relaxed">
+                      Durante a varredura, a extensão lê apenas os <strong>documentos novos</strong> (que ainda não foram lidos em varreduras anteriores) e gera automaticamente um resumo para a aba <strong>Histórico Processual</strong> e para os cartões do <strong>BPMN</strong>, além de detectar se houve solicitação de alteração em <strong>ETP, TR, Mapa de Riscos ou Pesquisa de Preços</strong>.
+                      <br />
+                      <strong>Como funciona:</strong> A extensão já possui um extrator inteligente nativo (que funciona sem precisar de chave de IA). Caso deseje resumos executivos ainda mais refinados por Inteligência Artificial, basta informar abaixo sua chave gratuita da API do <strong>Google Gemini</strong> (<code className="font-mono text-primary">aistudio.google.com</code>).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                  <input
+                    type="password"
+                    placeholder="Opcional: Cole aqui sua API Key do Google Gemini (AIzaSy...)"
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    className="flex-1 bg-surface-container border border-outline-variant rounded-xl px-3.5 py-2 text-xs font-mono text-on-surface focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveGeminiKey}
+                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-on-primary text-xs font-bold rounded-xl cursor-pointer shrink-0 transition-all"
+                  >
+                    {geminiSavedNotice ? '✅ Configuração Salva!' : 'Salvar Chave Gemini IA'}
+                  </button>
+                </div>
+              </div>
+
               <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h4 className="text-sm font-bold text-on-surface flex items-center gap-2">

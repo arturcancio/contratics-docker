@@ -85,7 +85,8 @@ import {
   normalizeSeiProtocol,
   RawSeiProcessScrapeResult,
   UnitLaneMappingRule,
-  repairMojibakeAndBrokenChars
+  repairMojibakeAndBrokenChars,
+  enrichNewDocumentsWithGeminiAi
 } from './services/seiSyncService';
 import { ReUICard } from './components/ReUI';
 import { CopyButton, CopyableText } from './components/CopyButton';
@@ -1878,9 +1879,12 @@ export default function App() {
     const updatedContractsToSave: Contrato[] = [];
     const histContToSave: HistoricoContratual[] = [];
 
-    for (const scraped of results) {
-      const targetDigits = normalizeSeiProtocol(scraped.protocolo);
+    for (const rawScraped of results) {
+      const targetDigits = normalizeSeiProtocol(rawScraped.protocolo);
       if (!targetDigits) continue;
+
+      // Enriquecimento opcional com IA Gemini caso a chave esteja configurada para documentos recém-lidos
+      const scraped = await enrichNewDocumentsWithGeminiAi(rawScraped);
 
       // Verifica se corresponde a algum Processo de Planejamento cadastrado no Contratics
       const matchingPlans = nextPlanejamentos.filter(
@@ -1909,14 +1913,20 @@ export default function App() {
         ];
         mapped.updatedTarefasForProcess.forEach(t => tasksToSave.push(t));
 
-        // Add non-duplicate history items
+        // Add or update history items (including newly read document summaries & version statistics)
         mapped.newHistoricoEntries.forEach(nh => {
-          const exists = nextHistPlan.some(
-            eh => eh.Processo_SEI === nh.Processo_SEI && eh.Descricao === nh.Descricao
+          const existingIdx = nextHistPlan.findIndex(
+            eh => eh.id === nh.id || (eh.Processo_SEI === nh.Processo_SEI && eh.Descricao === nh.Descricao)
           );
-          if (!exists) {
+          if (existingIdx === -1) {
             nextHistPlan.push(nh);
             histPlanToSave.push(nh);
+          } else {
+            nextHistPlan[existingIdx] = {
+              ...nextHistPlan[existingIdx],
+              ...nh
+            };
+            histPlanToSave.push(nextHistPlan[existingIdx]);
           }
         });
       }
@@ -2022,18 +2032,22 @@ export default function App() {
 
   const handleTriggerExtensionScan = (selectedProtocols?: string[]) => {
     if (currentUser?.role !== 'GECTI') return;
-    const allMonitored: Array<{ protocolo: string; category: 'planejamento' | 'contrato'; id: string; label: string }> = [];
+    const allMonitored: Array<{ protocolo: string; category: 'planejamento' | 'contrato'; id: string; label: string; knownDocIds?: string[] }> = [];
     const seen = new Set<string>();
 
     planejamentos.filter(p => !p.isBudgetOnlyItem && p.SEI_Processo).forEach(p => {
       const clean = normalizeSeiProtocol(p.SEI_Processo);
       if (clean && !seen.has(`plan-${clean}`)) {
         seen.add(`plan-${clean}`);
+        const knownDocIds = (p.seiSyncMetadata?.documentosArvore || [])
+          .filter(d => d.resumoConteudo && d.resumoConteudo.trim().length > 0)
+          .map(d => d.idSei);
         allMonitored.push({
           protocolo: p.SEI_Processo,
           category: 'planejamento',
           id: p.id,
-          label: `${p.Tipo_Processo} — ${p.Objeto}`
+          label: `${p.Tipo_Processo} — ${p.Objeto}`,
+          knownDocIds
         });
       }
     });
@@ -2042,11 +2056,15 @@ export default function App() {
       const clean = normalizeSeiProtocol(c.SEI_Processo);
       if (clean && !seen.has(`cont-${clean}`)) {
         seen.add(`cont-${clean}`);
+        const knownDocIds = (c.seiSyncMetadata?.documentosArvore || [])
+          .filter(d => d.resumoConteudo && d.resumoConteudo.trim().length > 0)
+          .map(d => d.idSei);
         allMonitored.push({
           protocolo: c.SEI_Processo,
           category: 'contrato',
           id: c.id,
-          label: `Contrato ${c.Num_Contrato} — ${c.Objeto}`
+          label: `Contrato ${c.Num_Contrato} — ${c.Objeto}`,
+          knownDocIds
         });
       }
     });
@@ -2089,6 +2107,7 @@ export default function App() {
         status?: string;
         unidadeAtual?: string;
         lastSyncAt?: string;
+        knownDocIds?: string[];
       }> = [];
       const seen = new Set<string>();
 
@@ -2096,6 +2115,9 @@ export default function App() {
         const clean = normalizeSeiProtocol(p.SEI_Processo);
         if (clean && !seen.has(`plan-${clean}`)) {
           seen.add(`plan-${clean}`);
+          const knownDocIds = (p.seiSyncMetadata?.documentosArvore || [])
+            .filter(d => d.resumoConteudo && d.resumoConteudo.trim().length > 0)
+            .map(d => d.idSei);
           list.push({
             protocolo: p.SEI_Processo,
             category: 'planejamento',
@@ -2103,7 +2125,8 @@ export default function App() {
             label: `${p.Tipo_Processo} — ${p.Objeto}`,
             status: p.Status_Planejamento,
             unidadeAtual: p.seiSyncMetadata?.unidadeAtual,
-            lastSyncAt: p.seiSyncMetadata?.lastSyncAt
+            lastSyncAt: p.seiSyncMetadata?.lastSyncAt,
+            knownDocIds
           });
         }
       });
@@ -2112,6 +2135,9 @@ export default function App() {
         const clean = normalizeSeiProtocol(c.SEI_Processo);
         if (clean && !seen.has(`cont-${clean}`)) {
           seen.add(`cont-${clean}`);
+          const knownDocIds = (c.seiSyncMetadata?.documentosArvore || [])
+            .filter(d => d.resumoConteudo && d.resumoConteudo.trim().length > 0)
+            .map(d => d.idSei);
           list.push({
             protocolo: c.SEI_Processo,
             category: 'contrato',
@@ -2119,7 +2145,8 @@ export default function App() {
             label: `Contrato ${c.Num_Contrato} — ${c.Objeto}`,
             status: c.Status_Contrato || 'Vigente',
             unidadeAtual: c.seiSyncMetadata?.unidadeAtual,
-            lastSyncAt: c.seiSyncMetadata?.lastSyncAt
+            lastSyncAt: c.seiSyncMetadata?.lastSyncAt,
+            knownDocIds
           });
         }
       });

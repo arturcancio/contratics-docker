@@ -117,7 +117,8 @@ async function executeBatchScan(processes, deepScanRelated = true) {
         {
           action: 'SCRAPE_SINGLE_PROTOCOL',
           protocolo: proc.protocolo,
-          deepScanRelated
+          deepScanRelated,
+          knownDocIds: proc.knownDocIds || []
         },
         { frameId: 0 }
       );

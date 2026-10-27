@@ -2026,10 +2026,100 @@ export default function Planejamentos({
             />
           ) : (
             <div className="space-y-4">
+              {/* Quadro Resumo de Versões de Artefatos (ETP, TR, Mapa de Riscos, Pesquisa de Preços) e Tempo Gasto em Alterações */}
+              {selectedPlan?.seiSyncMetadata?.estatisticasVersoesArtefatos &&
+                selectedPlan.seiSyncMetadata.estatisticasVersoesArtefatos.length > 0 && (
+                  <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-outline-variant/40 pb-2.5">
+                      <div>
+                        <h5 className="text-xs font-extrabold uppercase tracking-wider text-on-surface flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-primary" />
+                          Controle de Versões de Artefatos e Tempo de Alteração no SEI
+                        </h5>
+                        <p className="text-[11px] text-on-surface-variant mt-0.5">
+                          Identificação automática de quantas vezes cada artefato (DFD, ETP, Mapa de Riscos, Pesquisa de Preços, TR) foi alterado após despachos/notas técnicas e quantos dias cada revisão demandou.
+                        </p>
+                      </div>
+                      {selectedPlan.seiSyncMetadata.gargaloPrincipal && (
+                        <span className="text-[10.5px] font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg font-bold shrink-0">
+                          Gargalo Principal: {selectedPlan.seiSyncMetadata.gargaloPrincipal.etapa} ({selectedPlan.seiSyncMetadata.gargaloPrincipal.dias}d)
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {selectedPlan.seiSyncMetadata.estatisticasVersoesArtefatos.map((art) => {
+                        const hadRevisions = art.totalAlteracoes > 0;
+                        return (
+                          <div
+                            key={art.categoria}
+                            className={`rounded-xl border p-3 space-y-2 ${
+                              hadRevisions
+                                ? 'bg-amber-500/[0.06] border-amber-500/40'
+                                : 'bg-surface-container border-outline-variant/60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold text-on-surface">{art.nomeArtefato}</span>
+                              <span
+                                className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full ${
+                                  hadRevisions
+                                    ? 'bg-amber-500 text-slate-950'
+                                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                }`}
+                              >
+                                {hadRevisions
+                                  ? `Alterado ${art.totalAlteracoes} vez(es) (${art.totalVersoes} versões)`
+                                  : 'Versão Única (Sem alterações)'}
+                              </span>
+                            </div>
+
+                            <div className="text-[11px] text-on-surface-variant flex items-center gap-3 font-mono">
+                              <span>1ª versão: {art.diasPrimeiraElaboracao}d</span>
+                              {hadRevisions && (
+                                <span className="text-amber-300 font-bold">
+                                  Tempo total em alterações: +{art.diasTotaisRetrabalho} dia(s)
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="space-y-1 pt-1 border-t border-outline-variant/30">
+                              {art.versoes.map((v) => (
+                                <div
+                                  key={`${art.categoria}-v-${v.versao}-${v.idSei}`}
+                                  className="text-[11px] flex flex-wrap items-center justify-between gap-2 bg-surface-container-low/80 px-2.5 py-1 rounded border border-outline-variant/30"
+                                >
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono font-bold text-primary">{v.versao}ª Versão</span>
+                                    <span className="text-on-surface-variant font-mono">({v.data} • {v.unidade})</span>
+                                    {v.versao >= 2 && (
+                                      <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded">
+                                        +{v.diasDesdeAnterior}d{v.motivadoPorTipo ? ` após ${v.motivadoPorTipo}` : ''}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {v.idSei && (
+                                    <div className="inline-flex items-center gap-1 font-mono text-[10.5px] text-on-surface">
+                                      <span>SEI {v.idSei}</span>
+                                      <CopyButton text={v.idSei} label={`SEI ${v.idSei}`} />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
               <div className="flex justify-between items-center">
                 <div>
-                  <h4 className="text-sm font-semibold text-on-surface">Histórico de Ocorrências da Instrução</h4>
-                  <p className="text-[10px] text-on-surface-variant">Lançamentos de pareceres jurídicos, saneamentos, publicações de editais no SEI.</p>
+                  <h4 className="text-sm font-semibold text-on-surface">Histórico Processual e Resumo dos Documentos Lidos no SEI</h4>
+                  <p className="text-[10px] text-on-surface-variant">
+                    Lançamentos cronológicos, resumos automáticos de Despachos / Notas Técnicas / Artefatos e histórico de versões.
+                  </p>
                 </div>
                 <button
                   onClick={handleOpenNewHistModal}
@@ -2047,29 +2137,53 @@ export default function Planejamentos({
                 ) : (
                   selectedPlanHistoricos.map(h => (
                     <div key={h.id} className="p-4 flex flex-col md:flex-row hover:bg-surface-container/20 transition-colors gap-3 justify-between">
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center gap-2">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-on-surface font-mono">{formatDateTime(h.Data)}</span>
-                          <span className="text-[10px] bg-surface-container border border-outline-variant/40 px-2 py-0.25 text-on-surface-variant rounded">Coord: {h.Coordenacao}</span>
+                          <span className="text-[10px] bg-surface-container border border-outline-variant/40 px-2 py-0.25 text-on-surface-variant rounded font-semibold">
+                            Coord: {h.Coordenacao}
+                          </span>
+                          {h.Versao_Artefato && h.Total_Versoes_Artefato && h.Total_Versoes_Artefato > 1 && (
+                            <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.25 rounded">
+                              {h.Versao_Artefato}ª de {h.Total_Versoes_Artefato} versões
+                              {h.Dias_Elaboracao && h.Versao_Artefato >= 2 ? ` • Levou ${h.Dias_Elaboracao}d` : ''}
+                            </span>
+                          )}
+                          {h.Solicita_Alteracao && (
+                            <span className="text-[10px] font-mono font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 px-2 py-0.25 rounded">
+                              Solicita Ajustes nos Artefatos
+                            </span>
+                          )}
                         </div>
-                        <p className="text-xs text-on-surface mt-1 leading-relaxed">{h.Descricao}</p>
+                        <p className="text-xs text-on-surface mt-1 leading-relaxed font-medium">{h.Descricao}</p>
+                        {h.Resumo_Documento && !h.Descricao.includes(h.Resumo_Documento) && (
+                          <div className="mt-1 p-2.5 rounded-lg bg-surface-container/70 border border-outline-variant/40 text-[11px] text-on-surface-variant leading-relaxed">
+                            <strong className="text-primary font-mono uppercase text-[10px] mr-1.5">Resumo do Documento:</strong>
+                            {h.Resumo_Documento}
+                          </div>
+                        )}
                       </div>
                       
-                      <div className="flex items-center gap-4 shrink-0 justify-end">
-                        <span className="text-xs font-mono bg-primary/10 text-primary border border-primary/30 rounded px-2.5 py-0.5">
-                          {h.Num_SEI}
-                        </span>
+                      <div className="flex items-center gap-3 shrink-0 justify-end self-start md:self-center">
+                        {h.Num_SEI && (
+                          <div className="inline-flex items-center gap-1 bg-primary/10 text-primary border border-primary/30 rounded px-2.5 py-0.5">
+                            <span className="text-xs font-mono font-bold">SEI {h.Num_SEI}</span>
+                            <CopyButton text={h.Num_SEI} label={`Documento SEI ${h.Num_SEI}`} />
+                          </div>
+                        )}
                         
                         <div className="flex items-center gap-1 opacity-70 hover:opacity-100">
                           <button
                             onClick={() => handleOpenEditHistModal(h)}
                             className="p-1 text-on-surface-variant hover:text-primary"
+                            title="Editar histórico"
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => handleDeleteHist(h.id)}
                             className="p-1 text-on-surface-variant hover:text-rose-400"
+                            title="Excluir histórico"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
