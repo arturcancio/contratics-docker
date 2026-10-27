@@ -1115,7 +1115,7 @@ export default function DFDs({
                   )}
                 </div>
               </th>
-              <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-right select-none w-44">Ações</th>
+              <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-right select-none w-28">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -1299,25 +1299,25 @@ export default function DFDs({
                           <button
                             type="button"
                             onClick={() => setExpandedDfdId(expandedDfdId === dfd.id ? null : dfd.id)}
-                            className={`p-1 px-1.5 inline-flex items-center gap-1 text-[10px] font-bold rounded cursor-pointer transition-all active:scale-95 shrink-0 border ${
+                            className={`p-1.5 rounded-lg cursor-pointer transition-all active:scale-95 shrink-0 border ${
                               expandedDfdId === dfd.id
-                                ? 'bg-primary/20 border-primary text-primary'
-                                : 'bg-surface-container-high border-outline-variant text-on-surface-variant hover:text-on-surface'
+                                ? 'bg-primary/20 border-primary text-primary shadow-sm'
+                                : 'bg-surface-container-high border-outline-variant/60 text-on-surface-variant hover:text-primary hover:border-primary/40'
                             }`}
-                            title="Exibir detalhamento de Custeio vs Investimento"
+                            title="Exibir detalhamento (Custeio vs Investimento)"
+                            aria-label="Exibir detalhamento"
                           >
-                            <Eye className="w-3 h-3 text-primary shrink-0" />
-                            <span>Detalhes</span>
+                            <Eye className="w-3.5 h-3.5" />
                           </button>
 
                           <button
                             type="button"
                             onClick={() => onViewLineage && onViewLineage(dfd.id, 'dfd')}
-                            className="p-1 px-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/5 hover:bg-primary/15 border border-outline rounded cursor-pointer transition-all active:scale-95 shrink-0"
+                            className="p-1.5 rounded-lg border border-outline-variant/60 text-primary bg-primary/5 hover:bg-primary/15 hover:border-primary/40 cursor-pointer transition-all active:scale-95 shrink-0"
                             title="Rastreabilidade e Histórico do Processo (Percurso)"
+                            aria-label="Rastreabilidade e Histórico do Processo (Percurso)"
                           >
-                            <Shuffle className="w-3 h-3 text-primary animate-pulse" />
-                            <span>Percurso</span>
+                            <Shuffle className="w-3.5 h-3.5 text-primary" />
                           </button>
 
                           {dfd.Anexo_PDF && (
@@ -1328,11 +1328,11 @@ export default function DFDs({
                                 setViewingPdfFilename(dfd.Anexo_PDF_Nome || 'Documento_DFD_Anexo.pdf'); 
                                 setViewingPdfObj(dfd);
                               }}
-                              className="p-1 px-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-primary hover:bg-primary/10 rounded border border-primary/20 cursor-pointer active:scale-95 transition-all shrink-0"
-                              title={`Visualizar PDF: ${dfd.Anexo_PDF_Nome || 'Documento_DFD_Anexo.pdf'}`}
+                              className="p-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/15 hover:border-primary/50 cursor-pointer active:scale-95 transition-all shrink-0"
+                              title={`Visualizar documento PDF: ${dfd.Anexo_PDF_Nome || 'Documento_DFD_Anexo.pdf'}`}
+                              aria-label={`Visualizar PDF: ${dfd.Anexo_PDF_Nome || 'Documento_DFD_Anexo.pdf'}`}
                             >
-                              <FileText className="w-3 text-primary shrink-0" />
-                              <span>PDF</span>
+                              <FileText className="w-3.5 h-3.5 text-primary" />
                             </button>
                           )}
                           
@@ -1366,8 +1366,9 @@ export default function DFDs({
                               setAttachedFileData(dfd.Anexo_PDF && dfd.Anexo_PDF.startsWith('data:') ? dfd.Anexo_PDF : '');
                               setIsModalOpen(true);
                             }}
-                            className="p-1 inline-flex items-center text-on-surface-variant hover:text-primary hover:bg-primary/10 rounded transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant shrink-0"
-                            title="Editar DFD"
+                            className="p-1.5 rounded-lg border border-transparent hover:border-outline-variant/60 inline-flex items-center text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant shrink-0"
+                            title="Editar dados do DFD"
+                            aria-label="Editar DFD"
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
@@ -1382,8 +1383,9 @@ export default function DFDs({
                               }
                               setDfdToDelete(dfd);
                             }}
-                            className="p-1 inline-flex items-center text-on-surface-variant hover:text-rose-450 hover:bg-rose-550/10 rounded transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant shrink-0"
+                            className="p-1.5 rounded-lg border border-transparent hover:border-rose-500/30 inline-flex items-center text-on-surface-variant hover:text-rose-450 hover:bg-rose-550/10 transition-all cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-on-surface-variant shrink-0"
                             title="Excluir DFD"
+                            aria-label="Excluir DFD"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
