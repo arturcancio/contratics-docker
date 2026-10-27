@@ -3797,11 +3797,11 @@ export default function Contratos({
 
           {/* Contracts table list */}
           <div className="overflow-x-auto font-sans" data-tour="contract-table">
-            <table className="w-full min-w-[1000px] text-left border-separate border-spacing-y-2">
+            <table className="w-full text-left border-separate border-spacing-y-2">
               <thead>
                 <tr className="text-on-surface-variant">
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-36"
                     onClick={() => handleSort('Num_Contrato')}
                   >
                     <div className="flex items-center gap-1">
@@ -3812,7 +3812,7 @@ export default function Contratos({
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-36"
                     onClick={() => handleSort('Fornecedor')}
                   >
                     <div className="flex items-center gap-1">
@@ -3823,7 +3823,7 @@ export default function Contratos({
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none min-w-[180px]"
                     onClick={() => handleSort('Objeto')}
                   >
                     <div className="flex items-center gap-1">
@@ -3834,7 +3834,7 @@ export default function Contratos({
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-24"
                     onClick={() => handleSort('Vigencia_Inicio')}
                   >
                     <div className="flex items-center gap-1">
@@ -3845,18 +3845,18 @@ export default function Contratos({
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-24"
                     onClick={() => handleSort('Vigencia_Final')}
                   >
                     <div className="flex items-center gap-1">
-                      <span>Vigência Fim Calculada</span>
+                      <span>Vigência Fim</span>
                       {sortKey === 'Vigencia_Final' && (
                         sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 text-primary" /> : <ChevronDown className="w-3 h-3 text-primary" />
                       )}
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-right cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-right cursor-pointer hover:text-primary transition-colors select-none w-32"
                     onClick={() => handleSort('Valor_Anual_SOF')}
                   >
                     <div className="flex items-center justify-end gap-1 w-full">
@@ -3867,18 +3867,18 @@ export default function Contratos({
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none w-28"
                     onClick={() => handleSort('Perspectiva_Renovacao')}
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <span>Perspectiva de Renovação</span>
+                      <span>Renovação</span>
                       {sortKey === 'Perspectiva_Renovacao' && (
                         sortDirection === 'asc' ? <ChevronUp className="w-3 h-3 text-primary" /> : <ChevronDown className="w-3 h-3 text-primary" />
                       )}
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider text-center cursor-pointer hover:text-primary transition-colors select-none w-24"
                     onClick={() => handleSort('Status_Contrato')}
                   >
                     <div className="flex items-center justify-center gap-1">
@@ -3889,7 +3889,7 @@ export default function Contratos({
                     </div>
                   </th>
                   <th 
-                    className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none"
+                    className="px-2.5 py-2.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:text-primary transition-colors select-none w-36"
                     onClick={() => handleSort('Gestor_Contrato')}
                   >
                     <div className="flex items-center gap-1">
@@ -3899,7 +3899,7 @@ export default function Contratos({
                       )}
                     </div>
                   </th>
-                  <th className="px-5 py-3.5 text-[10px] font-bold uppercase tracking-wider text-right select-none">Ações</th>
+                  <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-right select-none w-28">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -3921,7 +3921,7 @@ export default function Contratos({
 
                     return (
                       <tr key={cont.id} className="group transition-all duration-150">
-                        <td className={`px-5 py-4 font-mono text-xs ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <td className={`px-3 py-3 font-mono text-xs whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                           <div className="space-y-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {isRecent && (
@@ -3935,7 +3935,7 @@ export default function Contratos({
                               <button
                                 type="button"
                                 onClick={() => setSelectedContratoId(cont.id)}
-                                className="font-bold text-on-surface hover:text-primary hover:underline transition-colors text-left focus:outline-none"
+                                className="font-bold text-on-surface hover:text-primary hover:underline transition-colors text-left focus:outline-none cursor-pointer"
                               >
                                 {cont.Num_Contrato}
                               </button>
@@ -3983,25 +3983,25 @@ export default function Contratos({
                             )}
                           </div>
                         </td>
-                        <td className={`px-5 py-4 text-xs font-semibold text-primary ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <td className={`px-3 py-3 text-xs font-semibold text-primary max-w-[150px] truncate ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={fornObj ? fornObj.Nome_Fornecedor : 'Inconsistência Fornecedor'}>
                           {fornObj ? fornObj.Nome_Fornecedor : 'Inconsistência Fornecedor'}
                         </td>
-                        <td className={`px-5 py-4 text-xs text-on-surface-variant max-w-xs truncate ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={cont.Objeto}>
+                        <td className={`px-3 py-3 text-xs text-on-surface-variant min-w-[180px] max-w-[240px] 2xl:max-w-xs ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`} title={cont.Objeto}>
                           <button
                             type="button"
                             onClick={() => setSelectedContratoId(cont.id)}
-                            className="text-left text-xs font-semibold text-on-surface hover:text-primary hover:underline transition-colors block w-full truncate focus:outline-none cursor-pointer"
+                            className="text-left text-xs font-semibold text-on-surface hover:text-primary hover:underline transition-colors block w-full line-clamp-2 leading-snug focus:outline-none cursor-pointer"
                           >
                             {cont.Objeto}
                           </button>
                         </td>
-                        <td className={`px-5 py-4 text-xs font-mono ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <td className={`px-2.5 py-3 text-xs font-mono whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                           {formatDate(cont.Vigencia_Inicio)}
                         </td>
-                        <td className={`px-5 py-4 text-xs font-mono font-semibold text-on-surface ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <td className={`px-2.5 py-3 text-xs font-mono font-semibold text-on-surface whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                           {formatDate(computedFim)}
                         </td>
-                        <td className={`px-5 py-4 ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <td className={`px-3 py-3 whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                           {(() => {
                             const sofInfo = getContractSOFValueForYear(cont, targetYearNum);
                             const startYear = cont.Vigencia_Inicio ? new Date(cont.Vigencia_Inicio).getUTCFullYear() : null;
@@ -4039,7 +4039,7 @@ export default function Contratos({
                             );
                           })()}
                         </td>
-                        <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/5 dark:group-hover:bg-[#1e2d4a]/25 first:rounded-l-xl last:rounded-r-xl border-y border-outline-variant/10 first:border-l last:border-r`}>
+                        <td className={`px-2.5 py-3 text-center whitespace-nowrap ${cellBgClass} group-hover:bg-primary/5 dark:group-hover:bg-[#1e2d4a]/25 first:rounded-l-xl last:rounded-r-xl border-y border-outline-variant/10 first:border-l last:border-r`}>
                           {(() => {
                             const sofInfo = getContractSOFValueForYear(cont, targetYearNum);
                             const activeItems = (itensSOF || []).filter(i => 
@@ -4139,7 +4139,7 @@ export default function Contratos({
                             );
                           })()}
                         </td>
-                        <td className={`px-5 py-4 text-center ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <td className={`px-2.5 py-3 text-center whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                           {cont.Status_Contrato === 'A Vencer' ? (
                             <div className="flex flex-col items-center gap-0.5" title={`Contrato ativo expirando em ${daysLeft} dias.`}>
                               <span className="inline-flex px-2 py-0.5 rounded bg-amber-400/10 border border-amber-500/20 text-amber-300 font-bold text-[9px] animate-pulse">
@@ -4155,45 +4155,67 @@ export default function Contratos({
                             <ReUIBadge variant="neutral">{cont.Status_Contrato || 'Encerrado'}</ReUIBadge>
                           )}
                         </td>
-                        <td className={`px-5 py-4 text-xs text-on-surface-variant ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                        <td className={`px-2.5 py-3 text-xs text-on-surface-variant max-w-[140px] ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
                           <div className="space-y-0.5">
-                            <p className="font-semibold block leading-none">Tit: {cont.Gestor_Contrato}</p>
-                            <p className="text-[10px] leading-none text-on-surface-variant/70">Subst: {cont.Gestor_Substituto || 'sem substituto'}</p>
+                            <p className="font-semibold block leading-none truncate" title={`Titular: ${cont.Gestor_Contrato}`}>Tit: {cont.Gestor_Contrato}</p>
+                            <p className="text-[10px] leading-none text-on-surface-variant/70 truncate" title={`Substituto: ${cont.Gestor_Substituto || 'sem substituto'}`}>Subst: {cont.Gestor_Substituto || 'sem substituto'}</p>
                           </div>
                         </td>
-                        <td className={`px-5 py-4 text-right ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
-                          <div className="flex justify-end items-center gap-1 opacity-80 group-hover:opacity-100 transition-all">
+                        <td className={`px-3 py-3 text-right whitespace-nowrap ${cellBgClass} group-hover:bg-primary/10 first:rounded-l-xl last:rounded-r-xl border-y first:border-l last:border-r`}>
+                          <div className="flex justify-end items-center gap-1 opacity-85 group-hover:opacity-100 transition-all">
                             <button
                               type="button"
                               onClick={() => onViewLineage && onViewLineage(cont.id, 'contrato')}
-                              className="p-1 px-1.5 text-[10px] font-bold bg-primary/5 hover:bg-primary/15 border border-outline text-primary rounded flex items-center gap-1 transition-all active:scale-95 cursor-pointer animate-in"
-                              title="Ver Histórico e Rastreabilidade do Processo Completo"
+                              className="p-1.5 rounded-lg border border-outline-variant/60 text-primary bg-primary/5 hover:bg-primary/15 hover:border-primary/40 cursor-pointer transition-all active:scale-95 shrink-0"
+                              title="Rastreabilidade e Histórico do Processo (Percurso)"
+                              aria-label="Rastreabilidade e Histórico do Processo (Percurso)"
                             >
-                              <Shuffle className="w-3 h-3 text-primary animate-pulse" />
-                              <span>Percurso</span>
+                              <Shuffle className="w-3.5 h-3.5 text-primary" />
                             </button>
 
                             <button
                               type="button"
                               onClick={() => setSelectedContratoId(cont.id)}
-                              className="p-1 px-1.5 text-[10px] font-bold bg-primary/10 border border-primary/20 hover:bg-primary/20 text-primary rounded flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                              className="p-1.5 rounded-lg border border-outline-variant/60 text-on-surface-variant bg-surface-container-high hover:text-primary hover:border-primary/40 cursor-pointer transition-all active:scale-95 shrink-0"
+                              title="Exibir ficha detalhada do Contrato"
+                              aria-label="Exibir detalhes"
                             >
-                              <Eye className="w-3 h-3" />
-                              <span>Detalhes</span>
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
+
+                            {cont.LinkContrato && (
+                              <button
+                                type="button"
+                                onClick={(e) => { 
+                                  e.preventDefault(); 
+                                  setViewingContractPdf(cont); 
+                                }}
+                                className="p-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/15 hover:border-primary/50 cursor-pointer active:scale-95 transition-all shrink-0"
+                                title={`Visualizar documento PDF: ${cont.LinkContratoNome || 'Contrato.pdf'}`}
+                                aria-label={`Visualizar PDF: ${cont.LinkContratoNome || 'Contrato.pdf'}`}
+                              >
+                                <FileText className="w-3.5 h-3.5 text-primary" />
+                              </button>
+                            )}
+
                             <button
                               type="button"
+                              disabled={currentUser.role === 'Visualizador' || currentUser.role === 'Auditor'}
                               onClick={() => handleStartEditContract(cont)}
-                              className="p-1 px-1.5 text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 text-amber-500 rounded flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                              className="p-1.5 rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:border-amber-500/40 cursor-pointer transition-all active:scale-95 shrink-0 disabled:opacity-30 disabled:hover:bg-transparent"
                               title="Editar dados cadastrais do Contrato"
+                              aria-label="Editar Contrato"
                             >
-                              <Edit className="w-3 h-3" />
-                              <span>Editar</span>
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
+
                             <button
                               type="button"
+                              disabled={currentUser.role === 'Visualizador' || currentUser.role === 'Auditor'}
                               onClick={() => handleDeleteContract(cont.id, cont.Num_Contrato)}
-                              className="p-1 text-on-surface-variant hover:text-rose-450 hover:bg-rose-550/10 rounded transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg border border-transparent hover:border-rose-500/30 text-on-surface-variant hover:text-rose-450 hover:bg-rose-550/10 transition-colors cursor-pointer disabled:opacity-30 disabled:hover:bg-transparent shrink-0"
+                              title="Excluir Contrato"
+                              aria-label="Excluir Contrato"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
