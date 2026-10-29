@@ -34,6 +34,13 @@ export default defineConfig(() => {
           secure: false,
           rewrite: (p) => p.replace(/^\/api-ipeadata/, ''),
         },
+        // Proxy transparente para Carta de Conjuntura do Ipea (divulgação primária e planilhas XLSX do ICTI)
+        '/api-ipea-cc': {
+          target: 'https://www.ipea.gov.br/cartadeconjuntura',
+          changeOrigin: true,
+          secure: false,
+          rewrite: (p) => p.replace(/^\/api-ipea-cc/, ''),
+        },
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       hmr: process.env.DISABLE_HMR !== 'true',
