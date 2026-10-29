@@ -830,46 +830,69 @@
     };
   }
 
+  function isExtensionContextValid() {
+    try {
+      return Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function safeSendSeiRuntimeMessage(msg, cb) {
+    if (!isExtensionContextValid()) return;
+    try {
+      chrome.runtime.sendMessage(msg, (resp) => {
+        try {
+          if (!isExtensionContextValid()) return;
+          const _ignoreErr = chrome.runtime.lastError;
+          if (typeof cb === 'function') cb(resp);
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+
   // Expõe a função de leitura no escopo global do content script para execução direta via chrome.scripting.executeScript
   window.__contraticsScrapeSingleProtocolInSei = scrapeSingleProtocolInSei;
 
   // Registra listener somente uma vez por contexto ativo da extensão (re-registra automaticamente se a extensão foi recarregada)
-  const currentRuntimeId = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || 'active';
-  if (window.__CONTRATICS_SEI_LISTENER_RUNTIME_ID__ !== currentRuntimeId) {
+  const currentRuntimeId = isExtensionContextValid() ? chrome.runtime.id : 'active';
+  if (isExtensionContextValid() && window.__CONTRATICS_SEI_LISTENER_RUNTIME_ID__ !== currentRuntimeId) {
     window.__CONTRATICS_SEI_LISTENER_RUNTIME_ID__ = currentRuntimeId;
 
-    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (!msg || !msg.action) return;
+    try {
+      chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+        if (!isExtensionContextValid() || !msg || !msg.action) return;
 
-      if (msg.action === 'PING_SEI_READER') {
-        sendResponse({ ok: true, url: window.location.href });
-        return false;
-      }
-
-      if (msg.action === 'SCRAPE_SINGLE_PROTOCOL') {
-        scrapeSingleProtocolInSei(msg.protocolo, msg.deepScanRelated !== false, msg.knownDocIds || [])
-          .then((data) => sendResponse({ ok: true, data }))
-          .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
-        return true;
-      }
-
-      if (msg.action === 'SCRAPE_CURRENT_OPEN_PROCESS') {
-        const bodyText = document.body ? document.body.innerText : '';
-        const protoMatch =
-          document.title.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/) ||
-          bodyText.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/);
-
-        if (!protoMatch) {
-          sendResponse({ ok: false, error: 'Nenhum número de processo SEI detectado na tela atual.' });
+        if (msg.action === 'PING_SEI_READER') {
+          sendResponse({ ok: true, url: window.location.href });
           return false;
         }
 
-        scrapeSingleProtocolInSei(protoMatch[0], true)
-          .then((data) => sendResponse({ ok: true, data }))
-          .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
-        return true;
-      }
-    });
+        if (msg.action === 'SCRAPE_SINGLE_PROTOCOL') {
+          scrapeSingleProtocolInSei(msg.protocolo, msg.deepScanRelated !== false, msg.knownDocIds || [])
+            .then((data) => sendResponse({ ok: true, data }))
+            .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
+          return true;
+        }
+
+        if (msg.action === 'SCRAPE_CURRENT_OPEN_PROCESS') {
+          const bodyText = document.body ? document.body.innerText : '';
+          const protoMatch =
+            document.title.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/) ||
+            bodyText.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/);
+
+          if (!protoMatch) {
+            sendResponse({ ok: false, error: 'Nenhum número de processo SEI detectado na tela atual.' });
+            return false;
+          }
+
+          scrapeSingleProtocolInSei(protoMatch[0], true)
+            .then((data) => sendResponse({ ok: true, data }))
+            .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
+          return true;
+        }
+      });
+    } catch (e) {}
   }
 
   // ============================================================================
@@ -925,7 +948,7 @@
         badge.innerHTML = '⏳ Lendo SEI...';
         try {
           const data = await scrapeSingleProtocolInSei(matched.protocolo, true);
-          chrome.runtime.sendMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data }, () => {
+          safeSendSeiRuntimeMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data }, () => {
             badge.innerHTML = '✅ Sincronizado!';
             setTimeout(() => {
               badge.innerHTML = orig;
@@ -979,7 +1002,7 @@
         if (btnSyncVis) {
           btnSyncVis.addEventListener('click', () => {
             btnSyncVis.textContent = '⏳ Varredura iniciada... acompanhe no Contratics';
-            chrome.runtime.sendMessage({
+            safeSendSeiRuntimeMessage({
               action: 'START_BATCH_SCAN',
               processes: matchedOnScreen,
               deepScanRelated: true
@@ -994,7 +1017,7 @@
   // PAINEL RETRÁTIL "CONTRATICS • SEI PRO" DENTRO DO SEI
   // ============================================================================
   if (window === window.top && document.body) {
-    chrome.runtime.sendMessage({ action: 'GET_MONITORED_PROCESSES' }, (resp) => {
+    safeSendSeiRuntimeMessage({ action: 'GET_MONITORED_PROCESSES' }, (resp) => {
       const monitored = (resp && resp.processes) || [];
       highlightMonitoredProcessesInSeiTables(monitored);
     });
@@ -1087,7 +1110,7 @@
       const countEl = drawer.querySelector('#contraticsMonitoredCount');
 
       function renderMonitoredInDrawer() {
-        chrome.runtime.sendMessage({ action: 'GET_MONITORED_PROCESSES' }, (resp) => {
+        safeSendSeiRuntimeMessage({ action: 'GET_MONITORED_PROCESSES' }, (resp) => {
           const list = (resp && resp.processes) || [];
           countEl.textContent = String(list.length);
           listContainer.innerHTML = '';
@@ -1112,7 +1135,7 @@
               syncBtn.textContent = '⏳...';
               try {
                 const scraped = await scrapeSingleProtocolInSei(item.protocolo, true);
-                chrome.runtime.sendMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data: scraped }, () => {
+                safeSendSeiRuntimeMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data: scraped }, () => {
                   syncBtn.textContent = '✅ OK';
                   statusEl.textContent = `Processo ${item.protocolo} atualizado no Contratics!`;
                   setTimeout(() => { syncBtn.textContent = 'Sincronizar'; }, 2000);
@@ -1148,7 +1171,7 @@
             return;
           }
           const scraped = await scrapeSingleProtocolInSei(protoMatch[0], true);
-          chrome.runtime.sendMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data: scraped }, () => {
+          safeSendSeiRuntimeMessage({ action: 'PUSH_SINGLE_SCRAPED_PROCESS', data: scraped }, () => {
             statusEl.textContent = `✅ Fluxo de ${scraped.protocolo} (${scraped.documentos.length} docs, ${scraped.processosRelacionados.length} associados) espelhado no BPMN do Contratics!`;
           });
         } catch (err) {
@@ -1158,11 +1181,11 @@
 
       drawer.querySelector('#contraticsDrawerBatchAll').addEventListener('click', () => {
         statusEl.textContent = '⏳ Varredura Geral iniciada! Acompanhe o progresso no Contratics.';
-        chrome.runtime.sendMessage({ action: 'START_BATCH_SCAN', processes: [], deepScanRelated: true });
+        safeSendSeiRuntimeMessage({ action: 'START_BATCH_SCAN', processes: [], deepScanRelated: true });
       });
 
       drawer.querySelector('#contraticsDrawerRollback').addEventListener('click', () => {
-        chrome.runtime.sendMessage({ action: 'TRIGGER_ROLLBACK_FROM_POPUP' }, () => {
+        safeSendSeiRuntimeMessage({ action: 'TRIGGER_ROLLBACK_FROM_POPUP' }, () => {
           statusEl.textContent = '⏪ Comando de restauração enviado para o Contratics.';
         });
       });
