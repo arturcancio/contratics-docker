@@ -20,9 +20,7 @@
  */
 
 (function () {
-  if (window.__CONTRATICS_SEI_READER_LOADED__) return;
-  window.__CONTRATICS_SEI_READER_LOADED__ = true;
-
+  // Permite reinjeção segura mesmo quando a extensão foi atualizada/recarregada sem F5 na aba do SEI
   function cleanText(raw) {
     if (!raw) return '';
     const txt = document.createElement('textarea');
@@ -832,34 +830,47 @@
     };
   }
 
-  // Escuta comandos vindos do Service Worker (background.js)
-  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    if (!msg || !msg.action) return;
+  // Expõe a função de leitura no escopo global do content script para execução direta via chrome.scripting.executeScript
+  window.__contraticsScrapeSingleProtocolInSei = scrapeSingleProtocolInSei;
 
-    if (msg.action === 'SCRAPE_SINGLE_PROTOCOL') {
-      scrapeSingleProtocolInSei(msg.protocolo, msg.deepScanRelated !== false, msg.knownDocIds || [])
-        .then((data) => sendResponse({ ok: true, data }))
-        .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
-      return true;
-    }
+  // Registra listener somente uma vez por contexto ativo da extensão (re-registra automaticamente se a extensão foi recarregada)
+  const currentRuntimeId = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || 'active';
+  if (window.__CONTRATICS_SEI_LISTENER_RUNTIME_ID__ !== currentRuntimeId) {
+    window.__CONTRATICS_SEI_LISTENER_RUNTIME_ID__ = currentRuntimeId;
 
-    if (msg.action === 'SCRAPE_CURRENT_OPEN_PROCESS') {
-      const bodyText = document.body ? document.body.innerText : '';
-      const protoMatch =
-        document.title.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/) ||
-        bodyText.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/);
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (!msg || !msg.action) return;
 
-      if (!protoMatch) {
-        sendResponse({ ok: false, error: 'Nenhum número de processo SEI detectado na tela atual.' });
+      if (msg.action === 'PING_SEI_READER') {
+        sendResponse({ ok: true, url: window.location.href });
         return false;
       }
 
-      scrapeSingleProtocolInSei(protoMatch[0], true)
-        .then((data) => sendResponse({ ok: true, data }))
-        .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
-      return true;
-    }
-  });
+      if (msg.action === 'SCRAPE_SINGLE_PROTOCOL') {
+        scrapeSingleProtocolInSei(msg.protocolo, msg.deepScanRelated !== false, msg.knownDocIds || [])
+          .then((data) => sendResponse({ ok: true, data }))
+          .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
+        return true;
+      }
+
+      if (msg.action === 'SCRAPE_CURRENT_OPEN_PROCESS') {
+        const bodyText = document.body ? document.body.innerText : '';
+        const protoMatch =
+          document.title.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/) ||
+          bodyText.match(/\d{5}\.\d{6}\/\d{4}-\d{2}/);
+
+        if (!protoMatch) {
+          sendResponse({ ok: false, error: 'Nenhum número de processo SEI detectado na tela atual.' });
+          return false;
+        }
+
+        scrapeSingleProtocolInSei(protoMatch[0], true)
+          .then((data) => sendResponse({ ok: true, data }))
+          .catch((err) => sendResponse({ ok: false, error: err.message || String(err) }));
+        return true;
+      }
+    });
+  }
 
   // ============================================================================
   // FERRAMENTA SEI PRO: DESTAQUE AUTOMÁTICO DE PROCESSOS MONITORADOS NAS TABELAS DO SEI

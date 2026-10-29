@@ -1,13 +1,12 @@
 /**
  * Contratics SEI Studio - Content Script para a aba do Contratics
  * Faz a ponte segura entre o aplicativo web Contratics (window.postMessage)
- * e o Service Worker da extensão Chrome (chrome.runtime).
+ * e o Service Worker da extensão Chrome (chrome.runtime), incluindo reconexão
+ * automática caso a extensão tenha sido recarregada/atualizada sem dar F5 na aba.
  */
 
 (function () {
-  // Evita múltiplas injeções
-  if (window.__CONTRATICS_SEI_BRIDGE_ACTIVE__) return;
-  window.__CONTRATICS_SEI_BRIDGE_ACTIVE__ = true;
+  const currentRuntimeId = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) || 'active';
 
   // Anuncia presença da extensão para o Contratics imediatamente
   function announceReady() {
@@ -15,7 +14,7 @@
       {
         source: 'CONTRATICS_SEI_EXTENSION',
         type: 'CONTRATICS_SEI_EXT_READY',
-        payload: { version: '1.0.0' }
+        payload: { version: '1.3.0' }
       },
       '*'
     );
@@ -24,9 +23,23 @@
   announceReady();
   setTimeout(announceReady, 1000);
 
-  // Escuta mensagens vindas da interface React do Contratics
-  window.addEventListener('message', (event) => {
+  if (window.__CONTRATICS_SEI_BRIDGE_RUNTIME_ID__ === currentRuntimeId) {
+    return;
+  }
+  window.__CONTRATICS_SEI_BRIDGE_RUNTIME_ID__ = currentRuntimeId;
+
+  // Remove listener anterior se a extensão foi recarregada na mesma aba sem F5
+  if (typeof window.__CONTRATICS_SEI_WINDOW_MSG_HANDLER__ === 'function') {
+    window.removeEventListener('message', window.__CONTRATICS_SEI_WINDOW_MSG_HANDLER__);
+  }
+
+  const handleWindowMessage = (event) => {
     if (event.source !== window || !event.data || event.data.source !== 'CONTRATICS_WEB_APP') {
+      return;
+    }
+
+    // Verifica se o contexto atual da extensão ainda é válido
+    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
       return;
     }
 
@@ -37,7 +50,7 @@
         {
           source: 'CONTRATICS_SEI_EXTENSION',
           type: 'CONTRATICS_SEI_EXT_PONG',
-          payload: { version: '1.0.0' }
+          payload: { version: '1.3.0' }
         },
         '*'
       );
@@ -45,38 +58,58 @@
     }
 
     if (type === 'CONTRATICS_SEI_START_BATCH_SCAN') {
-      chrome.runtime.sendMessage(
-        {
-          action: 'START_BATCH_SCAN',
-          processes: (payload && payload.processes) || []
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            window.postMessage(
-              {
-                source: 'CONTRATICS_SEI_EXTENSION',
-                type: 'CONTRATICS_SEI_SCAN_PROGRESS',
-                payload: {
-                  current: 0,
-                  total: 1,
-                  message: 'Erro ao comunicar com a extensão: ' + chrome.runtime.lastError.message
-                }
-              },
-              '*'
-            );
+      try {
+        chrome.runtime.sendMessage(
+          {
+            action: 'START_BATCH_SCAN',
+            processes: (payload && payload.processes) || []
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              window.postMessage(
+                {
+                  source: 'CONTRATICS_SEI_EXTENSION',
+                  type: 'CONTRATICS_SEI_SCAN_PROGRESS',
+                  payload: {
+                    current: 0,
+                    total: 1,
+                    message: 'Erro ao comunicar com a extensão: ' + chrome.runtime.lastError.message
+                  }
+                },
+                '*'
+              );
+            }
           }
-        }
-      );
+        );
+      } catch (err) {
+        window.postMessage(
+          {
+            source: 'CONTRATICS_SEI_EXTENSION',
+            type: 'CONTRATICS_SEI_SCAN_PROGRESS',
+            payload: {
+              current: 0,
+              total: 1,
+              message: 'A extensão foi atualizada. Recarregue esta página (F5) e tente novamente.'
+            }
+          },
+          '*'
+        );
+      }
       return;
     }
 
     if (type === 'CONTRATICS_SEI_PROCESS_LIST_RESPONSE') {
-      chrome.runtime.sendMessage({
-        action: 'STORE_PROCESS_LIST',
-        processes: (payload && payload.processes) || []
-      });
+      try {
+        chrome.runtime.sendMessage({
+          action: 'STORE_PROCESS_LIST',
+          processes: (payload && payload.processes) || []
+        });
+      } catch (e) {}
     }
-  });
+  };
+
+  window.__CONTRATICS_SEI_WINDOW_MSG_HANDLER__ = handleWindowMessage;
+  window.addEventListener('message', handleWindowMessage);
 
   // Escuta mensagens vindas do background.js (progresso e conclusão da varredura)
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
